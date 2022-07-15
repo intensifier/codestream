@@ -204,6 +204,33 @@ export const MethodLevelTelemetryPanel = () => {
 		);
 	}
 
+	// const renderEntityDropdownLabel = item => {
+	// 	return (
+	// 		<>
+	// 			<span className="label">{item.entityName}</span>
+	// 			<span className="subtle">
+	// 				{item.accountName && item.accountName.length > 20
+	// 					? item.accountName.substr(0, 20) + "..."
+	// 					: item.accountName}
+	// 				{item.domain ? ` (${item.domain})` : ""}
+	// 			</span>
+	// 		</>
+	// 	);
+	// };
+
+	const renderEntityDropdownSubtext = item => {
+		let subtext;
+		if (item.accountName && item.accountName.length > 25) {
+			subtext = item.accountName.substr(0, 25) + "...";
+		} else {
+			subtext = item.accountName;
+		}
+		if (item.domain) {
+			subtext += ` ${item.domain}`;
+		}
+		return subtext;
+	};
+
 	switch (derivedState.currentMethodLevelTelemetry?.error?.type) {
 		case "NO_RUBY_VSCODE_EXTENSION":
 			return <MissingRubyExtension />;
@@ -263,6 +290,7 @@ export const MethodLevelTelemetryPanel = () => {
 													telemetryResponse.newRelicEntityAccounts!.map((item, i) => {
 														return {
 															label: item.entityName,
+															subtextWide: renderEntityDropdownSubtext(item),
 															searchLabel: item.entityName,
 															key: item.entityGuid + "-" + i,
 															checked: item.entityGuid === telemetryResponse.newRelicEntityGuid!,
