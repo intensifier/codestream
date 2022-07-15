@@ -204,20 +204,6 @@ export const MethodLevelTelemetryPanel = () => {
 		);
 	}
 
-	// const renderEntityDropdownLabel = item => {
-	// 	return (
-	// 		<>
-	// 			<span className="label">{item.entityName}</span>
-	// 			<span className="subtle">
-	// 				{item.accountName && item.accountName.length > 20
-	// 					? item.accountName.substr(0, 20) + "..."
-	// 					: item.accountName}
-	// 				{item.domain ? ` (${item.domain})` : ""}
-	// 			</span>
-	// 		</>
-	// 	);
-	// };
-
 	const renderEntityDropdownSubtext = item => {
 		let subtext;
 		if (item.accountName && item.accountName.length > 25) {
