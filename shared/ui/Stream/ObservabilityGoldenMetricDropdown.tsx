@@ -7,6 +7,7 @@ import Tooltip from "./Tooltip";
 
 interface Props {
 	goldenMetrics: any;
+	loadingGoldenMetrics: boolean;
 }
 
 const StyledMetric = styled.div`
@@ -81,7 +82,24 @@ export const ObservabilityGoldenMetricDropdown = React.memo((props: Props) => {
 					/>
 				)}
 			</Row>
-			{expanded && (
+			{expanded && props.loadingGoldenMetrics && (
+				<Row
+					style={{
+						padding: "0 10px 0 42px"
+					}}
+					className={"pr-row"}
+				>
+					<Icon
+						style={{
+							marginRight: "5px"
+						}}
+						className="spin"
+						name="sync"
+					/>{" "}
+					Loading...
+				</Row>
+			)}
+			{expanded && !props.loadingGoldenMetrics && (
 				<>
 					{goldenMetrics.map(gm => {
 						const goldenMetricUnit = goldenMetricTitleMapping[gm?.name]?.units;

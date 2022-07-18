@@ -234,6 +234,7 @@ export const Observability = React.memo((props: Props) => {
 	const [expandedEntity, setExpandedEntity] = useState<string | null>(null);
 	const [currentEntityAccountIndex, setCurrentEntityAccountIndex] = useState<string | null>(null);
 	const [currentRepoId, setCurrentRepoId] = useState<string>("");
+	const [loadingGoldenMetrics, setLoadingGoldenMetrics] = useState<boolean>(false);
 	const [currentEntityAccounts, setCurrentEntityAccounts] = useState<EntityAccount[] | undefined>(
 		[]
 	);
@@ -492,6 +493,7 @@ export const Observability = React.memo((props: Props) => {
 
 	const fetchGoldenMetrics = async (entityGuid?: string | null) => {
 		if (entityGuid) {
+			setLoadingGoldenMetrics(true);
 			const response = await HostApi.instance.send(GetMethodLevelTelemetryRequestType, {
 				newRelicEntityGuid: entityGuid,
 				metricTimesliceNameMapping: derivedState.currentMethodLevelTelemetry
@@ -502,6 +504,7 @@ export const Observability = React.memo((props: Props) => {
 				setGoldenMetrics(response.goldenMetrics);
 				setNewRelicUrl(response.newRelicUrl);
 			}
+			setLoadingGoldenMetrics(false);
 		}
 	};
 
@@ -844,6 +847,7 @@ export const Observability = React.memo((props: Props) => {
 																							<>
 																								<ObservabilityGoldenMetricDropdown
 																									goldenMetrics={goldenMetrics}
+																									loadingGoldenMetrics={loadingGoldenMetrics}
 																								/>
 
 																								{observabilityErrors?.find(
