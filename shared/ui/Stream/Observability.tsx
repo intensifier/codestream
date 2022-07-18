@@ -2,7 +2,8 @@ import {
 	forEach as _forEach,
 	isEmpty as _isEmpty,
 	isNil as _isNil,
-	keyBy as _keyBy
+	keyBy as _keyBy,
+	head as _head
 } from "lodash-es";
 import React, { useEffect, useState } from "react";
 import { shallowEqual, useDispatch, useSelector } from "react-redux";
@@ -119,8 +120,8 @@ const NoEntitiesCopy = styled.div`
 
 const EntityHealth = styled.div<{ backgroundColor: string }>`
 	background-color: ${props => (props.backgroundColor ? props.backgroundColor : "white")};
-	width: 15px;
-	height: 15px;
+	width: 10px;
+	height: 10px;
 	border-radius: 2px;
 	margin-right: 4px;
 `;
@@ -220,6 +221,7 @@ export const Observability = React.memo((props: Props) => {
 	}>({});
 	const [loadingAssigments, setLoadingAssigments] = useState<boolean>(false);
 	const [hasEntities, setHasEntities] = useState<boolean>(false);
+	const [repoForEntityAssociator, setRepoForEntityAssociator] = useState<any>({});
 	const [loadingEntities, setLoadingEntities] = useState<boolean>(false);
 	const [observabilityAssignments, setObservabilityAssignments] = useState<
 		ObservabilityErrorCore[]
@@ -641,6 +643,24 @@ export const Observability = React.memo((props: Props) => {
 		}
 	}, [loadingErrors, loadingAssigments]);
 
+	useEffect(() => {
+		if (!_isEmpty(currentRepoId) && !_isEmpty(observabilityRepos)) {
+			const currentRepo = _head(observabilityRepos.filter(_ => _.repoId === currentRepoId));
+
+			if (
+				currentRepo &&
+				!currentRepo.hasRepoAssociation &&
+				!observabilityErrors?.find(
+					oe => oe?.repoId === currentRepo?.repoId && oe?.errors.length > 0
+				)
+			) {
+				setRepoForEntityAssociator(currentRepo);
+			} else {
+				setRepoForEntityAssociator({});
+			}
+		}
+	}, [currentRepoId, observabilityRepos]);
+
 	const handleSetUpMonitoring = (event: React.SyntheticEvent) => {
 		event.preventDefault();
 		dispatch(openPanel(WebviewPanels.OnboardNewRelic));
@@ -771,7 +791,7 @@ export const Observability = React.memo((props: Props) => {
 																					<EntityHealth backgroundColor={alertSeverityColor} />
 																					<div>
 																						<span>{ea.entityName}</span>
-																						<span className="subtle">
+																						<span className="subtle" style={{ fontSize: "11px" }}>
 																							{ea.accountName && ea.accountName.length > 25
 																								? ea.accountName.substr(0, 25) + "..."
 																								: ea.accountName}
@@ -880,6 +900,34 @@ export const Observability = React.memo((props: Props) => {
 														})}
 												</>
 											)}
+										{!loadingEntities && hasEntities && (
+											<>
+												{!_isEmpty(repoForEntityAssociator) && (
+													<>
+														<EntityAssociator
+															label="Associate this repo with an entity on New Relic in order to see errors"
+															onSuccess={async e => {
+																HostApi.instance.track("NR Entity Association", {
+																	"Repo ID": repoForEntityAssociator.repoId
+																});
+
+																await fetchObservabilityRepos(
+																	e.entityGuid,
+																	repoForEntityAssociator.repoId
+																);
+																fetchObservabilityErrors(
+																	e.entityGuid,
+																	repoForEntityAssociator.repoId
+																);
+																fetchGoldenMetrics(e.entityGuid);
+															}}
+															remote={repoForEntityAssociator.repoRemote}
+															remoteName={repoForEntityAssociator.repoName}
+														/>
+													</>
+												)}
+											</>
+										)}
 									</PaneNode>
 								</>
 							)}

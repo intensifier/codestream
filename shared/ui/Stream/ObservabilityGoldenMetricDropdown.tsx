@@ -71,7 +71,15 @@ export const ObservabilityGoldenMetricDropdown = React.memo((props: Props) => {
 				{expanded && <Icon name="chevron-down-thin" />}
 				{!expanded && <Icon name="chevron-right-thin" />}
 				<span style={{ margin: "0 5px 0 2px" }}>Golden Metrics</span>{" "}
-				{updatedAt && <Icon name="clock" className="clickable" title={updatedAt} delay={1} />}
+				{updatedAt && (
+					<Icon
+						style={{ transform: "scale(0.8)" }}
+						name="clock"
+						className="clickable"
+						title={updatedAt}
+						delay={1}
+					/>
+				)}
 			</Row>
 			{expanded && (
 				<>
@@ -96,7 +104,7 @@ export const ObservabilityGoldenMetricDropdown = React.memo((props: Props) => {
 						if (goldenMetricValue && goldenMetricValue % 1 !== 0) {
 							let logValue = -Math.floor(Math.log10(goldenMetricValue)) + 1;
 							let roundToValue = logValue > 2 ? logValue : 2;
-							goldenMetricValue = goldenMetricValue.toFixed(roundToValue);
+							goldenMetricValue = Number(goldenMetricValue?.toFixed(roundToValue));
 							noCommas = true;
 						}
 						// add commas to numbers
@@ -117,6 +125,7 @@ export const ObservabilityGoldenMetricDropdown = React.memo((props: Props) => {
 									<span style={{ marginRight: "5px" }}>{gm.title}</span>
 									{goldenMetricTooltip && (
 										<Icon
+											style={{ transform: "scale(0.9)" }}
 											name="info"
 											className="clickable"
 											title={goldenMetricTooltip}
