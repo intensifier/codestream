@@ -122,7 +122,6 @@ const EntityHealth = styled.div<{ backgroundColor: string }>`
 	background-color: ${props => (props.backgroundColor ? props.backgroundColor : "white")};
 	width: 10px;
 	height: 10px;
-	border-radius: 2px;
 	margin-right: 4px;
 `;
 
