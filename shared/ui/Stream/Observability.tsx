@@ -496,8 +496,6 @@ export const Observability = React.memo((props: Props) => {
 			setLoadingGoldenMetrics(true);
 			const response = await HostApi.instance.send(GetMethodLevelTelemetryRequestType, {
 				newRelicEntityGuid: entityGuid,
-				metricTimesliceNameMapping: derivedState.currentMethodLevelTelemetry
-					.metricTimesliceNameMapping!,
 				repoId: currentRepoId
 			});
 			if (response?.goldenMetrics) {

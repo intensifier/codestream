@@ -104,8 +104,11 @@ export const ObservabilityGoldenMetricDropdown = React.memo((props: Props) => {
 					{goldenMetrics.map(gm => {
 						const goldenMetricUnit = goldenMetricTitleMapping[gm?.name]?.units;
 						const goldenMetricTooltip = goldenMetricTitleMapping[gm?.name]?.tooltip;
-						let goldenMetricValueTrue = gm?.result[0][goldenMetricTitleMapping[gm?.name]?.title];
-						let goldenMetricValue = gm?.result[0][goldenMetricTitleMapping[gm?.name]?.title];
+						let goldenMetricValueTrue =
+							gm?.result && gm.result.length > 0
+								? gm?.result[0][goldenMetricTitleMapping[gm?.name]?.title]
+								: "";
+						let goldenMetricValue = goldenMetricValueTrue;
 
 						// Set value to non null result if golden metric does not appear in mapping array
 						if (!goldenMetricValueTrue && !goldenMetricValue && gm?.result[0]) {
@@ -122,7 +125,7 @@ export const ObservabilityGoldenMetricDropdown = React.memo((props: Props) => {
 						if (goldenMetricValue && goldenMetricValue % 1 !== 0) {
 							let logValue = -Math.floor(Math.log10(goldenMetricValue)) + 1;
 							let roundToValue = logValue > 2 ? logValue : 2;
-							goldenMetricValue = Number(goldenMetricValue?.toFixed(roundToValue));
+							goldenMetricValue = Number(goldenMetricValue)?.toFixed(roundToValue);
 							noCommas = true;
 						}
 						// add commas to numbers
