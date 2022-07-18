@@ -792,7 +792,10 @@ export const Observability = React.memo((props: Props) => {
 																					<EntityHealth backgroundColor={alertSeverityColor} />
 																					<div>
 																						<span>{ea.entityName}</span>
-																						<span className="subtle" style={{ fontSize: "11px" }}>
+																						<span
+																							className="subtle"
+																							style={{ fontSize: "11px", verticalAlign: "bottom" }}
+																						>
 																							{ea.accountName && ea.accountName.length > 25
 																								? ea.accountName.substr(0, 25) + "..."
 																								: ea.accountName}

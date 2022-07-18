@@ -110,7 +110,7 @@ export const ObservabilityCurrentRepo = React.memo((props: Props) => {
 
 	return (
 		<CurrentRepoContainer>
-			<Icon style={{ transform: "scale(0.7)", display: "inline-block" }} name="directory" />{" "}
+			<Icon style={{ transform: "scale(0.7)", display: "inline-block" }} name="repo" />{" "}
 			{currentRepoName}
 		</CurrentRepoContainer>
 	);
