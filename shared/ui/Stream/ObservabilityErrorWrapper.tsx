@@ -20,7 +20,7 @@ export const ObservabilityErrorWrapper = React.memo((props: Props) => {
 		<>
 			<Row
 				style={{
-					padding: "2px 10px 2px 30px"
+					padding: "2px 10px 2px 40px"
 				}}
 				className={"pr-row"}
 				onClick={() => setExpanded(!expanded)}
@@ -31,14 +31,13 @@ export const ObservabilityErrorWrapper = React.memo((props: Props) => {
 			</Row>
 			{expanded && (
 				<>
+					<ObservabilityAssignmentsDropdown
+						observabilityAssignments={props.observabilityAssignments}
+						entityGuid={props.entityGuid}
+					/>
 					<ObservabilityErrorDropdown
 						observabilityErrors={props.observabilityErrors}
 						observabilityRepo={props.observabilityRepo}
-						entityGuid={props.entityGuid}
-					/>
-
-					<ObservabilityAssignmentsDropdown
-						observabilityAssignments={props.observabilityAssignments}
 						entityGuid={props.entityGuid}
 					/>
 				</>
