@@ -19,6 +19,7 @@ import { isEmpty, isEqual } from "lodash-es";
 import React, { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
 import { shallowEqual } from "react-redux";
 import styled from "styled-components";
+import { PullRequestDetailsLoading } from "@codestream/webview/Stream/PullRequestLoading";
 
 import { OpenUrlRequestType, ReviewCloseDiffRequestType } from "@codestream/protocols/webview";
 import { WebviewPanels } from "@codestream/webview/ipc/webview.protocol.common";
@@ -1559,9 +1560,7 @@ export const OpenPullRequests = React.memo((props: Props) => {
 							</Row>
 						)}
 						{prFromUrlLoading && prFromUrlProviderId === providerId && (
-							<div style={{ marginLeft: "30px" }}>
-								<Icon className={"spin"} name="refresh" /> Loading...
-							</div>
+							<PullRequestDetailsLoading />
 						)}
 						{!isEmpty(prFromUrl) && !prFromUrlLoading && prFromUrlProviderId === providerId && (
 							<>{renderPrGroup(prFromUrl?.providerId, prFromUrl, "-1", "-1", "From URL")}</>
@@ -1679,9 +1678,18 @@ export const OpenPullRequests = React.memo((props: Props) => {
 						placement="bottom"
 						delay={1}
 					/>
-					{derivedState.isPRSupportedCodeHostConnected && (
-						<Icon onClick={addQuery} name="filter" title="Add Query" placement="bottom" delay={1} />
-					)}
+					{derivedState.PRConnectedProvidersCount === 1 &&
+					derivedState.PRConnectedProviders[0].id === "bitbucket*org"
+						? null
+						: derivedState.isPRSupportedCodeHostConnected && (
+								<Icon
+									onClick={addQuery}
+									name="filter"
+									title="Add Query"
+									placement="bottom"
+									delay={1}
+								/>
+						  )}
 					<InlineMenu
 						key="settings-menu"
 						className="subtle no-padding"

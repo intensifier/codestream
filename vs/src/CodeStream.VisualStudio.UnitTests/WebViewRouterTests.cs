@@ -29,6 +29,7 @@ namespace CodeStream.VisualStudio.UnitTests {
 			var mockEditorService = new Mock<IEditorService>();
 			var mockAuthenticationServiceFactory = new Mock<IAuthenticationServiceFactory>();
 			var mockComponentModel = new Mock<IComponentModel>();
+			var mockCredentialsService = new Mock<ICredentialsService>();
 
 			var mockComponentModelObject = mockComponentModel.Object;
 			var mockCodeStreamServiceObject = mockCodeStreamService.Object;
@@ -40,6 +41,7 @@ namespace CodeStream.VisualStudio.UnitTests {
 			var mockIdeServiceObject = mockIdeService.Object;
 			var mockEditorServiceObject = mockEditorService.Object;
 			var mockAuthenticationServiceFactoryObject = mockAuthenticationServiceFactory.Object;
+			var mockCredentialsServiceObject = mockCredentialsService.Object;
 			var ideServiceMock = new Mock<IIdeService>();
 
 			ideServiceMock.Setup(x => x.GetActiveDiffEditor())
@@ -61,7 +63,8 @@ namespace CodeStream.VisualStudio.UnitTests {
 				mockIdeServiceObject,
 				mockEditorServiceObject,
 				mockAuthenticationServiceFactoryObject,
-				messageInterceptor
+				messageInterceptor,
+				mockCredentialsServiceObject
 			);
 
 			await router.HandleAsync(new WindowEventArgs("BOGUS"));

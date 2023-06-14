@@ -1,5 +1,6 @@
 import {
 	CreateShareableCodeErrorRequestType,
+	CSAsyncError,
 	DidResolveStackTraceLineNotification,
 	ExecuteThirdPartyTypedType,
 	GetNewRelicErrorGroupRequest,
@@ -9,7 +10,11 @@ import {
 	UpdateCodeErrorRequestType,
 } from "@codestream/protocols/agent";
 import { CSCodeError, CSStackTraceLine } from "@codestream/protocols/api";
-import { EditorRevealRangeRequestType } from "@codestream/protocols/webview";
+import {
+	EditorCopySymbolType,
+	EditorReplaceSymbolType,
+	EditorRevealRangeRequestType,
+} from "@codestream/protocols/webview";
 import { logError } from "@codestream/webview/logger";
 import { CodeStreamState } from "@codestream/webview/store";
 import {
@@ -26,7 +31,11 @@ import {
 	_isLoadingErrorGroup,
 	_setErrorGroup,
 	_updateCodeErrors,
+	setFunctionToEdit,
 	_deleteCodeError,
+	setGrokLoading,
+	setGrokRepliesLength,
+	setGrokError,
 } from "@codestream/webview/store/codeErrors/actions";
 import { getCodeError } from "@codestream/webview/store/codeErrors/reducer";
 import { setCurrentCodeError } from "@codestream/webview/store/context/actions";
@@ -38,6 +47,8 @@ import { confirmPopup } from "@codestream/webview/Stream/Confirm";
 import { HostApi } from "@codestream/webview/webview-api";
 import { Position, Range } from "vscode-languageserver-types";
 import React from "react";
+import { getGrokPostLength } from "@codestream/webview/store/posts/reducer";
+import { URI } from "vscode-uri";
 
 export const updateCodeErrors =
 	(codeErrors: CSCodeError[]) => async (dispatch, getState: () => CodeStreamState) => {
@@ -88,14 +99,19 @@ export interface CreateCodeErrorError {
 
 export const createCodeError =
 	(attributes: NewCodeErrorAttributes) => async (dispatch, getState: () => CodeStreamState) => {
+		// console.debug("===--- createCodeError ---===", attributes);
 		try {
 			const response = await HostApi.instance.send(CreateShareableCodeErrorRequestType, {
 				attributes,
 				entryPoint: attributes.entryPoint,
 				addedUsers: attributes.addedUsers,
 				replyPost: attributes.replyPost,
+				codeBlock: attributes.codeBlock,
+				analyze: attributes.analyze,
+				reinitialize: attributes.reinitialize,
+				parentPostId: attributes.parentPostId,
 			});
-			if (response) {
+			if (response.codeError) {
 				dispatch(addCodeErrors([response.codeError]));
 				dispatch(addStreams([response.stream]));
 				dispatch(addPosts([response.post]));
@@ -130,7 +146,6 @@ export const processCodeErrorsMessage =
 		for (const deleteCodeError of deleteCodeErrors) {
 			dispatch(_deleteCodeError(deleteCodeError.id));
 			if (context.currentCodeErrorId === deleteCodeError.id) {
-				console.log("===--- setting current code error to null");
 				dispatch(setCurrentCodeError());
 			}
 		}
@@ -221,6 +236,7 @@ export const setErrorGroup =
 export const openErrorGroup =
 	(errorGroupGuid: string, occurrenceId?: string, data: any = {}) =>
 	async (dispatch, getState: () => CodeStreamState) => {
+		dispatch(setFunctionToEdit(undefined));
 		const { environment } = getState().configs;
 		let message, response;
 		if (data.environment && data.environment !== environment) {
@@ -313,17 +329,27 @@ export const openErrorGroup =
  *
  * a pending codeError has an ide that begins with PENDING, and fully looks like `PENDING-${errorGroupGuid}`.
  *
- * @param {string} codeErrorId
  */
 export const upgradePendingCodeError =
-	(codeErrorId: string, source: "Comment" | "Status Change" | "Assignee Change") =>
+	(
+		codeErrorId: string,
+		source: "Comment" | "Status Change" | "Assignee Change",
+		codeBlock?: string,
+		analyze = false
+	) =>
 	async (dispatch, getState: () => CodeStreamState) => {
-		console.log("upgradePendingCodeError", { codeErrorId: codeErrorId });
+		// console.debug("===--- upgradePendingCodeError ===---", { codeErrorId: codeErrorId, source });
 		try {
 			const state = getState();
-			let existingCodeError = getCodeError(state.codeErrors, codeErrorId) as CSCodeError;
-			if (codeErrorId?.indexOf(PENDING_CODE_ERROR_ID_PREFIX) === 0) {
-				const { accountId, objectId, objectType, title, text, stackTraces, objectInfo } =
+			const existingCodeError = getCodeError(state.codeErrors, codeErrorId);
+			if (!existingCodeError) {
+				console.warn(`upgradePendingCodeError: no codeError found for ${codeErrorId}`);
+				return;
+			}
+			const isPending = codeErrorId?.indexOf(PENDING_CODE_ERROR_ID_PREFIX) === 0;
+			if (isPending || analyze) {
+				// console.debug("===--- PENDING_CODE_ERROR_ID_PREFIX ===---")
+				const { accountId, objectId, objectType, title, text, stackTraces, objectInfo, postId } =
 					existingCodeError;
 				const newCodeError: NewCodeErrorAttributes = {
 					accountId,
@@ -333,8 +359,24 @@ export const upgradePendingCodeError =
 					text,
 					stackTraces,
 					objectInfo,
+					codeBlock,
+					analyze,
+					reinitialize: !isPending && analyze,
+					parentPostId: postId,
 				};
-				const response = (await dispatch(createPostAndCodeError(newCodeError))) as any;
+				const response = await dispatch(createPostAndCodeError(newCodeError));
+				if (!response.codeError) {
+					if (response.exception) {
+						logError(JSON.stringify(response.exception), {
+							codeErrorId: codeErrorId,
+						});
+					} else {
+						logError("no codeError returned", {
+							codeErrorId: codeErrorId,
+						});
+					}
+					return undefined;
+				}
 				HostApi.instance.track("Error Created", {
 					"Error Group ID": "",
 					"NR Account ID": newCodeError.accountId,
@@ -342,7 +384,7 @@ export const upgradePendingCodeError =
 				});
 
 				// remove the pending codeError
-				dispatch(removeCodeError(codeErrorId!));
+				dispatch(removeCodeError(codeErrorId));
 
 				dispatch(
 					setCurrentCodeError(response.codeError.id, {
@@ -350,7 +392,9 @@ export const upgradePendingCodeError =
 						// pending any longer
 						pendingErrorGroupGuid: undefined,
 						// if there's already a selected line, retain it
-						lineIndex: state.context.currentCodeErrorData?.lineIndex || 0,
+						lineIndex: state.context.currentCodeErrorData?.lineIndex ?? undefined,
+						// same with timestamp
+						timestamp: state.context.currentCodeErrorData?.timestamp ?? undefined,
 					})
 				);
 				return {
@@ -475,6 +519,63 @@ export const api =
 		}
 	};
 
+export const replaceSymbol =
+	(uri: string, symbol: string, codeBlock: string) =>
+	async (dispatch, getState: () => CodeStreamState) => {
+		await HostApi.instance.send(EditorReplaceSymbolType, {
+			uri,
+			symbolName: symbol,
+			codeBlock,
+		});
+	};
+
+export const copySymbolFromIde =
+	(stackLine: CSStackTraceLine, repoId?: string, ref?: string) => async dispatch => {
+		if (!stackLine.method || !stackLine.fileRelativePath) {
+			return;
+		}
+		const currentPosition =
+			ref && repoId && stackLine.fileRelativePath
+				? await HostApi.instance.send(ResolveStackTracePositionRequestType, {
+						ref,
+						repoId,
+						filePath: stackLine.fileRelativePath,
+						line: stackLine.line,
+						column: stackLine.column,
+				  })
+				: undefined;
+		if (currentPosition?.error) {
+			logError(`Unable to copySymbolFromIde: ${currentPosition.error}`);
+		}
+
+		const currentPositionPath = currentPosition?.path;
+
+		// console.debug(`===--- EditorCopySymbolType uri: ${path}, ref: ${ref}`);
+
+		const lookupPath =
+			currentPositionPath ??
+			URI.file(stackLine.fileFullPath ?? stackLine.fileRelativePath).toString();
+
+		// console.debug("===--- copySymbolFromIde lookupPath: ", lookupPath);
+
+		const symbolDetails = await HostApi.instance.send(EditorCopySymbolType, {
+			uri: lookupPath,
+			namespace: stackLine.namespace,
+			symbolName: stackLine.method,
+			ref,
+		});
+
+		if (symbolDetails.success && symbolDetails.range && symbolDetails.text) {
+			dispatch(
+				setFunctionToEdit({
+					codeBlock: symbolDetails.text,
+					symbol: stackLine.method,
+					uri: lookupPath,
+				})
+			);
+		}
+	};
+
 export const jumpToStackLine =
 	(lineIndex: number, stackLine: CSStackTraceLine, ref: string, repoId: string) =>
 	async (dispatch, getState: () => CodeStreamState) => {
@@ -541,3 +642,19 @@ export const fetchNewRelicErrorGroup =
 	(request: GetNewRelicErrorGroupRequest) => async dispatch => {
 		return HostApi.instance.send(GetNewRelicErrorGroupRequestType, request);
 	};
+
+export const startGrokLoading = (codeError: CSCodeError) => async (dispatch, getState) => {
+	const state: CodeStreamState = getState();
+	const grokPostLength = getGrokPostLength(state, codeError.streamId, codeError.postId);
+	// console.debug(
+	// 	`===--- startGrokLoading called, grokPostLength: ${grokPostLength}`
+	// );
+	dispatch(setGrokError(undefined));
+	dispatch(setGrokRepliesLength(grokPostLength));
+	dispatch(setGrokLoading(true));
+};
+
+export const handleGrokError = (grokError: CSAsyncError) => async dispatch => {
+	dispatch(setGrokLoading(false));
+	dispatch(setGrokError(grokError));
+};

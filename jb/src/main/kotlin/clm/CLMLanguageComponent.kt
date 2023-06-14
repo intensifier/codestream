@@ -1,32 +1,73 @@
 package com.codestream.clm
 
+import com.codestream.agentService
 import com.codestream.clmService
 import com.codestream.extensions.file
+import com.codestream.extensions.lspPosition
 import com.codestream.extensions.uri
+import com.codestream.git.getCSGitFile
+import com.codestream.protocols.agent.GetCommitParams
 import com.codestream.review.ReviewDiffVirtualFile
 import com.codestream.sessionService
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.editor.event.EditorFactoryEvent
 import com.intellij.openapi.editor.event.EditorFactoryListener
+import com.intellij.openapi.fileEditor.FileEditorManager
+import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.vfs.VfsUtil
+import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.NavigatablePsiElement
 import com.intellij.psi.PsiDocumentManager
+import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
+import com.intellij.util.concurrency.annotations.RequiresEdt
+import kotlinx.coroutines.future.await
+import org.eclipse.lsp4j.Range
+import org.jetbrains.kotlin.idea.core.util.toPsiFile
+import java.net.URI
+import java.net.URL
+import java.util.concurrent.CompletableFuture
 
 val testMode: Boolean = System.getProperty("idea.system.path")?.endsWith("system-test") ?: false
 
+class FindSymbolInFileResponse(
+    val functionText: String,
+    val range: Range
+)
+
+interface SymbolResolver {
+    fun getLookupClassNames(psiFile: PsiFile): List<String>?
+    fun getLookupSpanSuffixes(psiFile: PsiFile): List<String>?
+    fun findClassFunctionFromFile(
+        psiFile: PsiFile,
+        namespace: String?,
+        className: String,
+        functionName: String
+    ): PsiElement?
+
+    fun findTopLevelFunction(psiFile: PsiFile, functionName: String): PsiElement?
+}
+
 abstract class CLMLanguageComponent<T : CLMEditorManager>(
-    val project: Project, private val fileType: Class<out PsiFile>, val editorFactory: (editor: Editor) -> T
+    val project: Project,
+    private val fileType: Class<out PsiFile>,
+    val editorFactory: (editor: Editor) -> T,
+    private val symbolResolver: SymbolResolver
 ) : EditorFactoryListener, Disposable {
+    private val logger = Logger.getInstance(CLMLanguageComponent::class.java)
     private val managersByEditor = mutableMapOf<Editor, CLMEditorManager>()
 
     @Suppress("UNCHECKED_CAST")
-    constructor(project: Project, fileType: String, editorFactory: (editor: Editor) -> T) : this(
+    constructor(project: Project, fileType: String, editorFactory: (editor: Editor) -> T, symbolResolver: SymbolResolver) : this(
         project,
         CLMLanguageComponent::class.java.classLoader.loadClass(fileType) as Class<PsiFile>,
-        editorFactory
+        editorFactory,
+        symbolResolver
     )
 
     init {
@@ -77,4 +118,43 @@ abstract class CLMLanguageComponent<T : CLMEditorManager>(
     open fun filterNamespaces(namespaces: List<String>): List<String> = emptyList()
 
     open fun findSymbol(className: String?, functionName: String?): NavigatablePsiElement? = null
+
+    open suspend fun copySymbolInFile(uri: String, namespace: String?, functionName: String, ref: String?): FindSymbolInFileResponse? {
+        val filePath = URI.create(uri).path
+        val sha = ref?.let {
+            project.agentService?.getCommit(GetCommitParams(filePath, ref))?.scm?.revision
+        }
+        val virtFile = if (sha != null) getCSGitFile(uri, sha, project) else VfsUtil.findFileByURL(URL(uri))
+
+        if (virtFile == null) {
+            logger.warn("Could not find file for uri $uri")
+            return null
+        }
+
+        val future = CompletableFuture<FindSymbolInFileResponse?>()
+        ApplicationManager.getApplication().invokeLater {
+            future.complete(copySymbolEdtOperations(virtFile, namespace, functionName))
+        }
+        return future.await()
+    }
+
+    @RequiresEdt
+    private fun copySymbolEdtOperations(virtFile: VirtualFile, namespace: String?, functionName: String): FindSymbolInFileResponse? {
+        val psiFile = virtFile.toPsiFile(project) ?: return null
+        if (!isPsiFileSupported(psiFile)) return null
+        val editorManager = FileEditorManager.getInstance(project)
+        val editor = editorManager.openTextEditor(OpenFileDescriptor(project, virtFile), false)
+            ?: return null
+        // val editor = psiFile.findExistingEditor() ?: return null
+        val element = (if (namespace != null)
+            symbolResolver.findClassFunctionFromFile(psiFile, null, namespace, functionName)
+        else
+            symbolResolver.findTopLevelFunction(psiFile, functionName))
+            ?: return null
+        val document = editor.document
+        val start = document.lspPosition(element.textRange.startOffset)
+        val end = document.lspPosition(element.textRange.endOffset)
+        val range = Range(start, end)
+        return FindSymbolInFileResponse(element.text, range)
+    }
 }

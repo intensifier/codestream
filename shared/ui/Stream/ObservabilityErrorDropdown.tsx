@@ -12,6 +12,10 @@ import {
 	GetObservabilityErrorGroupMetadataRequestType,
 	GetObservabilityErrorGroupMetadataResponse,
 } from "@codestream/protocols/agent";
+import { CodeErrorTimeWindow } from "../../util/src/protocol/agent/api.protocol.models";
+import { InlineMenu } from "../src/components/controls/InlineMenu";
+import { setUserPreference } from "./actions";
+import styled from "styled-components";
 
 interface Props {
 	observabilityErrors?: any;
@@ -19,11 +23,22 @@ interface Props {
 	entityGuid?: string;
 }
 
+const SubtleDropdown = styled.span`
+	color: var(--text-color-subtle);
+	font-size: 11px;
+`;
+
 export const ObservabilityErrorDropdown = React.memo((props: Props) => {
 	const dispatch = useAppDispatch();
 	const derivedState = useAppSelector((state: CodeStreamState) => {
+		const timeWindow =
+			state.preferences.codeErrorTimeWindow &&
+			Object.values(CodeErrorTimeWindow).includes(state.preferences.codeErrorTimeWindow)
+				? state.preferences.codeErrorTimeWindow
+				: CodeErrorTimeWindow.ThreeDays;
 		return {
 			sessionStart: state.context.sessionStart,
+			timeWindow,
 		};
 	}, shallowEqual);
 
@@ -46,6 +61,13 @@ export const ObservabilityErrorDropdown = React.memo((props: Props) => {
 
 	const { observabilityRepo } = props;
 
+	const timeWindowItems = Object.values(CodeErrorTimeWindow).map(_ => ({
+		label: _,
+		key: _,
+		checked: derivedState.timeWindow === _,
+		action: () => dispatch(setUserPreference({ prefPath: ["codeErrorTimeWindow"], value: _ })),
+	}));
+
 	return (
 		<>
 			<Row
@@ -57,7 +79,16 @@ export const ObservabilityErrorDropdown = React.memo((props: Props) => {
 			>
 				{expanded && <Icon name="chevron-down-thin" />}
 				{!expanded && <Icon name="chevron-right-thin" />}
-				<span style={{ marginLeft: "2px" }}>Recent</span>
+				<span style={{ marginLeft: "2px", marginRight: "5px" }}>Recent</span>
+				<InlineMenu
+					title="Time Range"
+					noFocusOnSelect
+					items={timeWindowItems}
+					align="bottomRight"
+					className="dropdown"
+				>
+					<SubtleDropdown>{derivedState.timeWindow}</SubtleDropdown>
+				</InlineMenu>
 			</Row>
 			{expanded && (
 				<>
@@ -77,10 +108,10 @@ export const ObservabilityErrorDropdown = React.memo((props: Props) => {
 									const indexedErrorGroupGuid = `${err.errorGroupGuid}_${index}`;
 									return (
 										<ErrorRow
-											title={`${err.errorClass} (${err.count})`}
+											title={`${err.errorClass}`}
 											tooltip={err.message}
 											subtle={err.message}
-											timestamp={err.lastOccurrence}
+											alternateSubtleRight={err.count}
 											url={err.errorGroupUrl}
 											customPadding={"0 10px 0 50px"}
 											isLoading={isLoadingErrorGroupGuid === indexedErrorGroupGuid}

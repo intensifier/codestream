@@ -7,7 +7,6 @@ import {
 import { CSMe, CSTeamSettings } from "@codestream/protocols/api";
 import React, { useEffect, useMemo, useState } from "react";
 import styled from "styled-components";
-
 import { OpenUrlRequestType } from "@codestream/protocols/webview";
 import { WebviewPanels } from "@codestream/webview/ipc/webview.protocol.common";
 import { Button } from "@codestream/webview/src/components/Button";
@@ -49,7 +48,7 @@ import { SmartFormattedList } from "../SmartFormattedList";
 import { EMPTY_STATUS, StartWork } from "../StartWork";
 import Tooltip from "../Tooltip";
 import { ProviderDisplay, PROVIDER_MAPPINGS } from "./types";
-
+import { IssuesLoading } from "@codestream/webview/Stream/IssuesLoading";
 interface FetchCardError {
 	provider: string;
 	error: string;
@@ -1200,7 +1199,7 @@ export const IssueList = React.memo((props: React.PropsWithChildren<IssueListPro
 							</IssueMissing>
 						</>
 					)}
-					{firstLoad && <LoadingMessage align="left">Loading...</LoadingMessage>}
+					{firstLoad && <IssuesLoading />}
 					{cards.length == 0 &&
 					selectedLabel !== "issues assigned to you" &&
 					!props.loadingMessage &&

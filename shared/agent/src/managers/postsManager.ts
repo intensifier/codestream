@@ -694,7 +694,7 @@ export function trackCodeErrorPostCreation(
 			} = {
 				"Code Error ID": codeError.id,
 				"Entry Point": entryPoint,
-				Assignees: codeError.assignees.length,
+				Assignees: codeError.assignees?.length ?? 0,
 				// rounds to 4 places
 				"Invitee Assignees": addedUsers ? addedUsers.length : 0,
 			};
@@ -1016,9 +1016,7 @@ export class PostsManager extends EntityManagerBase<CSPost> {
 			}
 
 			if (providerId === "bitbucket*org") {
-				let result: Promise<Directives>;
-
-				result = await providerRegistry.executeMethod({
+				const result: Promise<Directives> = await providerRegistry.executeMethod({
 					method: "createCommitComment",
 					providerId: parsedUri.context.pullRequest.providerId,
 					params: {
@@ -1505,6 +1503,10 @@ export class PostsManager extends EntityManagerBase<CSPost> {
 			dontSendEmail: false,
 			mentionedUserIds: request.mentionedUserIds,
 			addedUsers: request.addedUsers,
+			codeBlock: request.codeBlock,
+			analyze: request.analyze,
+			reinitialize: request.reinitialize,
+			parentPostId: request.parentPostId, // For grok reinitialization
 		});
 
 		codeError = response.codeError!;

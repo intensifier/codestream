@@ -96,6 +96,9 @@ export interface CreatePostRequest {
 	isPseudoCodemark?: boolean;
 	reviewCheckpoint?: number;
 	files?: Attachment[];
+	codeBlock?: string;
+	analyze?: boolean;
+	reinitialize?: boolean;
 }
 
 export interface CrossPostIssueValues {

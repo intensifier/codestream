@@ -344,7 +344,10 @@ export class InstrumentationCodeLensProvider implements vscode.CodeLensProvider 
 		let instrumentableSymbols: InstrumentableSymbol[] = [];
 		let allSymbols: vscode.DocumentSymbol[] = [];
 
-		const checkPluginResult = this.checkPlugin(document.languageId);
+		const checkPluginErrors = this.checkPlugin(document.languageId);
+		if (checkPluginErrors && checkPluginErrors.length > 0) {
+			return checkPluginErrors;
+		}
 
 		try {
 			if (token.isCancellationRequested) {
@@ -639,9 +642,6 @@ export class InstrumentationCodeLensProvider implements vscode.CodeLensProvider 
 			});
 			codeLenses = codeLenses.filter(_ => _.range.start.line >= 0);
 			const hasLenses = codeLenses.length > 0;
-			if (!hasLenses && checkPluginResult && checkPluginResult.length > 0) {
-				return checkPluginResult;
-			}
 
 			if (hasLenses) {
 				this.tryTrack(

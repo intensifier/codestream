@@ -497,7 +497,7 @@ class Team extends React.Component<Props, State> {
 		const promoteAdmin = { label: "Make Admin", action: () => this.promote(user) };
 		const kickUser = { label: "Remove from Org", action: () => this.confirmKick(user) };
 
-		const isUserAdmin = adminIds.includes(user.id);
+		const isUserAdmin = adminIds?.includes(user.id);
 		if (isCurrentUserAdmin && user.id !== this.props.currentUserId) {
 			if (isUserAdmin) {
 				return (
@@ -774,7 +774,9 @@ const mapStateToProps = state => {
 	const teammates = mapFilter(memberIds, id => {
 		const user = users[id as string];
 		if (!user || !user.isRegistered || user.deactivated || user.externalUserId) return;
-
+		if (user.username === "Grok") {
+			return;
+		}
 		if (!user.fullName) {
 			let email = user.email;
 			if (email) user.fullName = email.replace(/@.*/, "");
@@ -788,12 +790,15 @@ const mapStateToProps = state => {
 	const currentUser = users[session.userId];
 	const invisible = currentUser.status ? currentUser.status.invisible : false;
 
-	const adminIds = team.adminIds;
-	const isCurrentUserAdmin = adminIds.includes(session.userId);
+	const adminIds = team?.adminIds;
+	const isCurrentUserAdmin = adminIds?.includes(session?.userId);
 
 	const invited = mapFilter(memberIds, id => {
 		const user = users[id as string];
 		if (!user || user.isRegistered || user.deactivated || user.externalUserId) return;
+		if (user.username === "Grok") {
+			return;
+		}
 		let email = user.email;
 		if (email) user.fullName = email.replace(/@.*/, "");
 		return user;

@@ -18,7 +18,6 @@ import {
 	NormalizeUrlRequestType,
 	PixieDynamicLoggingResultNotification,
 	TelemetrySetAnonymousIdRequestType,
-	ThirdPartyProviders,
 	VerifyConnectivityRequestType,
 	PollForMaintenanceModeRequestType,
 	VersionCompatibility,
@@ -26,15 +25,16 @@ import {
 	GetObservabilityErrorGroupMetadataRequestType,
 	GetObservabilityErrorGroupMetadataResponse,
 } from "@codestream/protocols/agent";
-import { CodemarkType, CSApiCapabilities, CSCodeError, CSMe } from "@codestream/protocols/api";
+import { CodemarkType, CSCodeError, CSMe } from "@codestream/protocols/api";
 import React from "react";
 import * as path from "path-browserify";
 import { render } from "react-dom";
 import { Range } from "vscode-languageserver-types";
 
-import { logError } from "@codestream/webview/logger";
+import { logError, logWarning } from "@codestream/webview/logger";
 import { setBootstrapped } from "@codestream/webview/store/bootstrapped/actions";
 import {
+	handleGrokError,
 	openErrorGroup,
 	processCodeErrorsMessage,
 	resolveStackTraceLine,
@@ -71,7 +71,6 @@ import {
 	ViewAnomalyNotificationType,
 } from "./ipc/webview.protocol";
 import { WebviewPanels } from "@codestream/webview/ipc/webview.protocol.common";
-import { logWarning } from "./logger";
 import { store } from "./store";
 import { bootstrap, reset } from "./store/actions";
 import {
@@ -247,26 +246,30 @@ function listenForEvents(store) {
 				store.dispatch(resetDocuments());
 				break;
 			case ChangeDataType.Documents:
-				if ((data as any).reason === "removed") {
-					store.dispatch(removeDocument((data as any).document));
+				if (data.reason === "removed") {
+					store.dispatch(removeDocument(data.document));
 				} else {
-					store.dispatch(updateDocument((data as any).document));
+					store.dispatch(updateDocument(data.document));
 				}
 				break;
 			case ChangeDataType.Preferences:
 				store.dispatch(updatePreferences(data));
 				break;
 			case ChangeDataType.Unreads:
-				store.dispatch(updateUnreads(data as any)); // TODO: Not sure why we need the any here
+				store.dispatch(updateUnreads(data));
 				break;
 			case ChangeDataType.Providers:
-				store.dispatch(updateProviders(data as ThirdPartyProviders));
+				store.dispatch(updateProviders(data));
 				break;
 			case ChangeDataType.ApiCapabilities:
-				store.dispatch(apiCapabilitiesUpdated(data as CSApiCapabilities));
+				store.dispatch(apiCapabilitiesUpdated(data));
 				break;
 			case ChangeDataType.CodeErrors:
-				store.dispatch(processCodeErrorsMessage(data as CSCodeError[]));
+				store.dispatch(processCodeErrorsMessage(data));
+				break;
+			case ChangeDataType.AsyncError:
+				// Only 1 error type right now
+				store.dispatch(handleGrokError(data[0]));
 				break;
 			default:
 				store.dispatch({ type: `ADD_${type.toUpperCase()}`, payload: data });

@@ -28,6 +28,10 @@ import styled from "styled-components";
 
 import { ObservabilityRelatedWrapper } from "@codestream/webview/Stream/ObservabilityRelatedWrapper";
 import { ObservabilityPreview } from "@codestream/webview/Stream/ObservabilityPreview";
+import {
+	ObservabilityLoadingServiceEntities,
+	ObservabilityLoadingServiceEntity,
+} from "@codestream/webview/Stream/ObservabilityLoading";
 import { CurrentMethodLevelTelemetry } from "@codestream/webview/store/context/types";
 import { setRefreshAnomalies } from "../store/context/actions";
 
@@ -186,7 +190,7 @@ export const ErrorRow = (props: {
 
 	return (
 		<Row
-			className="pr-row"
+			className="pr-row error-row"
 			onClick={e => {
 				props.onClick && props.onClick();
 			}}
@@ -258,7 +262,7 @@ export const Observability = React.memo((props: Props) => {
 			newRelicIsConnected,
 			activeO11y,
 			observabilityRepoEntities: preferences.observabilityRepoEntities || EMPTY_ARRAY,
-			showGoldenSignalsInEditor: state.configs.showGoldenSignalsInEditor,
+			showGoldenSignalsInEditor: state?.configs.showGoldenSignalsInEditor,
 			isVS: state.ide.name === "VS",
 			hideCodeLevelMetricsInstructions: state.preferences.hideCodeLevelMetricsInstructions,
 			currentMethodLevelTelemetry: (state.context.currentMethodLevelTelemetry ||
@@ -268,6 +272,7 @@ export const Observability = React.memo((props: Props) => {
 			anomaliesNeedRefresh: state.context.anomaliesNeedRefresh,
 			clmSettings,
 			showAnomalies: isFeatureEnabled(state, "showAnomalies"),
+			recentErrorsTimeWindow: state.preferences.codeErrorTimeWindow,
 		};
 	}, shallowEqual);
 
@@ -395,6 +400,7 @@ export const Observability = React.memo((props: Props) => {
 			try {
 				const response = await HostApi.instance.send(GetObservabilityErrorsRequestType, {
 					filters: buildFilters([currentRepoId]),
+					timeWindow: derivedState.recentErrorsTimeWindow,
 				});
 
 				if (isNRErrorResponse(response.error)) {
@@ -639,6 +645,7 @@ export const Observability = React.memo((props: Props) => {
 		try {
 			const response = await HostApi.instance.send(GetObservabilityErrorsRequestType, {
 				filters: [{ repoId: repoId, entityGuid: entityGuid }],
+				timeWindow: derivedState.recentErrorsTimeWindow,
 			});
 			if (isNRErrorResponse(response.error)) {
 				setObservabilityErrorsError(response.error.error.message ?? response.error.error.type);
@@ -893,6 +900,12 @@ export const Observability = React.memo((props: Props) => {
 		}
 	}, [expandedEntity]);
 
+	useEffect(() => {
+		if (derivedState.recentErrorsTimeWindow && expandedEntity && currentRepoId) {
+			fetchObservabilityErrors(expandedEntity, currentRepoId);
+		}
+	}, [derivedState.recentErrorsTimeWindow]);
+
 	/*
 	 *	When current repo changes in IDE, set new entity accounts
 	 *  and fetch corresponding errors
@@ -1028,11 +1041,7 @@ export const Observability = React.memo((props: Props) => {
 						<>
 							<PaneNode>
 								{loadingEntities ? (
-									<ErrorRow
-										isLoading={true}
-										title="Loading..."
-										customPadding={"0 10px 0 20px"}
-									></ErrorRow>
+									<ObservabilityLoadingServiceEntities />
 								) : (
 									<>
 										{genericError && (
@@ -1188,10 +1197,7 @@ export const Observability = React.memo((props: Props) => {
 																			<>
 																				{ea.entityGuid === loadingPane ? (
 																					<>
-																						<ErrorRow
-																							isLoading={true}
-																							title="Loading..."
-																						></ErrorRow>
+																						<ObservabilityLoadingServiceEntity />
 																					</>
 																				) : (
 																					<>

@@ -13,7 +13,7 @@ import org.jetbrains.plugins.ruby.ruby.lang.psi.impl.controlStructures.methods.R
 import org.jetbrains.plugins.ruby.ruby.lang.psi.impl.controlStructures.modules.RModuleImpl
 
 class CLMRubyComponent(project: Project) :
-    CLMLanguageComponent<CLMRubyEditorManager>(project, RFileImpl::class.java, ::CLMRubyEditorManager) {
+    CLMLanguageComponent<CLMRubyEditorManager>(project, RFileImpl::class.java, ::CLMRubyEditorManager, RubySymbolResolver()) {
 
     private val logger = Logger.getInstance(CLMRubyComponent::class.java)
 
@@ -22,8 +22,7 @@ class CLMRubyComponent(project: Project) :
     }
 }
 
-class CLMRubyEditorManager(editor: Editor) : CLMEditorManager(editor, "ruby", false) {
-
+class RubySymbolResolver : SymbolResolver {
     override fun getLookupClassNames(psiFile: PsiFile): List<String>? {
         return null
     }
@@ -72,10 +71,17 @@ class CLMRubyEditorManager(editor: Editor) : CLMEditorManager(editor, "ruby", fa
                 }
             } else {
                 if (element is RContainer) {
-                    return findAnyFunction(element, functionName)
+                    val result = findAnyFunction(element, functionName)
+                    if (result != null) {
+                        return result
+                    }
                 }
             }
         }
         return null
     }
+}
+
+class CLMRubyEditorManager(editor: Editor) : CLMEditorManager(editor, "ruby", false, false, RubySymbolResolver()) {
+
 }

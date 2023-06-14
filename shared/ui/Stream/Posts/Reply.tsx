@@ -15,7 +15,7 @@ import {
 import { useAppDispatch } from "@codestream/webview/utilities/hooks";
 import { escapeHtml, replaceHtml } from "@codestream/webview/utils";
 import cx from "classnames";
-import React from "react";
+import React, { forwardRef, Ref } from "react";
 import { useSelector } from "react-redux";
 import styled from "styled-components";
 import { deletePost, editPost } from "../actions";
@@ -32,10 +32,12 @@ import { AddReactionIcon, Reactions } from "../Reactions";
 import Tag from "../Tag";
 import Timestamp from "../Timestamp";
 import { RepliesToPostContext } from "./RepliesToPost";
+import { GrokFeedback } from "@codestream/webview/Stream/Posts/GrokFeedback";
 
 export interface ReplyProps {
 	author: Partial<CSUser>;
 	post: Post;
+	codeErrorId?: string;
 	nestedReplies?: PostPlus[];
 	renderMenu?: (target: any, onClose: () => void) => React.ReactNode;
 	className?: string;
@@ -43,15 +45,18 @@ export interface ReplyProps {
 	editingPostId?: string;
 	threadId?: string; // only set for nested replies
 	lastNestedReply?: boolean;
+	noReply?: boolean;
 }
 
 const AuthorInfo = styled.div`
 	display: flex;
-	align-items: top;
+	align-items: flex-start;
+
 	${Headshot} {
 		margin-right: 7px;
 		flex-shrink: 0;
 	}
+
 	.emote {
 		font-weight: normal;
 		padding-left: 4px;
@@ -70,19 +75,23 @@ const Root = styled.div`
 	// too little padding between the reply and the one below
 	// since the other reply has a 5px extra padding from that body
 	min-height: 35px;
+
 	${AuthorInfo} {
 		font-weight: 700;
 	}
+
 	.icon.reply {
 		margin-left: 5px;
 		margin-right: 10px;
 		vertical-align: -2px;
 	}
+
 	${AddReactionIcon} {
 		vertical-align: -2px;
 		margin-left: 5px;
 		margin-right: 5px;
 	}
+
 	.bar-left-not-last-child {
 		width: 2px;
 		height: 100%;
@@ -92,6 +101,7 @@ const Root = styled.div`
 		background: var(--text-color);
 		opacity: 0.25;
 	}
+
 	.bar-left-last-child {
 		width: 2px;
 		height: 27px;
@@ -101,6 +111,7 @@ const Root = styled.div`
 		background: var(--text-color);
 		opacity: 0.25;
 	}
+
 	.bar-left-connector {
 		width: 19px;
 		height: 2px;
@@ -110,12 +121,13 @@ const Root = styled.div`
 		background: var(--text-color);
 		opacity: 0.25;
 	}
+
 	.related {
 		margin: 10px 0;
 	}
 `;
 
-const ReplyBody = styled.span`
+export const ReplyBody = styled.span`
 	display: flex;
 	flex-direction: column;
 	position: relative;
@@ -131,14 +143,17 @@ const ReplyBody = styled.span`
 	:hover ${AddReactionIcon} {
 		visibility: visible;
 	}
+
 	:hover .icon.reply,
 	:hover ${AddReactionIcon} {
 		opacity: 0.6;
 	}
+
 	:hover .icon.reply:hover,
 	:hover ${AddReactionIcon}:hover {
 		opacity: 1;
 	}
+
 	.bar-left-parent {
 		width: 2px;
 		height: calc(100% - 20px);
@@ -162,6 +177,7 @@ const Content = styled.div`
 	margin-left: 27px;
 	display: flex;
 	flex-direction: column;
+
 	> *:not(:last-child) {
 		margin-bottom: 10px;
 	}
@@ -169,18 +185,22 @@ const Content = styled.div`
 
 const ReviewMarkerActionsWrapper = styled.div`
 	margin-left: 13px;
+
 	.code {
 		margin: 5px 0 !important;
 	}
+
 	.file-info {
 		font-size: 11px;
 		display: flex;
 		flex-flow: row wrap;
 	}
+
 	.file-info .monospace {
 		display: block;
 		white-space: nowrap;
 	}
+
 	.icon {
 		vertical-align: 2px;
 	}
@@ -199,7 +219,7 @@ const ComposeWrapper = styled.div.attrs(() => ({
 	}
 `;
 
-export const Reply = (props: ReplyProps) => {
+export const Reply = forwardRef((props: ReplyProps, ref: Ref<any>) => {
 	const dispatch = useAppDispatch();
 	const { setEditingPostId, setReplyingToPostId } = React.useContext(RepliesToPostContext);
 	const [menuState, setMenuState] = React.useState<{
@@ -302,7 +322,7 @@ export const Reply = (props: ReplyProps) => {
 	const author = props.author || { username: "???" };
 
 	return (
-		<Root className={props.className}>
+		<Root ref={ref} className={props.className}>
 			{props.threadId && !props.lastNestedReply && <div className="bar-left-not-last-child" />}
 			{props.threadId && props.lastNestedReply && <div className="bar-left-last-child" />}
 			{props.threadId && <div className="bar-left-connector" />}
@@ -314,7 +334,7 @@ export const Reply = (props: ReplyProps) => {
 							<Headshot size={20} person={props.author} />{" "}
 						</ProfileLink>
 					)}
-					<span>
+					<span className="reply-author">
 						{props.author.username}
 						{emote}
 						{checkpoint && (
@@ -341,13 +361,15 @@ export const Reply = (props: ReplyProps) => {
 						<Timestamp relative time={props.post.createdAt} edited={props.post.hasBeenEdited} />
 					</span>
 					<div style={{ marginLeft: "auto", whiteSpace: "nowrap" }}>
-						<Icon
-							title="Reply"
-							name="reply"
-							placement="top"
-							className="reply clickable"
-							onClick={() => setReplyingToPostId(props.threadId || props.post.id)}
-						/>
+						{!props.noReply && (
+							<Icon
+								title="Reply"
+								name="reply"
+								placement="top"
+								className="reply clickable"
+								onClick={() => setReplyingToPostId(props.threadId || props.post.id)}
+							/>
+						)}
 						{!isPending(props.post) && <AddReactionIcon post={props.post} />}
 						{renderedMenu}
 						{props.renderMenu && (
@@ -415,8 +437,8 @@ export const Reply = (props: ReplyProps) => {
 				)}
 				{emote || isEditing ? null : (
 					<>
-						<Content>
-							<MarkdownText text={postText} />
+						<Content className="reply-content-container">
+							<MarkdownText text={postText} className="reply-markdown-content" />
 							<Attachments post={props.post as CSPost} />
 							{hasTags && (
 								<MetaDescriptionForTags>
@@ -433,6 +455,9 @@ export const Reply = (props: ReplyProps) => {
 					</>
 				)}
 				{!isPending(props.post) && <Reactions post={props.post} />}
+				{!isPending(props.post) && props.codeErrorId && props.post.forGrok && (
+					<GrokFeedback postId={props.post.id} errorId={props.codeErrorId} />
+				)}
 			</ReplyBody>
 			{props.nestedReplies &&
 				props.nestedReplies.length > 0 &&
@@ -447,7 +472,7 @@ export const Reply = (props: ReplyProps) => {
 				))}
 		</Root>
 	);
-};
+});
 
 const NestedReply = (props: {
 	post: Post;

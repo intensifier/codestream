@@ -14,6 +14,10 @@ Prerequisites
 - [NodeJS](https://nodejs.org/en/), =16.13.2
 - [npm](https://npmjs.com/), >=8.13.1
 
+Extensions
+
+- [Prettier for VSCode](https://prettier.io/)
+
 ### Before you begin...
 
 The CodeStream clients all live in a single git mono-repo. Each IDE has their own tools for generating builds and VS Code is no different!
@@ -111,11 +115,15 @@ npm run webview:watch
 
 ### Code Formatting
 
-We use [prettier](https://prettier.io/) for formatting our code. You can run prettier across the code by calling `npm run pretty` from a terminal.
+We use [prettier](https://prettier.io/) for formatting our code.
 
 To format the code as you make changes you can install the [Prettier - Code formatter](https://marketplace.visualstudio.com/items/esbenp.prettier-vscode) extension.
 
-Add the following to your User Settings to make prettier run as you save changes to files:
+Ensure it is the default formatter:
+
+` "editor.defaultFormatter": "esbenp.prettier-vscode"`
+
+Additionally, you may add the following to your User Settings to make prettier run as you save changes to files:
 
 `"editor.formatOnSave": true,`
 

@@ -302,7 +302,9 @@ export type CSCodeErrorStatus = "resolved" | "open";
 export interface CSStackTraceLine {
 	fileRelativePath?: string;
 	fileFullPath?: string;
+	fullMethod?: string;
 	method?: string;
+	namespace?: string;
 	arguments?: string[];
 	line?: number;
 	column?: number;
@@ -332,7 +334,7 @@ export interface CSCodeError extends CSEntity {
 	text?: string;
 	stackTraces: CSStackTraceInfo[]; // (CSStackTraceInfo | CSStackTraceError)[];
 	providerUrl?: string;
-	assignees: string[];
+	assignees?: string[];
 
 	// an array of people who have resolved the code error
 	resolvedBy?: CSCodeErrorResolutions;
@@ -380,6 +382,7 @@ export interface CSPost extends CSEntity {
 	files?: Attachment[];
 	sharedTo?: ShareTarget[];
 	codeErrorId?: string;
+	forGrok?: boolean;
 }
 
 export interface CSRemote {
@@ -748,6 +751,17 @@ export interface FetchRequestQuery {
 	limit?: number;
 }
 
+export enum CodeErrorTimeWindow {
+	"HalfHour" = "30 minutes",
+	"Hour" = "1 hour",
+	"ThreeHours" = "3 hours",
+	"SixHours" = "6 hours",
+	"TwelveHours" = "12 hours",
+	"OneDay" = "24 hours",
+	"ThreeDays" = "3 days",
+	"SevenDays" = "7 days",
+}
+
 export interface CSMePreferences {
 	telemetryConsent?: boolean; // legacy
 	telemetryOptOut?: boolean;
@@ -809,6 +823,7 @@ export interface CSMePreferences {
 	issueMru?: {
 		[providerId: string]: { [currentState: string]: string };
 	};
+	codeErrorTimeWindow?: CodeErrorTimeWindow;
 }
 
 export interface RepoSetting {

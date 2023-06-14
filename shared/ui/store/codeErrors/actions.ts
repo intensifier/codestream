@@ -1,5 +1,6 @@
 import {
 	ClaimCodeErrorRequestType,
+	CSAsyncError,
 	DeleteCodeErrorRequestType,
 	FetchCodeErrorsRequestType,
 	GetCodeErrorRequestType,
@@ -9,7 +10,7 @@ import { CSCodeError, CSStackTraceInfo } from "@codestream/protocols/api";
 import { logError } from "@codestream/webview/logger";
 import { HostApi } from "@codestream/webview/webview-api";
 import { action } from "../common";
-import { CodeErrorsActionsTypes } from "./types";
+import { CodeErrorsActionsTypes, FunctionToEdit } from "./types";
 
 export const reset = () => action("RESET");
 
@@ -32,6 +33,18 @@ export const saveCodeErrors = (codeErrors: CSCodeError[]) =>
 export const _updateCodeErrors = (codeErrors: CSCodeError[]) =>
 	action(CodeErrorsActionsTypes.UpdateCodeErrors, codeErrors);
 
+export const setGrokLoading = (loading: boolean) =>
+	action(CodeErrorsActionsTypes.SetGrokLoading, loading);
+
+export const setGrokRepliesLength = (length: number) =>
+	action(CodeErrorsActionsTypes.SetGrokRepliesLength, length);
+
+export const setFunctionToEdit = (functionToEdit: FunctionToEdit | undefined) =>
+	action(CodeErrorsActionsTypes.SetFunctionToEdit, functionToEdit);
+
+export const setGrokError = (grokError: CSAsyncError | undefined) =>
+	action(CodeErrorsActionsTypes.SetGrokError, grokError);
+
 export interface NewCodeErrorAttributes {
 	accountId?: number;
 	objectId?: string;
@@ -48,6 +61,10 @@ export interface NewCodeErrorAttributes {
 		mentionedUserIds?: string[];
 	};
 	providerUrl?: string;
+	codeBlock?: string;
+	analyze: boolean;
+	reinitialize: boolean;
+	parentPostId?: string;
 }
 
 export const _deleteCodeError = (id: string) => action(CodeErrorsActionsTypes.Delete, id);

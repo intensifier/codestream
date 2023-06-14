@@ -15,7 +15,14 @@ import { NewRelicErrorGroup } from "@codestream/protocols/agent";
 type CodeErrorsActions = ActionType<typeof actions>;
 type ActiveIntegrationsActions = ActionType<typeof activeIntegrationsActions>;
 
-const initialState: CodeErrorsState = { bootstrapped: false, codeErrors: {}, errorGroups: {} };
+const initialState: CodeErrorsState = {
+	bootstrapped: false,
+	codeErrors: {},
+	errorGroups: {},
+	grokLoading: false,
+	grokRepliesLength: 0,
+	grokError: undefined,
+};
 
 export function reduceCodeErrors(
 	state = initialState,
@@ -26,6 +33,9 @@ export function reduceCodeErrors(
 			return {
 				bootstrapped: true,
 				errorGroups: state.errorGroups,
+				grokLoading: state.grokLoading,
+				grokRepliesLength: state.grokRepliesLength,
+				grokError: state.grokError,
 				codeErrors: {
 					...state.codeErrors,
 					...toMapBy(
@@ -48,8 +58,12 @@ export function reduceCodeErrors(
 			}
 			return {
 				bootstrapped: state.bootstrapped,
+				grokLoading: state.grokLoading,
+				grokRepliesLength: state.grokRepliesLength,
+				grokError: state.grokError,
 				errorGroups: state.errorGroups,
 				codeErrors: { ...state.codeErrors, ...newCodeErrors },
+				functionToEdit: state.functionToEdit,
 			};
 		}
 		case CodeErrorsActionsTypes.UpdateCodeErrors:
@@ -57,8 +71,27 @@ export function reduceCodeErrors(
 			return {
 				bootstrapped: state.bootstrapped,
 				errorGroups: state.errorGroups,
+				grokLoading: state.grokLoading,
+				grokRepliesLength: state.grokRepliesLength,
+				grokError: state.grokError,
 				codeErrors: { ...state.codeErrors, ...toMapBy("id", action.payload) },
+				functionToEdit: state.functionToEdit,
 			};
+		}
+		case CodeErrorsActionsTypes.SetFunctionToEdit: {
+			if (action.payload) {
+				console.debug(`grokFunctionToEdit: ${JSON.stringify(action.payload).substring(0, 100)}`);
+			}
+			return { ...state, functionToEdit: action.payload };
+		}
+		case CodeErrorsActionsTypes.SetGrokLoading: {
+			return { ...state, grokLoading: action.payload };
+		}
+		case CodeErrorsActionsTypes.SetGrokError: {
+			return { ...state, grokError: action.payload };
+		}
+		case CodeErrorsActionsTypes.SetGrokRepliesLength: {
+			return { ...state, grokRepliesLength: action.payload };
 		}
 		case CodeErrorsActionsTypes.Delete: {
 			const nextCodeErrors = { ...state.codeErrors };
@@ -67,6 +100,10 @@ export function reduceCodeErrors(
 				bootstrapped: state.bootstrapped,
 				codeErrors: nextCodeErrors,
 				errorGroups: state.errorGroups,
+				functionToEdit: state.functionToEdit,
+				grokLoading: state.grokLoading,
+				grokRepliesLength: state.grokRepliesLength,
+				grokError: state.grokError,
 			};
 		}
 		case CodeErrorsActionsTypes.SetErrorGroup: {

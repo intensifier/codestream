@@ -11,7 +11,7 @@ import com.intellij.psi.impl.source.tree.java.PsiMethodCallExpressionImpl
 import com.intellij.psi.search.GlobalSearchScope
 
 class CLMJavaComponent(project: Project) :
-    CLMLanguageComponent<CLMJavaEditorManager>(project, PsiJavaFileImpl::class.java, ::CLMJavaEditorManager) {
+    CLMLanguageComponent<CLMJavaEditorManager>(project, PsiJavaFileImpl::class.java, ::CLMJavaEditorManager, JavaSymbolResolver()) {
 
     private val logger = Logger.getInstance(CLMJavaComponent::class.java)
 
@@ -45,7 +45,7 @@ class CLMJavaComponent(project: Project) :
     }
 }
 
-class CLMJavaEditorManager(editor: Editor) : CLMEditorManager(editor, "java", true) {
+class JavaSymbolResolver : SymbolResolver {
     override fun getLookupClassNames(psiFile: PsiFile): List<String>? {
         if (psiFile !is PsiJavaFileImpl || psiFile.classes.isEmpty()) return null
         val clazz = psiFile.classes[0]
@@ -72,6 +72,9 @@ class CLMJavaEditorManager(editor: Editor) : CLMEditorManager(editor, "java", tr
         return null
     }
 
+}
+
+class CLMJavaEditorManager(editor: Editor) : CLMEditorManager(editor, "java", true, false, JavaSymbolResolver()) {
     override suspend fun findSymbols(psiFile: PsiFile, names: List<String>): Map<String, String> {
         if (psiFile !is PsiJavaFileImpl) return mapOf<String, String>()
         val foo = psiFile.findChildrenByClass(PsiMethodCallExpressionImpl::class.java)

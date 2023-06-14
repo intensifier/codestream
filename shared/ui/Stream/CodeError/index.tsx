@@ -4,9 +4,9 @@ import {
 	NewRelicErrorGroup,
 	ResolveStackTraceResponse,
 } from "@codestream/protocols/agent";
-import { CSCodeError, CSPost, CSUser } from "@codestream/protocols/api";
-import React, { PropsWithChildren, useEffect } from "react";
-import { shallowEqual, useSelector } from "react-redux";
+import { CSCodeError, CSPost, CSStackTraceLine, CSUser } from "@codestream/protocols/api";
+import React, { PropsWithChildren, RefObject, useEffect, useMemo, useRef, useState } from "react";
+import { shallowEqual } from "react-redux";
 import styled from "styled-components";
 
 import { OpenUrlRequestType } from "@codestream/protocols/webview";
@@ -22,15 +22,22 @@ import { CodeStreamState } from "@codestream/webview/store";
 import {
 	fetchCodeError,
 	PENDING_CODE_ERROR_ID_PREFIX,
+	setGrokLoading,
 } from "@codestream/webview/store/codeErrors/actions";
 import { getCodeError, getCodeErrorCreator } from "@codestream/webview/store/codeErrors/reducer";
 import {
 	api,
+	copySymbolFromIde,
 	fetchErrorGroup,
 	jumpToStackLine,
+	startGrokLoading,
 	upgradePendingCodeError,
 } from "@codestream/webview/store/codeErrors/thunks";
-import { getThreadPosts } from "@codestream/webview/store/posts/reducer";
+import {
+	getGrokPostLength,
+	getThreadPosts,
+	getPost,
+} from "@codestream/webview/store/posts/reducer";
 import { isConnected } from "@codestream/webview/store/providers/reducer";
 import {
 	currentUserIsAdminSelector,
@@ -43,10 +50,10 @@ import { useAppDispatch, useAppSelector, useDidMount } from "@codestream/webview
 import { isSha } from "@codestream/webview/utilities/strings";
 import { emptyArray, replaceHtml } from "@codestream/webview/utils";
 import { HostApi } from "@codestream/webview/webview-api";
-import { getPost } from "../../store/posts/reducer";
 import { createPost, deletePost, invite, markItemRead } from "../actions";
 import { Attachments } from "../Attachments";
 import {
+	AuthorInfo,
 	BigTitle,
 	Header,
 	HeaderActions,
@@ -73,6 +80,8 @@ import Timestamp from "../Timestamp";
 import Tooltip from "../Tooltip";
 import { ConditionalNewRelic } from "./ConditionalComponent";
 import { isFeatureEnabled } from "../../store/apiVersioning/reducer";
+import { ReplyBody } from "@codestream/webview/Stream/Posts/Reply";
+import { LoadingMessage } from "@codestream/webview/src/components/LoadingMessage";
 
 interface SimpleError {
 	/**
@@ -105,6 +114,7 @@ export interface BaseCodeErrorProps extends CardProps {
 	stackFrameClickDisabled?: boolean;
 	stackTraceTip?: any;
 	resolutionTip?: any;
+	setGrokRequested: () => void;
 }
 
 export interface BaseCodeErrorHeaderProps {
@@ -262,24 +272,28 @@ const STATES_TO_DISPLAY_STRINGS = {
 export const BaseCodeErrorHeader = (props: PropsWithChildren<BaseCodeErrorHeaderProps>) => {
 	const { codeError, collapsed } = props;
 	const dispatch = useAppDispatch();
+
 	const derivedState = useAppSelector((state: CodeStreamState) => {
+		const allTeamMembers = getTeamMembers(state);
+		const teamMembers = allTeamMembers.filter(_ => _.username !== "Grok");
+
 		return {
 			isConnectedToNewRelic: isConnected(state, { id: "newrelic*com" }),
 			codeErrorCreator: getCodeErrorCreator(state),
 			isCurrentUserInternal: isCurrentUserInternal(state),
 			ideName: encodeURIComponent(state.ide.name || ""),
-			teamMembers: getTeamMembers(state),
+			teamMembers: teamMembers,
 			emailAddress: state.session.userId ? state.users[state.session.userId]?.email : "",
 			hideCodeErrorInstructions: state.preferences.hideCodeErrorInstructions,
 			isPDIdev: isFeatureEnabled(state, "PDIdev"),
 		};
 	});
 
-	const [items, setItems] = React.useState<DropdownButtonItems[]>([]);
-	const [states, setStates] = React.useState<DropdownButtonItems[] | undefined>(undefined);
-	const [openConnectionModal, setOpenConnectionModal] = React.useState(false);
-	const [isStateChanging, setIsStateChanging] = React.useState(false);
-	const [isAssigneeChanging, setIsAssigneeChanging] = React.useState(false);
+	const [items, setItems] = useState<DropdownButtonItems[]>([]);
+	const [states, setStates] = useState<DropdownButtonItems[] | undefined>(undefined);
+	const [openConnectionModal, setOpenConnectionModal] = useState(false);
+	const [isStateChanging, setIsStateChanging] = useState(false);
+	const [isAssigneeChanging, setIsAssigneeChanging] = useState(false);
 
 	const notify = (emailAddress?: string) => {
 		// if no email address or it's you
@@ -519,6 +533,7 @@ export const BaseCodeErrorHeader = (props: PropsWithChildren<BaseCodeErrorHeader
 				// if we have an assignee don't re-include them here
 				usersFromCodeStream = usersFromCodeStream.filter(_ => _.email !== assigneeEmail);
 			}
+
 			if (usersFromCodeStream.length) {
 				assigneeItems.push({ label: "-", key: "sep-nr" });
 				assigneeItems.push({
@@ -892,7 +907,7 @@ export const BaseCodeErrorHeader = (props: PropsWithChildren<BaseCodeErrorHeader
 									delay={1}
 								>
 									{props.errorGroup?.errorGroupUrl && props.codeError.title ? (
-										<span>
+										<span data-testid="code-error-title">
 											<Link
 												href={
 													props.errorGroup.errorGroupUrl! +
@@ -903,7 +918,7 @@ export const BaseCodeErrorHeader = (props: PropsWithChildren<BaseCodeErrorHeader
 											</Link>
 										</span>
 									) : (
-										<span>{title}</span>
+										<span data-testid="code-error-title">{title}</span>
 									)}
 								</Tooltip>
 							}
@@ -952,17 +967,17 @@ export const BaseCodeErrorMenu = (props: BaseCodeErrorMenuProps) => {
 		};
 	});
 	const currentUserIsAdmin = useAppSelector(currentUserIsAdminSelector);
-	const [isLoading, setIsLoading] = React.useState(false);
-	const [menuState, setMenuState] = React.useState<{ open: boolean; target?: any }>({
+	const [isLoading, setIsLoading] = useState(false);
+	const [menuState, setMenuState] = useState<{ open: boolean; target?: any }>({
 		open: false,
 		target: undefined,
 	});
 
-	const [shareModalOpen, setShareModalOpen] = React.useState(false);
+	const [shareModalOpen, setShareModalOpen] = useState(false);
 
-	const permalinkRef = React.useRef<HTMLTextAreaElement>(null);
+	const permalinkRef = useRef<HTMLTextAreaElement>(null);
 
-	const menuItems = React.useMemo(() => {
+	const menuItems = useMemo(() => {
 		const items: DropdownButtonItems[] = [];
 
 		if (props.errorGroup) {
@@ -993,7 +1008,7 @@ export const BaseCodeErrorMenu = (props: BaseCodeErrorMenuProps) => {
 
 		if (currentUserIsAdmin) {
 			items.push({
-				label: "Delete All",
+				label: "Delete All Replies",
 				icon: <Icon name="trash" />,
 				key: "deleteAll-permalink",
 				action: () => {
@@ -1134,7 +1149,7 @@ export const BaseCodeErrorMenu = (props: BaseCodeErrorMenuProps) => {
 const BaseCodeError = (props: BaseCodeErrorProps) => {
 	const dispatch = useAppDispatch();
 	const derivedState = useAppSelector((state: CodeStreamState) => {
-		const codeError = state.codeErrors[props.codeError.id] || props.codeError;
+		const codeError: CSCodeError = state.codeErrors[props.codeError.id] || props.codeError;
 		const codeAuthorId = (props.codeError.codeAuthorIds || [])[0];
 
 		return {
@@ -1144,24 +1159,89 @@ const BaseCodeError = (props: BaseCodeErrorProps) => {
 			codeAuthor: state.users[codeAuthorId || props.codeError?.creatorId],
 			codeError,
 			errorGroup: props.errorGroup,
-			errorGroupIsLoading: (state.codeErrors.errorGroups[codeError.objectId] as any)?.isLoading,
+			errorGroupIsLoading: codeError.objectId
+				? state.codeErrors.errorGroups[codeError.objectId]?.isLoading
+				: false,
 			currentCodeErrorData: state.context.currentCodeErrorData,
 			hideCodeErrorInstructions: state.preferences.hideCodeErrorInstructions,
+			replies: props.collapsed
+				? emptyArray
+				: getThreadPosts(state, codeError.streamId, codeError.postId),
+			showGrok: isFeatureEnabled(state, "showGrok"),
 		};
-	});
+	}, shallowEqual);
 	const renderedFooter = props.renderFooter && props.renderFooter(CardFooter, ComposeWrapper);
 	const { codeError, errorGroup } = derivedState;
 
-	const [currentSelectedLine, setCurrentSelectedLineIndex] = React.useState(
+	const [currentSelectedLine, setCurrentSelectedLineIndex] = useState<number>(
 		derivedState.currentCodeErrorData?.lineIndex || 0
 	);
-	const [didJumpToFirstAvailableLine, setDidJumpToFirstAvailableLine] = React.useState(false);
+	const [didJumpToFirstAvailableLine, setDidJumpToFirstAvailableLine] = useState(false);
+	const [didCopyMethod, setDidCopyMethod] = useState(false);
+	const [jumpLocation, setJumpLocation] = useState<number | undefined>();
+
+	const functionToEdit = useAppSelector(state => state.codeErrors.functionToEdit);
+	const isGrokLoading = useAppSelector(state => state.codeErrors.grokLoading);
+	const grokMarkRepliesLength = useAppSelector(state => state.codeErrors.grokRepliesLength);
+	const currentGrokRepliesLength = useAppSelector(state =>
+		getGrokPostLength(state, codeError.streamId, codeError.postId)
+	);
+
+	useEffect(() => {
+		// console.debug(
+		// 	`===--- grok loading useEffect loading ${isGrokLoading} currentGrokRepliesLength: ${currentGrokRepliesLength} grokRepliesLength: ${grokMarkRepliesLength}`
+		// );
+		if (
+			grokMarkRepliesLength !== undefined &&
+			isGrokLoading &&
+			currentGrokRepliesLength > grokMarkRepliesLength
+		) {
+			// console.debug(
+			// 	`===--- setGrokLoading false ${currentGrokRepliesLength} > ${grokMarkRepliesLength}`
+			// );
+			dispatch(setGrokLoading(false));
+		}
+	}, [isGrokLoading, currentGrokRepliesLength]);
+
+	if (derivedState.showGrok) {
+		useEffect(() => {
+			const submitGrok = async (codeBlock: string) => {
+				// console.debug("===--- useEffect startGrokLoading");
+				props.setGrokRequested();
+				dispatch(startGrokLoading(props.codeError));
+				const actualCodeError = (await dispatch(
+					upgradePendingCodeError(props.codeError.id, "Comment", codeBlock, true)
+				)) as
+					| {
+							codeError: CSCodeError | undefined;
+					  }
+					| undefined;
+
+				if (!actualCodeError || !actualCodeError.codeError) {
+					return;
+				}
+
+				dispatch(markItemRead(props.codeError.id, actualCodeError.codeError.numReplies + 1));
+
+				// setIsLoading(false);
+				// setText("");
+				// setAttachments([]);
+			};
+			// if (derivedState.replies?.length === 0 && functionToEdit) {
+			if (currentGrokRepliesLength === 0 && functionToEdit) {
+				// setIsLoading(true);
+				submitGrok(functionToEdit.codeBlock).catch(e => {
+					console.error("submitGrok failed", e);
+				});
+			}
+		}, [functionToEdit]);
+	}
 
 	const onClickStackLine = async (event, lineIndex) => {
 		event && event.preventDefault();
 		if (props.collapsed) return;
 		const { stackTraces } = codeError;
-		const stackInfo = (stackTraces && stackTraces[0]) || codeError.stackInfo;
+		const stackInfo = stackTraces?.[0];
 		if (stackInfo && stackInfo.lines[lineIndex] && stackInfo.lines[lineIndex].line !== undefined) {
 			setCurrentSelectedLineIndex(lineIndex);
 			dispatch(
@@ -1174,36 +1254,84 @@ const BaseCodeError = (props: BaseCodeErrorProps) => {
 	const stackTrace = stackTraces && stackTraces[0] && stackTraces[0].lines;
 	const stackTraceText = stackTraces && stackTraces[0] && stackTraces[0].text;
 
+	// This can be incredibly complex with nested anonymous inner functions. For the current approach
+	// we rely on the stack trace having a named method for us to latch on to send for error analysis.
+	// An alternate approach would be to resolve with language symbols in the IDE and bubble up to the
+	// appropriate scope to find the best code segment to send. (i.e. up to the method of a class, but
+	// not all the way up to the class itself)
+	function extractMethodName(lines: CSStackTraceLine[]): CSStackTraceLine | undefined {
+		for (const line of lines) {
+			if (
+				line.method &&
+				line.resolved &&
+				line.method !== "<unknown>" &&
+				line.fileFullPath !== "<anonymous>"
+			) {
+				return line;
+			}
+		}
+		return undefined;
+	}
+
+	useEffect(() => {
+		if (
+			!props.collapsed &&
+			jumpLocation !== undefined &&
+			didJumpToFirstAvailableLine &&
+			!didCopyMethod
+		) {
+			const { stackTraces } = codeError;
+			const stackInfo = stackTraces?.[0];
+			// console.debug(`===--- symbol useEffect`);
+			if (stackInfo?.lines) {
+				// This might be different from the jumpToLine lineIndex if jumpToLine is an anonymous function
+				// This also might not be the best approach, but it's a start
+				const line = extractMethodName(stackInfo.lines);
+				if (line?.fileRelativePath) {
+					const { stackTraces } = codeError;
+					const stackInfo = stackTraces?.[0];
+					// console.debug(`===--- symbol useEffect`, line.method);
+					try {
+						// console.debug(`===--- symbol useEffect calling copySymbolFromIde`);
+						dispatch(copySymbolFromIde(line, stackInfo.repoId, stackInfo.sha));
+					} catch (ex) {
+						console.warn(ex);
+					}
+					setDidCopyMethod(true);
+					setTimeout(() => {
+						try {
+							// console.debug(`===--- symbol useEffect calling jumpToStackLine`);
+							dispatch(
+								jumpToStackLine(
+									jumpLocation,
+									stackInfo.lines[jumpLocation],
+									stackInfo.sha!,
+									stackInfo.repoId!
+								)
+							);
+						} catch (ex) {
+							console.warn(ex);
+						}
+					}, 100);
+				}
+			}
+		}
+	}, [codeError, jumpLocation, didJumpToFirstAvailableLine]);
+
 	useEffect(() => {
 		if (!props.collapsed && !didJumpToFirstAvailableLine) {
 			const { stackTraces } = codeError;
-			const stackInfo = (stackTraces && stackTraces[0]) || codeError.stackInfo;
+			const stackInfo = stackTraces?.[0];
 			if (stackInfo?.lines) {
 				let lineIndex = currentSelectedLine;
 				const len = stackInfo.lines.length;
-				while (
-					lineIndex < len &&
-					// stackInfo.lines[lineNum].line !== undefined &&
-					stackInfo.lines[lineIndex].error
-				) {
+				while (lineIndex < len && !stackInfo.lines[lineIndex].resolved) {
 					lineIndex++;
 				}
 				if (lineIndex < len) {
 					setDidJumpToFirstAvailableLine(true);
+					setJumpLocation(lineIndex);
 					setCurrentSelectedLineIndex(lineIndex);
-
-					try {
-						dispatch(
-							jumpToStackLine(
-								lineIndex,
-								stackInfo.lines[lineIndex],
-								stackInfo.sha,
-								stackInfo.repoId!
-							)
-						);
-					} catch (ex) {
-						console.warn(ex);
-					}
 				}
 			}
 		}
@@ -1266,7 +1394,7 @@ const BaseCodeError = (props: BaseCodeErrorProps) => {
 										>
 											<DisabledClickLine key={"disabled-line" + i} className="monospace">
 												<span>
-													<span style={{ opacity: ".6" }}>{line.method}</span>({mline}:
+													<span style={{ opacity: ".6" }}>{line.fullMethod}</span>({mline}:
 													<strong>{line.line}</strong>
 													{line.column ? `:${line.column}` : null})
 												</span>
@@ -1361,6 +1489,7 @@ const BaseCodeError = (props: BaseCodeErrorProps) => {
 			)}
 			{codeError?.text && (
 				<Message
+					data-testid="code-error-text"
 					style={{
 						opacity: derivedState.hideCodeErrorInstructions ? "1" : ".25",
 					}}
@@ -1395,13 +1524,13 @@ const BaseCodeError = (props: BaseCodeErrorProps) => {
 						})}
 
 					{props.repoInfo && (
-						<DataRow>
+						<DataRow data-testid="code-error-repo">
 							<DataLabel>Repo:</DataLabel>
 							<DataValue>{props.repoInfo.repoName}</DataValue>
 						</DataRow>
 					)}
 					{repoRef && (
-						<DataRow>
+						<DataRow data-testid="code-error-ref">
 							<DataLabel>Build:</DataLabel>
 							<DataValue>{repoRef}</DataValue>
 						</DataRow>
@@ -1464,18 +1593,24 @@ const renderMetaSectionCollapsed = (props: BaseCodeErrorProps) => {
 	);
 };
 
-const ReplyInput = (props: { codeError: CSCodeError }) => {
+const ReplyInput = (props: { codeError: CSCodeError; setGrokRequested: () => void }) => {
 	const dispatch = useAppDispatch();
-	const [text, setText] = React.useState("");
-	const [attachments, setAttachments] = React.useState<AttachmentField[]>([]);
-	const [isLoading, setIsLoading] = React.useState(false);
-	const teamMates = useSelector((state: CodeStreamState) => getTeamMates(state));
+	const [text, setText] = useState("");
+	const [attachments, setAttachments] = useState<AttachmentField[]>([]);
+	const [isLoading, setIsLoading] = useState(false);
+	const teamMates = useAppSelector((state: CodeStreamState) => getTeamMates(state));
+	const showGrok = useAppSelector(state => isFeatureEnabled(state, "showGrok"));
 
 	const submit = async () => {
 		// don't create empty replies
 		if (text.length === 0) return;
 
+		props.setGrokRequested();
+
 		setIsLoading(true);
+		if (showGrok && text.match(/@Grok/gim)) {
+			dispatch(startGrokLoading(props.codeError));
+		}
 
 		const actualCodeError = (await dispatch(
 			upgradePendingCodeError(props.codeError.id, "Comment")
@@ -1567,7 +1702,7 @@ export type CodeErrorProps = PropsWithId | PropsWithCodeError;
 
 const CodeErrorForCodeError = (props: PropsWithCodeError) => {
 	const { codeError, ...baseProps } = props;
-	const derivedState = useSelector((state: CodeStreamState) => {
+	const derivedState = useAppSelector((state: CodeStreamState) => {
 		const post =
 			codeError && codeError.postId
 				? getPost(state.posts, codeError!.streamId, codeError.postId)
@@ -1587,12 +1722,49 @@ const CodeErrorForCodeError = (props: PropsWithCodeError) => {
 		};
 	}, shallowEqual);
 
-	const [preconditionError, setPreconditionError] = React.useState<SimpleError>({
-		message: "",
-		type: "",
-	});
-	const [isEditing, setIsEditing] = React.useState(false);
-	const [shareModalOpen, setShareModalOpen] = React.useState(false);
+	const isGrokLoading = useAppSelector(state => state.codeErrors.grokLoading);
+	const grokError = useAppSelector(state =>
+		state.codeErrors.grokError
+			? { message: state.codeErrors.grokError.errorMessage, type: "warning" }
+			: undefined
+	);
+
+	const [headerError, setHeaderError] = useState<SimpleError>();
+	const [isEditing, setIsEditing] = useState(false);
+	const [shareModalOpen, setShareModalOpen] = useState(false);
+	const [scrollNewTarget, setScrollNewTarget] = useState<RefObject<HTMLElement> | undefined>(
+		undefined
+	);
+	const [isGrokRequested, setIsGrokRequested] = useState(false);
+	const currentGrokRepliesLength = useAppSelector(state =>
+		getGrokPostLength(state, props.codeError.streamId, props.codeError.postId)
+	);
+
+	function scrollToNew() {
+		const target = scrollNewTarget?.current;
+		if (target) {
+			// console.debug("===--- scrollToNew ", target);
+			target.scrollIntoView({ behavior: "smooth", block: "start", inline: "nearest" });
+		} else {
+			// console.debug("===--- scrollToNew no target", scrollNewTarget);
+		}
+	}
+
+	useEffect(() => {
+		if (isGrokRequested && currentGrokRepliesLength > 0) {
+			// console.debug(`---=== useEffect calling scrollToNew ${currentGrokRepliesLength} ===---`);
+			scrollToNew();
+		}
+	}, [currentGrokRepliesLength]);
+
+	function scrollNewTargetCallback(ref: RefObject<HTMLElement>) {
+		// console.debug("===--- scrollNewTargetCallback setScrollNewTarget ", ref);
+		setScrollNewTarget(ref);
+	}
+
+	function setGrokRequested() {
+		setIsGrokRequested(true);
+	}
 
 	useDidMount(() => {
 		if (!props.collapsed) {
@@ -1608,30 +1780,66 @@ const CodeErrorForCodeError = (props: PropsWithCodeError) => {
 		((Footer, InputContainer) => {
 			if (props.collapsed) return null;
 
+			const grokMessage =
+				currentGrokRepliesLength === 0
+					? "Hold on while I analyze this error for you..."
+					: "Hold on while I think about that...";
+
+			// console.debug(`===--- length: ${currentGrokRepliesLength} message: ${grokMessage} isGrokLoading: ${isGrokLoading} ---===`);
+
 			return (
 				<Footer className="replies-to-review" style={{ borderTop: "none", marginTop: 0 }}>
 					{props.codeError.postId && (
 						<>
-							{derivedState.replies?.length > 0 && <MetaLabel>Activity</MetaLabel>}
+							{<MetaLabel>Activity</MetaLabel>}
 							<RepliesToPost
 								streamId={props.codeError.streamId}
 								parentPostId={props.codeError.postId}
 								itemId={props.codeError.id}
 								numReplies={props.codeError.numReplies}
+								scrollNewTargetCallback={scrollNewTargetCallback}
+								codeErrorId={props.codeError.id}
+								noReply={true}
 							/>
+							{grokError && (
+								<DelayedRender>
+									<div className="color-warning">
+										<div>{grokError.message}</div>
+									</div>
+								</DelayedRender>
+							)}
+							{isGrokLoading && (
+								<DelayedRender>
+									<ReplyBody style={{ marginTop: 13 }}>
+										<AuthorInfo style={{ fontWeight: 700 }}>
+											<Headshot
+												size={20}
+												person={{
+													username: "Grok",
+													avatar: { image: "https://images.codestream.com/icons/grok-green.png" },
+												}}
+											/>
+											<span>Grok</span>
+										</AuthorInfo>
+									</ReplyBody>
+									<LoadingMessage data-testid="grok-loading-message" align={"left"}>
+										{grokMessage}
+									</LoadingMessage>
+								</DelayedRender>
+							)}
 						</>
 					)}
 
 					{InputContainer && !derivedState.isPDIdev && (
 						<InputContainer>
-							<ReplyInput codeError={codeError} />
+							<ReplyInput codeError={codeError} setGrokRequested={setGrokRequested} />
 						</InputContainer>
 					)}
 				</Footer>
 			);
 		});
 
-	const repoInfo = React.useMemo(() => {
+	const repoInfo = useMemo(() => {
 		const { stackTraces } = codeError;
 		let stackInfo = stackTraces && stackTraces[0]; // TODO deal with multiple stacks
 		if (!stackInfo) stackInfo = (codeError as any).stackInfo; // this is for old code, maybe can remove after a while?
@@ -1664,7 +1872,8 @@ const CodeErrorForCodeError = (props: PropsWithCodeError) => {
 				currentUserId={derivedState.currentUser.id}
 				renderFooter={renderFooter}
 				setIsEditing={setIsEditing}
-				headerError={preconditionError}
+				headerError={headerError}
+				setGrokRequested={setGrokRequested}
 			/>
 		</>
 	);
@@ -1677,7 +1886,7 @@ const CodeErrorForId = (props: PropsWithId) => {
 	const codeError = useAppSelector((state: CodeStreamState) => {
 		return getCodeError(state.codeErrors, id);
 	});
-	const [notFound, setNotFound] = React.useState(false);
+	const [notFound, setNotFound] = useState(false);
 
 	useDidMount(() => {
 		let isValid = true;

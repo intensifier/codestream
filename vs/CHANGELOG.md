@@ -1,16 +1,33 @@
 # Change Log
 
+## [14.23.0] - 2023-06-15
+
+### Added
+- Added the abillity to select a time range for viewing all errors of a service instead of showing the 5 most recent
+
+### Changed
+- Removed custom queries for Bitbucket
+- Altered CodeStream loading UI to show a skeleton animation instead of loading text
+- Altered styling on buttons across CodeStream
+- Renamed the option to "Delete All" to "Delete All Replies" for comment threads in errors
+
+### Fixed
+- Fixed error with Slack integration that prevented deletion of posts from CodeStream from synchronizing with Slack channels and direct messages
+- Fixed a bug that showed the repo selection prompt after opening an error from the observability section
+- Fixed a bug with Bitbucket pull requests all being expanded if there are any with the same numerical name
+
 ## [14.22.0] - 2023-6-01
 
 ### Changed
 - Altered Bitbucket Add Reviewers dropdown to account for no reviewers available	
+- Altered Bitbucket Icons for Pull Request Approval and Change Requests	
 
 ### Fixed
 - Fixed Bitbucket api request timeout issue
-- Fixed Bitbucket issue that allowed codestream to remove a status reviewer
 - Fixed Bitbucket issue that allowed already assigned reviewer to be selected again
 - Fixed Bitbucket issue that allowed assigning reviewers to an already declined pull request
-- Fixed Bitbucket issue that caused review buttons to be active without reviewer selected
+- Fixed Bitbucket UI issue that displayed duplicate reviewers until refreshing
+- Fixed Bitbucket issue that caused add/remove reviewers buttons to be active without reviewers selected
 
 ## [14.21.0] - 2023-5-25
 
