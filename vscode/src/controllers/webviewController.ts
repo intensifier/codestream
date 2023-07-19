@@ -19,8 +19,8 @@ import {
 	DidChangeVersionCompatibilityNotification,
 	DidChangeVersionCompatibilityNotificationType,
 	DidEncounterMaintenanceModeNotificationType,
-	RefreshMaintenancePollNotificationType,
 	DidResolveStackTraceLineNotificationType,
+	RefreshMaintenancePollNotificationType,
 	ReportingMessageType,
 	VersionCompatibility
 } from "@codestream/protocols/agent";
@@ -29,11 +29,16 @@ import {
 	ActiveEditorInfo,
 	ApplyMarkerRequestType,
 	BootstrapInHostRequestType,
+	CompareLocalFilesRequestType,
 	CompareMarkerRequestType,
 	ConnectToIDEProviderRequestType,
 	DisconnectFromIDEProviderRequestType,
+	EditorContext,
+	EditorCopySymbolType,
 	EditorHighlightRangeRequestType,
+	EditorReplaceSymbolType,
 	EditorRevealRangeRequestType,
+	EditorRevealSymbolRequestType,
 	EditorScrollToNotificationType,
 	EditorSelectRangeRequestType,
 	GetActiveEditorContextRequestType,
@@ -41,16 +46,23 @@ import {
 	HostDidChangeConfigNotificationType,
 	HostDidChangeEditorSelectionNotificationType,
 	HostDidChangeEditorVisibleRangesNotificationType,
+	HostDidChangeLayoutNotificationType,
 	HostDidChangeVisibleEditorsNotificationType,
+	HostDidChangeWorkspaceFoldersNotificationType,
 	HostDidLogoutNotificationType,
 	HostDidReceiveRequestNotificationType,
-	HostDidChangeWorkspaceFoldersNotificationType,
 	InsertTextRequestType,
+	IpcRoutes,
+	isIpcRequestMessage,
+	isIpcResponseMessage,
 	LocalFilesCloseDiffRequestType,
 	LogoutRequestType,
 	NewCodemarkNotificationType,
+	NewPullRequestBranch,
+	NewPullRequestNotificationType,
 	NewReviewNotificationType,
 	OpenUrlRequestType,
+	RefreshEditorsCodeLensRequestType,
 	ReloadWebviewRequestType,
 	RestartRequestType,
 	ReviewCloseDiffRequestType,
@@ -59,39 +71,27 @@ import {
 	ShellPromptFolderRequestType,
 	ShowCodemarkNotificationType,
 	ShowNextChangedFileNotificationType,
-	ShowPreviousChangedFileNotificationType,
 	ShowNextChangedFileRequestType,
+	ShowPreviousChangedFileNotificationType,
 	ShowPreviousChangedFileRequestType,
+	ShowPullRequestNotificationType,
 	ShowReviewNotificationType,
+	SidebarLocation,
 	StartWorkNotificationType,
+	TeamlessContext,
+	TraverseDiffsRequestType,
 	UpdateConfigurationRequestType,
 	UpdateServerUrlRequestType,
+	ViewAnomalyNotification,
+	ViewAnomalyNotificationType,
+	ViewMethodLevelTelemetryNotificationType,
+	WebviewContext,
 	WebviewDidChangeContextNotificationType,
 	WebviewDidInitializeNotificationType,
-	TraverseDiffsRequestType,
-	CompareLocalFilesRequestType,
-	NewPullRequestNotificationType,
-	ShowPullRequestNotificationType,
-	HostDidChangeLayoutNotificationType,
-	NewPullRequestBranch,
-	ViewMethodLevelTelemetryNotificationType,
-	RefreshEditorsCodeLensRequestType,
-	EditorContext,
-	IpcRoutes,
-	isIpcRequestMessage,
-	isIpcResponseMessage,
-	SidebarLocation,
-	TeamlessContext,
-	WebviewContext,
 	WebviewIpcMessage,
 	WebviewIpcNotificationMessage,
 	WebviewIpcRequestMessage,
-	WebviewPanels,
-	EditorRevealSymbolRequestType,
-	EditorCopySymbolType,
-	EditorReplaceSymbolType,
-	ViewAnomalyNotificationType,
-	ViewAnomalyNotification
+	WebviewPanels
 } from "@codestream/protocols/webview";
 import {
 	authentication,
@@ -99,21 +99,21 @@ import {
 	ConfigurationChangeEvent,
 	ConfigurationTarget,
 	Disposable,
+	env,
 	Range,
+	Selection,
 	TextEditor,
 	TextEditorSelectionChangeEvent,
 	TextEditorVisibleRangesChangeEvent,
 	Uri,
 	ViewColumn,
 	window,
-	workspace,
-	env,
-	Selection
+	workspace
 } from "vscode";
 import { NotificationType, RequestType } from "vscode-languageclient";
 
 import { gate } from "../system/decorators/gate";
-import { Strings, Functions, log } from "../system";
+import { Functions, log, Strings } from "../system";
 import { openUrl } from "../urlHandler";
 import { toLoggableIpcMessage, WebviewLike } from "../webviews/webviewLike";
 import { toCSGitUri } from "../providers/gitContentProvider";
@@ -132,6 +132,7 @@ import { Logger } from "../logger";
 import { BuiltInCommands } from "../constants";
 import * as csUri from "../system/uri";
 import * as TokenManager from "../api/tokenManager";
+import { SaveTokenReason } from "../api/tokenManager";
 import { copySymbol, replaceSymbol } from "./symbolEditController";
 
 const emptyObj = {};
@@ -1112,6 +1113,7 @@ export class WebviewController implements Disposable {
 						if (token) {
 							token.url = params.serverUrl;
 							await TokenManager.addOrUpdate(
+								SaveTokenReason.UPDATE_SERVER_URL,
 								params.serverUrl,
 								Container.config.email,
 								params.currentTeamId,

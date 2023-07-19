@@ -1,5 +1,13 @@
 # Change Log
 
+## [14.24.0] - 2023-07-19
+
+### Fixed
+- Addresses [#1511](https://github.com/TeamCodeStream/codestream/issues/1511) &mdash; Can't open PR details in Bitbucket
+- Fixes an issue where you would get signed out of CodeStream when switching repos in your IDE
+- Fixes an issue where CodeStream would incorrectly allow you to remove a review with status from a Bitbucket PR
+- Fixes an issue where an expanded Bitbucket PR couldn't be collapsed
+
 ## [14.23.0] - 2023-06-16
 
 ### Added

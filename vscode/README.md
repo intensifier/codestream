@@ -10,9 +10,7 @@ Shift left by making code performance, code review and code discussion part of t
 
 - **Code Hosts:** Bitbucket, Bitbucket Server, GitHub, GitHub Enterprise, GitLab, GitLab Self-Managed
 - **Issue Trackers:** Asana, Azure DevOps, Bitbucket, GitHub, GitHub Enterprise, GitLab, GitLab Self-Managed, Jira, Linear, Shortcut, Trello, YouTrack
-- **Observability:** New Relic
 - **Messaging Services:** Slack, Microsoft Teams
-- **CI/CD:** CircleCI
 
 ### Requirements
 

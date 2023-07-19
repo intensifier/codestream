@@ -34,6 +34,7 @@ module.exports = {
 		"@typescript-eslint/no-empty-function": "warn",
 		"@typescript-eslint/ban-ts-comment": "warn",
 		"@typescript-eslint/ban-types": "warn",
+		"@typescript-eslint/no-explicit-any": "warn",
 		"@typescript-eslint/no-this-alias": "warn",
 		"prefer-spread": "warn",
 		"no-case-declarations": "warn",

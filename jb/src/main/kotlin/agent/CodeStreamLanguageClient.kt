@@ -3,6 +3,8 @@ package com.codestream.agent
 import com.codestream.agent.handlers.ResolveStackTraceHandler
 import com.codestream.agentService
 import com.codestream.appDispatcher
+import com.codestream.authentication.CSLogoutReason
+import com.codestream.authentication.SaveTokenReason
 import com.codestream.authenticationService
 import com.codestream.clmService
 import com.codestream.codeStream
@@ -111,7 +113,7 @@ class CodeStreamLanguageClient(private val project: Project) : LanguageClient {
             project.codeStream?.show {
                 project.webViewService?.postNotification("codestream/didEncounterMaintenanceMode", json, true)
                 appDispatcher.launch {
-                    project.authenticationService?.logout()
+                    project.authenticationService?.logout(CSLogoutReason.MAINTAINENCE_MODE)
                 }
             }
         }
@@ -135,17 +137,28 @@ class CodeStreamLanguageClient(private val project: Project) : LanguageClient {
     fun didLogin(json: JsonElement) {
         val notification = gson.fromJson<DidLoginNotification>(json)
         project.agentService?.onDidStart {
-            project.authenticationService?.completeLogin(notification.data)
+            project.authenticationService?.completeLogin(SaveTokenReason.LOGIN_SUCCESS, notification.data)
         }
     }
 
     @JsonNotification("codestream/didLogout")
-    fun didLogout(notification: DidLogoutNotification) = appDispatcher.launch {
-        project.authenticationService?.logout()
+    fun didLogout(json: JsonElement) {
+        // DidLogoutNotification in function signature doesn't work for some reason - reason: null
+        // Maybe gson inside of lsp not aware of inner type LogoutReason?
+        val notification = gson.fromJson<DidLogoutNotification>(json)
+        logger.info("codeStream/didLogout: ${notification.reason}")
+        appDispatcher.launch {
+            if (notification.reason == LogoutReason.UNSUPPORTED_VERSION) {
+                project.authenticationService?.logout(CSLogoutReason.UNSUPPORTED_VERSION)
+            } else {
+                project.authenticationService?.logout(CSLogoutReason.DID_LOGOUT)
+            }
 
-        if (notification.reason === LogoutReason.TOKEN) {
-            project.agentService?.onDidStart {
-                project.webViewService?.load(true)
+            if (notification.reason === LogoutReason.TOKEN) {
+                logger.info("codeStream/didLogout: LogoutReason.TOKEN -> resetting web context")
+                project.agentService?.onDidStart {
+                    project.webViewService?.load(true)
+                }
             }
         }
     }
@@ -173,8 +186,10 @@ class CodeStreamLanguageClient(private val project: Project) : LanguageClient {
     }
 
     @JsonNotification("codestream/restartRequired")
-    fun restartRequired(json: JsonElement) = appDispatcher.launch {
-        project.agentService?.restart()
+    fun restartRequired(json: JsonElement) {
+        appDispatcher.launch {
+            project.agentService?.restart()
+        }
     }
 
     @JsonRequest("codestream/url/open")

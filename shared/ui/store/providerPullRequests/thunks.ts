@@ -296,6 +296,15 @@ export interface PRRequest {
 	index?: number;
 }
 
+// TODO fix
+// On full build this error is thrown by lsp. On esbuild dev mode it is not, hence this workaround
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function throwIfError(response: any) {
+	if (response?.exception?.responseError?.message) {
+		throw response.exception.responseError;
+	}
+}
+
 export const getMyPullRequests = createAppAsyncThunk<
 	GetMyPullRequestsResponse[][] | undefined,
 	PRRequest
@@ -329,6 +338,7 @@ export const getMyPullRequests = createAppAsyncThunk<
 				force: force || (options && options.force),
 			},
 		});
+		throwIfError(response);
 		if (index !== undefined) {
 			dispatch(updatePullRequestFilter({ providerId, data: response, index }));
 		} else if (!test && response != null) {

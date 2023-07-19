@@ -16,6 +16,7 @@ module.exports = {
 		"no-empty": "warn",
 		"no-useless-escape": "warn",
 		"no-control-regex": "warn",
+		"@typescript-eslint/no-explicit-any": "warn",
 		"@typescript-eslint/no-inferrable-types": "warn",
 		"no-inner-declarations": "warn",
 		"no-constant-condition": "warn",

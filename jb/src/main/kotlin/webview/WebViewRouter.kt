@@ -2,6 +2,7 @@ package com.codestream.webview
 
 import com.codestream.agentService
 import com.codestream.appDispatcher
+import com.codestream.authentication.CSLogoutReason
 import com.codestream.authenticationService
 import com.codestream.clmService
 import com.codestream.editorService
@@ -152,7 +153,7 @@ class WebViewRouter(val project: Project) {
     private suspend fun logout(message: WebViewMessage) {
         val authentication = project.authenticationService ?: return
         val request = gson.fromJson<LogoutRequest>(message.params!!)
-        authentication.logout(request.newServerUrl)
+        authentication.logout(CSLogoutReason.WEBVIEW_MSG, request.newServerUrl)
     }
 
     private suspend fun restart(message: WebViewMessage) {

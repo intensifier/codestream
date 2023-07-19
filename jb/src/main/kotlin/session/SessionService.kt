@@ -2,6 +2,7 @@ package com.codestream.session
 
 import com.codestream.agent.DidChangeUnreadsNotification
 import com.codestream.agentService
+import com.codestream.authentication.CSLogoutReason
 import com.codestream.telemetry.ErrorHandler
 import com.codestream.protocols.agent.CSPreferences
 import com.codestream.protocols.agent.CSUser
@@ -12,6 +13,7 @@ import com.codestream.protocols.agent.Stream
 import com.codestream.protocols.agent.UserLoggedIn
 import com.google.gson.JsonObject
 import com.intellij.openapi.project.Project
+import com.intellij.profiler.eventtrace.parser.panels.logger
 import kotlin.properties.Delegates
 
 typealias UserLoggedInObserver = (UserLoggedIn?) -> Unit
@@ -110,7 +112,8 @@ class SessionService(val project: Project) {
         ErrorHandler.agentService = project.agentService
     }
 
-    fun logout() {
+    fun logout(logoutReason: CSLogoutReason) {
+        logger.info("SessionService.logout: $logoutReason")
         _userLoggedIn = null
         _unreads = 0
     }

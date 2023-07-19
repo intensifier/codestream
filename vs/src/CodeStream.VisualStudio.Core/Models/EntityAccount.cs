@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using Newtonsoft.Json;
 
 namespace CodeStream.VisualStudio.Core.Models
@@ -15,6 +16,15 @@ namespace CodeStream.VisualStudio.Core.Models
 		[JsonProperty("entityName", NullValueHandling = NullValueHandling.Ignore)]
 		public string EntityName { get; set; }
 		[JsonProperty("tags", NullValueHandling = NullValueHandling.Ignore)]
-		public IDictionary<string, string[]> Tags { get; set; } = new Dictionary<string, string[]>();
+		public IList<EntityAccountTagCollection> Tags { get; set; } = new List<EntityAccountTagCollection>();
+	}
+
+	public class EntityAccountTagCollection
+	{
+		[JsonProperty("key", NullValueHandling = NullValueHandling.Ignore)]
+		public string Key { get; set; }
+
+		[JsonProperty("values", NullValueHandling = NullValueHandling.Ignore)]
+		public string[] Values { get; set; }
 	}
 }

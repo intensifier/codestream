@@ -36,7 +36,8 @@ const copy = copyPlugin({
 			path.resolve(context, "index.ts"),
 			path.resolve(context, "styles", "webview.less")
 		],
-		outdir: target
+		outdir: target,
+		target: "chrome90", // jxbrowser compatability
 	};
 	await startEsbuild(args, buildOptions);
 })();

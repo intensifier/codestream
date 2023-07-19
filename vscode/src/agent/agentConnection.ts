@@ -1078,6 +1078,7 @@ export class CodeStreamAgentConnection implements Disposable {
 
 	@log()
 	private onLogout(e: DidLogoutNotification) {
+		Logger.log(`onLogout ${e.reason}`);
 		if (e.reason === LogoutReason.Token) {
 			void Container.session.logout();
 		} else {

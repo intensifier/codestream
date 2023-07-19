@@ -12,6 +12,7 @@ import { Editor } from "./extensions/editor";
 import { openUrl } from "./urlHandler";
 import { SessionSignedOutReason } from "./api/session";
 import * as TokenManager from "./api/tokenManager";
+import { SaveTokenReason } from "./api/tokenManager";
 import { WorkspaceState } from "./common";
 import { BuiltInCommands } from "./constants";
 import { Container } from "./container";
@@ -554,7 +555,12 @@ export class Commands implements Disposable {
 					await Container.context.workspaceState.update(WorkspaceState.TeamId, undefined);
 					await Container.webview.show();
 				} else {
-					await Container.session.login(Container.config.email, token, teamId);
+					await Container.session.login(
+						SaveTokenReason.SIGN_IN_COMMAND,
+						Container.config.email,
+						token,
+						teamId
+					);
 				}
 			}
 		} catch (ex) {

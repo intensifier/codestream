@@ -5,7 +5,6 @@ import {
 import { isEmpty as _isEmpty, sortBy as _sortBy } from "lodash-es";
 import React from "react";
 import styled from "styled-components";
-
 import { OpenUrlRequestType } from "@codestream/protocols/webview";
 import {
 	logout,
@@ -232,6 +231,10 @@ export function EllipsisMenu(props: EllipsisMenuProps) {
 			teamId: derivedState.team.id,
 			settings: { xray: value },
 		});
+	};
+
+	const handleLogout = async () => {
+		dispatch(logout());
 	};
 
 	const deleteOrganization = () => {

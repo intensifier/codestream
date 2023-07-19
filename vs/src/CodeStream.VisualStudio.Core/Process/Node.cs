@@ -1,4 +1,4 @@
-﻿using CodeStream.VisualStudio.Core.Logging;
+using CodeStream.VisualStudio.Core.Logging;
 using Serilog;
 using System;
 using System.Text;
@@ -16,7 +16,7 @@ namespace CodeStream.VisualStudio.Core.Process {
 		/// <param name="minor"></param>
 		/// <param name="build"></param>
 		/// <returns></returns>
-		public static bool EnsureVersion(string nodeExe, int major = 16, int minor = 13, int build = 2) {
+		public static bool EnsureVersion(string nodeExe, int major = 16, int minor = 17, int build = 1) {
 			var sb = new StringBuilder();
 			System.Diagnostics.Process process = null;
 			try {

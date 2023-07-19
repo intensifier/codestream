@@ -27,7 +27,7 @@ SOFTWARE.
 Copyright (c) 2018-2021 CodeStream Inc.
 
 */
-import { ChildProcess, execFile } from "child_process";
+import { ChildProcess, ExecFileException, execFile } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
 import { Logger } from "../logger";
@@ -98,7 +98,7 @@ export function findExecutable(exe: string, args: string[]): { cmd: string; args
 			"System32",
 			"WindowsPowerShell",
 			"v1.0",
-			"PowerShell.exe"
+			"PowerShell.exe",
 		);
 		const psargs = ["-ExecutionPolicy", "Unrestricted", "-NoLogo", "-NonInteractive", "-File", exe];
 
@@ -163,7 +163,11 @@ export function runCommand(command: string, args: any[], options: CommandOptions
 			command,
 			args,
 			opts,
-			(err: (Error & { code?: string | number }) | null, stdout: string, stderr: string) => {
+			(
+				err: (ExecFileException & { code?: string | number | undefined | null }) | null,
+				stdout: string,
+				stderr: string,
+			) => {
 				if (!err) {
 					if (stderr) {
 						Logger.warn(`Warning(${command} ${args.join(" ")}): ${stderr}`);
@@ -176,8 +180,8 @@ export function runCommand(command: string, args: any[], options: CommandOptions
 				if (err.message === "stdout maxBuffer exceeded") {
 					reject(
 						new Error(
-							`Command output exceeded the allocated stdout buffer. Set 'options.maxBuffer' to a larger value than ${opts.maxBuffer} bytes`
-						)
+							`Command output exceeded the allocated stdout buffer. Set 'options.maxBuffer' to a larger value than ${opts.maxBuffer} bytes`,
+						),
 					);
 				}
 
@@ -185,11 +189,11 @@ export function runCommand(command: string, args: any[], options: CommandOptions
 					Logger.warn(
 						`Error(${opts.cwd}): ${command} ${args.join(" ")})\n    (${err.code}) ${
 							err.message
-						}\n${stderr}`
+						}\n${stderr}`,
 					);
 				}
 				reject(err);
-			}
+			},
 		);
 
 		ignoreClosedInputStream(proc);

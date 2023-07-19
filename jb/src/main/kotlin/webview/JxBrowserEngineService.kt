@@ -27,7 +27,7 @@ import java.nio.file.Path
 import java.nio.file.Paths
 import java.util.concurrent.CompletableFuture
 
-const val DOWNLOAD_URL_PREFIX = "https://assets.codestream.com/jxbrowser/"
+const val DOWNLOAD_URL_PREFIX = "https://images.codestream.com/jxbrowser/"
 
 class JxBrowserEngineService : Disposable {
 

@@ -8,7 +8,7 @@ plugins {
 
 group "com.codestream"
 
-version "14.23.0"
+version "14.24.0"
 
 sourceCompatibility = JavaVersion.VERSION_11
 targetCompatibility = JavaVersion.VERSION_11
@@ -125,6 +125,8 @@ tasks.withType(Test) {
     environment 'TEST_MODE', 'true'
 }
 
+test.outputs.upToDateWhen {false}
+
 import org.gradle.internal.os.OperatingSystem
 
 task buildDeps(type: Exec) {
@@ -157,7 +159,7 @@ task copyProtobuf(type: Copy) {
 def createCopyNodeTask(String platform) {
     String taskName = "copyNode-" + platform
     String supplementalSoftwarePath = System.getenv("TCBUILD_SUPPLEMENTAL_SOFTWARE_PATH")
-    String nodeVersion = 'v16.13.2'
+    String nodeVersion = 'v16.17.1'
     return tasks.create(taskName, Copy) {
         from "$supplementalSoftwarePath/node/node-$nodeVersion-${platform}"
         include "**/*"
@@ -212,6 +214,7 @@ copyDebugAgent.dependsOn buildDebugDeps
 
 task buildDebugDependencies {}
 buildDebugDependencies.dependsOn buildDebugDeps, copyDebugAgent, copyProtobuf
+
 
 
 

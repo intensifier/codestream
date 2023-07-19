@@ -15,6 +15,7 @@ import com.codestream.protocols.webview.DidChangeApiVersionCompatibility
 import com.codestream.protocols.webview.UserSession
 import com.codestream.sessionService
 import com.codestream.settings.ApplicationSettingsService
+import com.codestream.settings.SettingsService
 import com.codestream.settingsService
 import com.codestream.webViewService
 import com.github.salomonbrys.kotson.fromJson
@@ -29,6 +30,23 @@ import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.Project
 import kotlinx.coroutines.future.await
 
+enum class SaveTokenReason {
+    COPY,
+    LOGIN_SUCCESS,
+    LOGOUT,
+    LOGIN_ERROR,
+    AUTO_SIGN_IN,
+}
+
+enum class CSLogoutReason {
+    MAINTAINENCE_MODE,
+    DID_LOGOUT,
+    CONFIG_CHANGE,
+    SIGN_OUT_ACTION,
+    WEBVIEW_MSG,
+    UNSUPPORTED_VERSION,
+}
+
 class AuthenticationService(val project: Project) {
 
     private val extensionCapabilities: JsonElement get() = gson.toJsonTree(Capabilities())
@@ -39,9 +57,9 @@ class AuthenticationService(val project: Project) {
     private var apiVersionCompatibility: ApiVersionCompatibility? = null
     private var missingCapabilities: JsonObject? = null
 
-    fun bootstrap(): Any? {
-        val settings = project.settingsService ?: return Unit
-        val session = project.sessionService ?: return Unit
+    fun bootstrap(): BootstrapResponse? {
+        val settings = project.settingsService ?: return null
+        val session = project.sessionService ?: return null
 
         return BootstrapResponse(
             UserSession(session.userLoggedIn?.userId, session.eligibleJoinCompanies),
@@ -55,6 +73,21 @@ class AuthenticationService(val project: Project) {
         )
     }
 
+    private fun resolveToken(settings: SettingsService): String? {
+        val credentialAttributes = settings.credentialAttributes()
+        PasswordSafe.instance.getPassword(credentialAttributes)?.let {
+            logger.info("Auto sign-in password safe found settings.credentialAttributes()")
+            return it
+        }
+
+        val credentialAttributesNoTeam = settings.credentialAttributes(false)
+        PasswordSafe.instance.getPassword(credentialAttributesNoTeam)?.let {
+            logger.info("Auto sign-in password safe found using settings.credentialAttributes(false)")
+            return it
+        }
+        return null
+    }
+
     /**
      * Attempts to auto-sign in using a token stored in the password safe. Returns false
      * only if the token login fails or in case of an exception. If the auto-login fails for
@@ -66,8 +99,7 @@ class AuthenticationService(val project: Project) {
                 ?: return true.also { logger.warn("Auto sign-in failed: settings service not available") }
             if (!appSettings.autoSignIn)
                 return true.also { logger.warn("Auto sign-in failed: auto sign-in disabled") }
-            val tokenStr = PasswordSafe.instance.getPassword(settings.credentialAttributes())
-                ?: PasswordSafe.instance.getPassword(settings.credentialAttributes(false))
+            val tokenStr = resolveToken(settings)
                 ?: return true.also { logger.warn("Auto sign-in failed: unable to retrieve token from password safe") }
             val agent = project.agentService?.agent
                 ?: return true.also { logger.warn("Auto sign-in failed: agent service not available") }
@@ -77,50 +109,55 @@ class AuthenticationService(val project: Project) {
                 agent.loginToken(
                     LoginWithTokenParams(
                         token,
-                        settings.state.teamId
+                        settings.state.teamId // seems to not be used
                     )
                 ).await()
 
             return if (loginResult.error != null) {
-                logger.warn(loginResult.error)
+                logger.warn("Auto sign-in error ${loginResult.error}")
                 settings.state.teamId = null
                 appSettings.state.teamId = null
-                saveAccessToken(null)
+                saveAccessToken(SaveTokenReason.LOGIN_ERROR, null)
                 logger.info("Auto sign-in failed: ${loginResult.error}")
                 false
             } else {
-                completeLogin(loginResult)
+                completeLogin(SaveTokenReason.AUTO_SIGN_IN, loginResult)
                 logger.info("Auto sign-in successful")
                 true
             }
         } catch (err: Exception) {
-            logger.warn(err)
+            logger.warn("Auto sign-in error $err")
             return false
         }
     }
 
-    fun completeLogin(result: LoginResult) {
+    fun completeLogin(reason: SaveTokenReason, result: LoginResult) {
         if (project.sessionService?.userLoggedIn == null) {
             result.state?.let {
                 mergedCapabilities = extensionCapabilities.merge(it.capabilities)
                 project.settingsService?.state?.teamId = it.teamId
                 appSettings.state.teamId = it.teamId
-                saveAccessToken(it.token)
+                saveAccessToken(reason, it.token)
             }
             project.sessionService?.login(result.userLoggedIn, result.eligibleJoinCompanies)
         }
     }
 
-    suspend fun logout(newServerUrl: String? = null) {
+    suspend fun logout(reason: CSLogoutReason, newServerUrl: String? = null) {
         val agent = project.agentService ?: return
         val session = project.sessionService ?: return
         val settings = project.settingsService ?: return
 
-        session.logout()
+        logger.info("Logging out of CodeStream $reason")
+
+        session.logout(reason)
         agent.restart(newServerUrl)
-        saveAccessToken(null)
-        settings.state.teamId = null
-        appSettings.state.teamId = null
+
+        if (reason != CSLogoutReason.UNSUPPORTED_VERSION && reason != CSLogoutReason.MAINTAINENCE_MODE) {
+            saveAccessToken(SaveTokenReason.LOGOUT, null)
+            settings.state.teamId = null
+            appSettings.state.teamId = null
+        }
     }
 
     private var upgradeRequiredShown = false
@@ -152,23 +189,25 @@ class AuthenticationService(val project: Project) {
             ?: return
         val token = gson.fromJson<JsonObject>(tokenStr)
         token["url"] = toServerUrl
-        saveAccessToken(token, toServerUrl, toTeamId)
+        saveAccessToken(SaveTokenReason.COPY, token, toServerUrl, toTeamId)
     }
 
-    private fun saveAccessToken(accessToken: JsonObject?, serverUrl: String? = null, teamId: String? = null) {
+    private fun saveAccessToken(reason: SaveTokenReason, accessToken: JsonObject?, serverUrl: String? = null, teamId: String? = null) {
         val settings = project.settingsService ?: return
         if (accessToken != null) {
-            logger.info("Saving access token to password safe")
+            logger.info("Saving access token to password safe reason: $reason with provided teamid $teamId")
         } else {
-            logger.info("Clearing access token from password safe")
+            logger.info("Clearing access token from password safe reason: $reason with provided teamid $teamId")
         }
 
         val credentials = accessToken?.let {
             Credentials(null, it.toString())
         }
 
+        val credentialAttributes = settings.credentialAttributes(true, serverUrl, teamId)
+
         PasswordSafe.instance.set(
-            settings.credentialAttributes(true, serverUrl, teamId),
+            credentialAttributes,
             credentials
         )
     }

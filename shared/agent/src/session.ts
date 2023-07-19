@@ -709,6 +709,7 @@ export class CodeStreamSession {
 		this.agent.sendNotification(DidChangeVersionCompatibilityNotificationType, e);
 
 		if (e.compatibility === VersionCompatibility.UnsupportedUpgradeRequired) {
+			Logger.log("onVersionCompatibilityChanged performing logout on UnsupportedUpgradeRequired");
 			this.logout(LogoutReason.UnsupportedVersion);
 		}
 	}
@@ -1490,6 +1491,7 @@ export class CodeStreamSession {
 
 	@log()
 	logout(reason: LogoutReason) {
+		Logger.log(`Session.logout: ${reason}`);
 		this.setStatus(SessionStatus.SignedOut);
 		return this.agent.sendNotification(DidLogoutNotificationType, { reason: reason });
 	}
@@ -1616,8 +1618,7 @@ export class CodeStreamSession {
 					props["company"]["trialEnd_at"] = new Date(company.trialEndDate).toISOString();
 				}
 
-				// @TODO: remove isEmpty conditional check when we are done with `simple-ui` AB test
-				if (company.testGroups && !isEmpty(user?.providerInfo?.newrelic?.accessToken)) {
+				if (company.testGroups) {
 					props["AB Test"] = Object.keys(company.testGroups).map(
 						key => `${key}|${company.testGroups![key]}`
 					);

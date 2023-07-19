@@ -31,6 +31,9 @@ module.exports = {
 		"<rootDir>/src/**/*.{spec,test}.{js,jsx,ts,tsx}",
 	],
 	testResultsProcessor: "jest-teamcity-reporter",
-	transformIgnorePatterns: ["node_modules/(?!d3-color)"],
+	// see https://github.com/jestjs/jest/issues/12036
+	transformIgnorePatterns: [
+		"node_modules/(?!d3|d3-array|d3-color|d3-path|d3-scale|d3-shape|internmap|delaunator|robust-predicates)",
+	],
 	watchPlugins: ["jest-watch-typeahead/filename", "jest-watch-typeahead/testname"],
 };

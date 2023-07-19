@@ -38,6 +38,7 @@ import { Container, TelemetryOptions } from "./container";
 import { Logger, TraceLevel } from "./logger";
 import { FileSystem, Strings, Versions } from "./system";
 import * as TokenManager from "./api/tokenManager";
+import { SaveTokenReason } from "./api/tokenManager";
 
 const extension = extensions.getExtension(extensionQualifiedId);
 export const extensionVersion = extension?.packageJSON?.version ?? "1.0.0";
@@ -109,6 +110,7 @@ export async function activate(context: ExtensionContext) {
 					const oldToken = await TokenManager.get(cfg.serverUrl, cfg.email, teamId);
 					if (oldToken) {
 						await TokenManager.addOrUpdate(
+							SaveTokenReason.SERVER_MIGRATION,
 							serverUrlMigrations[key],
 							oldToken.email,
 							oldToken.teamId,
