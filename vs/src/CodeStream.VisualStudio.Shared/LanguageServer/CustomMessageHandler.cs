@@ -20,6 +20,8 @@ using CodeStream.VisualStudio.Shared.Extensions;
 using CodeStream.VisualStudio.Shared.Models;
 using CodeStream.VisualStudio.Shared.Packages;
 using CodeStream.VisualStudio.Shared.Services;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace CodeStream.VisualStudio.Shared.LanguageServer {
 	public class CustomMessageHandler : IDisposable {
@@ -29,7 +31,7 @@ namespace CodeStream.VisualStudio.Shared.LanguageServer {
 		private readonly IEventAggregator _eventAggregator;
 		private readonly IBrowserServiceFactory _browserServiceFactory;
 		private readonly ISettingsServiceFactory _settingsServiceFactory;
-
+		private readonly IFileResolutionService _fileResolutionService;
 		private readonly Subject<DocumentMarkerChangedSubjectArgs> _documentMarkerChangedSubject;
 		private readonly Subject<UserPreferencesChangedSubjectArgs> _userPreferencesChangedSubject;
 		private readonly IDisposable _documentMarkerChangedSubscription;
@@ -39,11 +41,14 @@ namespace CodeStream.VisualStudio.Shared.LanguageServer {
 			IServiceProvider serviceProvider,
 			IEventAggregator eventAggregator,
 			IBrowserServiceFactory browserServiceFactory,
-			ISettingsServiceFactory settingsServiceFactory) {
+			ISettingsServiceFactory settingsServiceFactory,
+			IFileResolutionService fileResolutionService) {
+
 			_serviceProvider = serviceProvider;
 			_eventAggregator = eventAggregator;
 			_browserServiceFactory = browserServiceFactory;
 			_settingsServiceFactory = settingsServiceFactory;
+			_fileResolutionService = fileResolutionService;
 
 			_documentMarkerChangedSubject = new Subject<DocumentMarkerChangedSubjectArgs>();
 			_userPreferencesChangedSubject = new Subject<UserPreferencesChangedSubjectArgs>();
@@ -364,13 +369,42 @@ namespace CodeStream.VisualStudio.Shared.LanguageServer {
 		}
 
 		[JsonRpcMethod(ResolveStackTracePathsRequestType.MethodName)]
-		public System.Threading.Tasks.Task<ResolveStackTracePathsResponse> OnResolveStackTracePathsAsync(JToken e, JToken someOtherPropThatNeedsToBeHereForRequests) {
+		public System.Threading.Tasks.Task<ResolveStackTracePathsResponse> OnResolveStackTracePaths(JToken e, JToken someOtherPropThatNeedsToBeHereForRequests) {
 			using (Log.CriticalOperation(
-				$"{nameof(OnResolveStackTracePathsAsync)} Method={ResolveStackTracePathsRequestType.MethodName}",
+				$"{nameof(OnResolveStackTracePaths)} Method={ResolveStackTracePathsRequestType.MethodName}",
 				Serilog.Events.LogEventLevel.Information)) {
-				
-				return System.Threading.Tasks.Task.FromResult(new ResolveStackTracePathsResponse() { NotImplemented = true });				
+
+				var request = e.ToObject<ResolveStackTracePathsRequest>();
+				var response = new ResolveStackTracePathsResponse() { NotImplemented = false };
+
+				foreach(var path in request.Paths.Where(p => p != null))
+				{
+					var resolvedFilePath = _fileResolutionService.ResolveLocal(path);
+					if (resolvedFilePath != null)
+					{
+						response.ResolvedPaths.Add(resolvedFilePath);
+					}
+				}
+
+				return System.Threading.Tasks.Task.FromResult(response);
 			}
+		}
+
+		[JsonRpcMethod(DidResolveStackTraceLineNotificationType.MethodName)]
+		public void OnDidResolveStackTraceLine(JToken e)
+		{
+			using (Log.CriticalOperation($"{nameof(OnDidResolveStackTraceLine)} Method={DidResolveStackTraceLineNotificationType.MethodName}", Serilog.Events.LogEventLevel.Debug))
+			{
+				try
+				{
+					BrowserService.EnqueueNotification(new DidResolveStackTraceLineNotificationType(e));
+				}
+				catch (Exception ex)
+				{
+					Log.Error(ex, $"Problem with {nameof(OnDidResolveStackTraceLine)}");
+				}
+			}
+
 		}
 
 		/// <summary>

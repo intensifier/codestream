@@ -1,8 +1,28 @@
 # Change Log
 
+## [14.25.0] - 2023-07-03
+
+### Added
+
+- Adds a Code-Level Metrics section that highlights poorly performing methods in the code based on anomalous increases in error rate or average duration. Currently available for Java, .NET, Ruby and Python.
+- Adds desktop notifications to call out poorly performing methods in the code
+
+### Changed
+
+- Updated the error grouping paradigm in the Errors section to align with the New Relic Errors Inbox
+
+### Fixed
+
+- Fixes an issue that was preventing codelenses from being displayed for C#
+- Fixes an issue that would result in you being prompted to select a repo when opening an error
+- Fixes an issue that would generate an error if you submitted a Bitbucket PR against a branch that already has an open PR
+- Fixes an issue preventing you from being able to open the local files from the changeset when opening a PR
+- Fixes an issue where adding a comment to a Bitbucket PR via the "Close and Comment" button wouldn't appear without reloading the PR details
+
 ## [14.24.0] - 2023-07-19
 
 ### Fixed
+
 - Addresses [#1511](https://github.com/TeamCodeStream/codestream/issues/1511) &mdash; Can't open PR details in Bitbucket
 - Fixes an issue where you would get signed out of CodeStream when switching repos in your IDE
 - Fixes an issue where CodeStream would incorrectly allow you to remove a review with status from a Bitbucket PR
@@ -11,14 +31,17 @@
 ## [14.23.0] - 2023-06-16
 
 ### Added
+
 - Added the abillity to select a time range for viewing all errors of a service instead of showing the 5 most recent
 
 ### Changed
+
 - Removed custom queries for Bitbucket
 - Altered CodeStream loading UI to show a skeleton animation instead of loading text
 - Altered styling on buttons across CodeStream
 
 ### Fixed
+
 - Fixed error with Slack integration that prevented deletion of posts from CodeStream from synchronizing with Slack channels and direct messages
 - Fixed a bug that showed the repo selection prompt after opening an error from the observability section
 - Fixed a bug with Bitbucket pull requests all being expanded if there are any with the same numerical name
@@ -26,10 +49,12 @@
 ## [14.22.0] - 2023-6-01
 
 ### Changed
+
 - Altered Bitbucket Add Reviewers dropdown to account for no reviewers available
-- Altered Bitbucket Icons for Pull Request Approval and Change Requests	
+- Altered Bitbucket Icons for Pull Request Approval and Change Requests
 
 ### Fixed
+
 - Fixed Bitbucket api request timeout issue
 - Fixed Bitbucket issue that allowed already assigned reviewer to be selected again
 - Fixed Bitbucket issue that allowed assigning reviewers to an already declined pull request
@@ -40,6 +65,7 @@
 ## [14.21.0] - 2023-5-25
 
 ### Fixed
+
 - Fixed Bitbucket issue for PR Details commit list not loading
 
 ## [14.20.0] - 2023-5-18

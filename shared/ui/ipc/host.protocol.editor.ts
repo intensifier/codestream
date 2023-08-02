@@ -25,8 +25,10 @@ export interface EditorHighlightRangeResponse {
 }
 
 export interface EditorRevealSymbolRequest {
-	className?: string;
-	functionName?: string;
+	codeFilepath?: string;
+	codeNamespace?: string;
+	codeFunction?: string;
+	language: string;
 }
 export interface EditorRevealSymbolResponse {
 	success: boolean;

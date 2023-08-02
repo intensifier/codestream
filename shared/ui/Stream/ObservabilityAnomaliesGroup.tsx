@@ -79,6 +79,7 @@ export const ObservabilityAnomaliesGroup = React.memo((props: Props) => {
 	function handleClickTelemetry() {
 		const event = {
 			"Detection Method": props.detectionMethod ?? "<unknown>",
+			Language: props.observabilityAnomalies[0]?.language ?? "<unknown>",
 		};
 
 		console.debug("CLM Anomaly Clicked", event);
@@ -89,8 +90,10 @@ export const ObservabilityAnomaliesGroup = React.memo((props: Props) => {
 	function handleClick(anomaly: ObservabilityAnomaly) {
 		handleClickTelemetry();
 		HostApi.instance.send(EditorRevealSymbolRequestType, {
-			className: anomaly.className,
-			functionName: anomaly.functionName,
+			codeFilepath: anomaly.codeFilepath,
+			codeNamespace: anomaly.codeNamespace,
+			codeFunction: anomaly.codeFunction,
+			language: anomaly.language,
 		});
 		if (!props.noAnomaly) {
 			dispatch(closeAllPanels());

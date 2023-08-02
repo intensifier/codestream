@@ -45,7 +45,10 @@ namespace CodeStream.VisualStudio.Shared.UI.ToolWindows {
 
 					_eventAggregator = _componentModel.GetService<IEventAggregator>();
 					_sessionService = _componentModel.GetService<ISessionService>();
-					_browserService = _componentModel.GetService<IBrowserService>();					
+					_browserService = _componentModel.GetService<IBrowserService>();
+
+					
+
 					_ = _browserService.InitializeAsync().ContinueWith(_ => {
 						ThreadHelper.JoinableTaskFactory.Run(async delegate {
 							await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
@@ -147,7 +150,8 @@ namespace CodeStream.VisualStudio.Shared.UI.ToolWindows {
 									_componentModel.GetService<IEditorService>(),
 									_componentModel.GetService<IAuthenticationServiceFactory>(),
 									_componentModel.GetService<IMessageInterceptorService>(),
-									_componentModel.GetService<ICredentialsService>());
+									_componentModel.GetService<ICredentialsService>(),
+									_componentModel.GetService<ISymbolService>());
 
 								_browserService.AddWindowMessageEvent(
 									async delegate (object sender, WindowEventArgs ea) { await router.HandleAsync(ea); });

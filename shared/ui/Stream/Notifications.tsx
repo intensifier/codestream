@@ -1,6 +1,5 @@
 import { useAppDispatch, useAppSelector } from "@codestream/webview/utilities/hooks";
 import React, { useState } from "react";
-import { useDispatch, useSelector } from "react-redux";
 import { CodeStreamState } from "../store";
 import { isFeatureEnabled } from "../store/apiVersioning/reducer";
 import { Checkbox } from "../src/components/Checkbox";
@@ -52,6 +51,7 @@ export const Notifications = props => {
 				state.preferences.notificationDelivery || CSNotificationDeliveryPreference.All,
 			reviewReminderDelivery: state.preferences.reviewReminderDelivery === false ? false : true,
 			createReviewOnDetectUnreviewedCommits: createReviewOnDetectUnreviewedCommits,
+			notifyPerformanceIssues: state.preferences.notifyPerformanceIssues === false ? false : true,
 			weeklyEmailDelivery: state.preferences.weeklyEmailDelivery === false ? false : true,
 			toastPrNotify: state.preferences.toastPrNotify === false ? false : true,
 			hasDesktopNotifications,
@@ -67,6 +67,7 @@ export const Notifications = props => {
 		loadingCreateReviewOnDetectUnreviewedCommits,
 		setLoadingCreateReviewOnDetectUnreviewedCommits,
 	] = useState(false);
+	const [loadingNotifyPerformanceIssues, setLoadingNotifyPerformanceIssues] = useState(false);
 	const [loadingToastPrNotify, setLoadingToastPrNotify] = useState(false);
 	const [loadingWeeklyEmailDelivery, setLoadingWeeklyEmailDelivery] = useState(false);
 
@@ -101,6 +102,13 @@ export const Notifications = props => {
 		HostApi.instance.track("Review Create On Detect Unreviewed Commits Changed", { Value: value });
 		dispatch(setUserPreference({ prefPath: ["reviewCreateOnDetectUnreviewedCommits"], value }));
 		setLoadingCreateReviewOnDetectUnreviewedCommits(false);
+	};
+
+	const handleChangeNotifyPerformanceIssues = async (value: boolean) => {
+		setLoadingNotifyPerformanceIssues(true);
+		HostApi.instance.track("Notify Performance Issues Changed", { Value: value });
+		dispatch(setUserPreference({ prefPath: ["notifyPerformanceIssues"], value }));
+		setLoadingNotifyPerformanceIssues(false);
 	};
 
 	const handleToastPrNotify = async (value: boolean) => {
@@ -203,6 +211,16 @@ export const Notifications = props => {
 						{derivedState.hasDesktopNotifications && derivedState.notificationDeliverySupported && (
 							<div>
 								<h3>Desktop Notifications</h3>
+								<div style={{ marginTop: "20px" }}>
+									<Checkbox
+										name="notifyPerformanceIssues"
+										checked={derivedState.notifyPerformanceIssues}
+										onChange={handleChangeNotifyPerformanceIssues}
+										loading={loadingNotifyPerformanceIssues}
+									>
+										Notify me about performance issues
+									</Checkbox>
+								</div>
 								<div style={{ marginTop: "20px" }}>
 									<Checkbox
 										name="createReviewOnDetectUnreviewedCommits"

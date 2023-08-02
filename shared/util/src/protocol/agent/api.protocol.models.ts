@@ -782,6 +782,7 @@ export interface CSMePreferences {
 	pullRequestView?: "auto" | "vertical" | "side-by-side";
 	reviewCreateOnCommit?: boolean;
 	reviewCreateOnDetectUnreviewedCommits?: boolean;
+	notifyPerformanceIssues?: boolean;
 	issueReposDefaultBranch?: {
 		[repoId: string]: string;
 	};
@@ -824,7 +825,28 @@ export interface CSMePreferences {
 		[providerId: string]: { [currentState: string]: string };
 	};
 	codeErrorTimeWindow?: CodeErrorTimeWindow;
+	clmSettings?: CLMSettings;
 }
+
+export interface CLMSettings {
+	compareDataLastValue: string;
+	compareDataLastReleaseValue: boolean;
+	againstDataPrecedingValue: string;
+	minimumChangeValue: string;
+	minimumBaselineValue: string;
+	minimumErrorRateValue: string;
+	minimumAverageDurationValue: string;
+}
+
+export const DEFAULT_CLM_SETTINGS: CLMSettings = {
+	compareDataLastValue: "7",
+	compareDataLastReleaseValue: true,
+	againstDataPrecedingValue: "21",
+	minimumChangeValue: "10",
+	minimumBaselineValue: "30",
+	minimumErrorRateValue: "1",
+	minimumAverageDurationValue: "0.1",
+};
 
 export interface RepoSetting {
 	/** repo id */

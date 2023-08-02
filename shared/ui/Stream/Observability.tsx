@@ -80,8 +80,9 @@ import Timestamp from "./Timestamp";
 import Tooltip from "./Tooltip";
 import { WarningBox } from "./WarningBox";
 import { ObservabilityAnomaliesWrapper } from "@codestream/webview/Stream/ObservabilityAnomaliesWrapper";
-import { isFeatureEnabled } from "../store/apiVersioning/reducer";
-import { DEFAULT_CLM_SETTINGS } from "./CLMSettings";
+import { CLMSettings, DEFAULT_CLM_SETTINGS } from "@codestream/protocols/api";
+import { throwIfError } from "@codestream/webview/store/common";
+import { AnyObject } from "@codestream/webview/utils";
 
 interface Props {
 	paneState: PaneState;
@@ -169,6 +170,8 @@ const SubtleRight = styled.time`
 		padding-left: 0;
 	}
 `;
+
+type TelemetryState = "No Entities" | "No Services" | "Services" | "Not Connected";
 
 export const ErrorRow = (props: {
 	title: string;
@@ -271,8 +274,8 @@ export const Observability = React.memo((props: Props) => {
 			scmInfo: state.editorContext.scmInfo,
 			anomaliesNeedRefresh: state.context.anomaliesNeedRefresh,
 			clmSettings,
-			showAnomalies: isFeatureEnabled(state, "showAnomalies"),
 			recentErrorsTimeWindow: state.preferences.codeErrorTimeWindow,
+			currentObservabilityAnomalyEntityGuid: state.context.currentObservabilityAnomalyEntityGuid,
 		};
 	}, shallowEqual);
 
@@ -281,7 +284,8 @@ export const Observability = React.memo((props: Props) => {
 
 	const [noErrorsAccess, setNoErrorsAccess] = useState<string | undefined>(undefined);
 	const [loadingObservabilityErrors, setLoadingObservabilityErrors] = useState<boolean>(false);
-	const [genericError, setGenericError] = useState<string | undefined>(undefined);
+	const [genericError, setGenericError] = useState<string>();
+	const [errorInboxError, setErrorInboxError] = useState<string>();
 	const [loadingAssignmentErrorsClick, setLoadingAssignmentErrorsClick] = useState<{
 		[errorGroupGuid: string]: boolean;
 	}>({});
@@ -296,6 +300,7 @@ export const Observability = React.memo((props: Props) => {
 		useState<GetObservabilityAnomaliesResponse>({
 			responseTime: [],
 			errorRate: [],
+			didNotifyNewAnomalies: false,
 		});
 	const [observabilityAssignments, setObservabilityAssignments] = useState<
 		ObservabilityErrorCore[]
@@ -352,8 +357,10 @@ export const Observability = React.memo((props: Props) => {
 
 	const loadAssignments = async () => {
 		setLoadingAssignments(true);
+		setErrorInboxError(undefined);
 		try {
 			const response = await HostApi.instance.send(GetObservabilityErrorAssignmentsRequestType, {});
+			throwIfError(response);
 			setObservabilityAssignments(response.items);
 			setLoadingAssignments(false);
 			setNoErrorsAccess(undefined);
@@ -367,14 +374,14 @@ export const Observability = React.memo((props: Props) => {
 			} else if (ex.code === ERROR_GENERIC_USE_ERROR_MESSAGE) {
 				setNoErrorsAccess(ex.message || GENERIC_ERROR_MESSAGE);
 			} else {
-				setGenericError(ex.message || GENERIC_ERROR_MESSAGE);
+				setErrorInboxError(GENERIC_ERROR_MESSAGE);
 			}
 		} finally {
 			setLoadingAssignments(false);
 		}
 	};
 
-	const doRefresh = async (force: boolean = false) => {
+	const doRefresh = async (force = false) => {
 		if (!derivedState.newRelicIsConnected) return;
 
 		console.debug(`o11y: doRefresh called`);
@@ -383,7 +390,7 @@ export const Observability = React.memo((props: Props) => {
 		setLoadingEntities(true);
 
 		try {
-			await Promise.all([loadAssignments(), fetchObservabilityRepos(force), getEntityCount()]);
+			await Promise.all([loadAssignments(), fetchObservabilityRepos(force), getEntityCount(true)]);
 		} finally {
 			setLoadingEntities(false);
 		}
@@ -429,9 +436,9 @@ export const Observability = React.memo((props: Props) => {
 		}
 	};
 
-	const getEntityCount = async () => {
+	const getEntityCount = async (force = false) => {
 		try {
-			const { entityCount } = await HostApi.instance.send(GetEntityCountRequestType, {});
+			const { entityCount } = await HostApi.instance.send(GetEntityCountRequestType, { force });
 			console.debug(`o11y: entityCount ${entityCount}`);
 			setHasEntities(entityCount > 0);
 		} catch (err) {
@@ -447,7 +454,7 @@ export const Observability = React.memo((props: Props) => {
 		setGenericError(undefined);
 		setLoadingEntities(true);
 		try {
-			await Promise.all([loadAssignments(), fetchObservabilityRepos(force), getEntityCount()]);
+			await Promise.all([loadAssignments(), fetchObservabilityRepos(force), getEntityCount(true)]);
 			console.debug(`o11y: Promise.all finished`);
 		} finally {
 			setLoadingEntities(false);
@@ -513,6 +520,28 @@ export const Observability = React.memo((props: Props) => {
 		}
 	}, [derivedState.observabilityRepoEntities]);
 
+	useEffect(() => {
+		const entityGuid = derivedState.currentObservabilityAnomalyEntityGuid;
+		if (!_isEmpty(currentRepoId) && !_isEmpty(observabilityRepos) && !_isEmpty(entityGuid)) {
+			const _currentEntityAccounts = observabilityRepos.find(or => {
+				return or.repoId === currentRepoId;
+			})?.entityAccounts;
+
+			setCurrentEntityAccounts(_currentEntityAccounts);
+
+			if (_currentEntityAccounts && _currentEntityAccounts.length > 0 && currentRepoId) {
+				const userPrefExpanded = activeO11y?.[currentRepoId];
+				const _expandedEntity = userPrefExpanded
+					? userPrefExpanded
+					: _currentEntityAccounts[0].entityGuid;
+
+				if (_expandedEntity !== entityGuid) {
+					setExpandedEntity(entityGuid);
+				}
+			}
+		}
+	}, [derivedState.currentObservabilityAnomalyEntityGuid]);
+
 	// Update golden metrics every 5 minutes
 	useInterval(() => {
 		fetchGoldenMetrics(expandedEntity, true);
@@ -538,7 +567,8 @@ export const Observability = React.memo((props: Props) => {
 		// than having this call be reliant on multiple variables to be set given the
 		// complicated nature of this component, and since its telemetry tracking, the delay
 		// is not user facing.
-		let telemetryStateValue;
+
+		let telemetryStateValue: TelemetryState | undefined = undefined;
 		// "No Entities" - We don’t find any entities on NR and are showing the instrument-your-app message.
 		console.debug(
 			`o11y: hasEntities ${hasEntities} and repoForEntityAssociator ${
@@ -567,18 +597,26 @@ export const Observability = React.memo((props: Props) => {
 
 		if (!isEmpty(telemetryStateValue)) {
 			console.debug("o11y: O11y Rendered", telemetryStateValue);
-			HostApi.instance.track("O11y Rendered", {
+			const properties: AnyObject = {
 				State: telemetryStateValue,
-			});
+			};
+			if (telemetryStateValue === "No Services") {
+				properties.Meta = {
+					hasEntities,
+					hasRepoForEntityAssociator: !_isEmpty(repoForEntityAssociator),
+					currentEntityAccounts: currentEntityAccounts?.length ?? -1,
+					observabilityRepoCount: observabilityRepos?.length ?? -1,
+				};
+			}
+			HostApi.instance.track("O11y Rendered", properties);
 		}
 	};
 
 	const callServiceClickedTelemetry = () => {
 		console.debug("o11y: callServiceClickedTelemetry");
 		try {
-			let currentRepoErrors = observabilityErrors?.find(
-				_ => _ && _.repoId === currentRepoId
-			)?.errors;
+			let currentRepoErrors = observabilityErrors?.find(_ => _ && _.repoId === currentRepoId)
+				?.errors;
 			let filteredCurrentRepoErrors = currentRepoErrors?.filter(_ => _.entityId === expandedEntity);
 			let filteredAssigments = observabilityAssignments?.filter(_ => _.entityId === expandedEntity);
 			const hasAnomalies =
@@ -666,42 +704,44 @@ export const Observability = React.memo((props: Props) => {
 
 	const fetchAnomalies = async (entityGuid: string, repoId) => {
 		dispatch(setRefreshAnomalies(false));
-		if (!derivedState.showAnomalies) {
-			return;
-		}
 		setCalculatingAnomalies(true);
 
 		try {
+			const clmSettings = derivedState?.clmSettings as CLMSettings;
 			const response = await HostApi.instance.send(GetObservabilityAnomaliesRequestType, {
 				entityGuid,
-				sinceDaysAgo: !_isNil(derivedState?.clmSettings?.compareDataLastValue)
-					? derivedState?.clmSettings?.compareDataLastValue
-					: DEFAULT_CLM_SETTINGS.compareDataLastValue,
-				baselineDays: !_isNil(derivedState?.clmSettings?.againstDataPrecedingValue)
-					? derivedState?.clmSettings?.againstDataPrecedingValue
-					: DEFAULT_CLM_SETTINGS.againstDataPrecedingValue,
-				sinceReleaseAtLeastDaysAgo: !_isNil(derivedState?.clmSettings?.compareDataLastReleaseValue)
-					? derivedState?.clmSettings?.compareDataLastReleaseValue
+				sinceDaysAgo: parseInt(
+					!_isNil(clmSettings?.compareDataLastValue)
+						? clmSettings?.compareDataLastValue
+						: DEFAULT_CLM_SETTINGS.compareDataLastValue
+				),
+				baselineDays: parseInt(
+					!_isNil(clmSettings?.againstDataPrecedingValue)
+						? clmSettings?.againstDataPrecedingValue
+						: DEFAULT_CLM_SETTINGS.againstDataPrecedingValue
+				),
+				sinceLastRelease: !_isNil(clmSettings?.compareDataLastReleaseValue)
+					? clmSettings?.compareDataLastReleaseValue
 					: DEFAULT_CLM_SETTINGS.compareDataLastReleaseValue,
 				minimumErrorRate: parseFloat(
-					!_isNil(derivedState?.clmSettings?.minimumErrorRateValue)
-						? derivedState?.clmSettings?.minimumErrorRateValue
+					!_isNil(clmSettings?.minimumErrorRateValue)
+						? clmSettings?.minimumErrorRateValue
 						: DEFAULT_CLM_SETTINGS.minimumErrorRateValue
 				),
 				minimumResponseTime: parseFloat(
-					!_isNil(derivedState?.clmSettings?.minimumAverageDurationValue)
-						? derivedState?.clmSettings?.minimumAverageDurationValue
+					!_isNil(clmSettings?.minimumAverageDurationValue)
+						? clmSettings?.minimumAverageDurationValue
 						: DEFAULT_CLM_SETTINGS.minimumAverageDurationValue
 				),
 				minimumSampleRate: parseFloat(
-					!_isNil(derivedState?.clmSettings?.minimumBaselineValue)
-						? derivedState?.clmSettings?.minimumBaselineValue
+					!_isNil(clmSettings?.minimumBaselineValue)
+						? clmSettings?.minimumBaselineValue
 						: DEFAULT_CLM_SETTINGS.minimumBaselineValue
 				),
 				minimumRatio:
 					parseFloat(
-						!_isNil(derivedState?.clmSettings?.minimumChangeValue)
-							? derivedState?.clmSettings?.minimumChangeValue
+						!_isNil(clmSettings?.minimumChangeValue)
+							? clmSettings?.minimumChangeValue
 							: DEFAULT_CLM_SETTINGS.minimumChangeValue
 					) /
 						100 +
@@ -1216,19 +1256,18 @@ export const Observability = React.memo((props: Props) => {
 																									errorMsg={serviceLevelObjectiveError}
 																								/>
 																							)}
-																							{derivedState.showAnomalies &&
-																								anomalyDetectionSupported && (
-																									<ObservabilityAnomaliesWrapper
-																										observabilityAnomalies={observabilityAnomalies}
-																										observabilityRepo={_observabilityRepo}
-																										entityGuid={ea.entityGuid}
-																										noAccess={noErrorsAccess}
-																										calculatingAnomalies={calculatingAnomalies}
-																										distributedTracingEnabled={
-																											ea?.distributedTracingEnabled
-																										}
-																									/>
-																								)}
+																							{anomalyDetectionSupported && (
+																								<ObservabilityAnomaliesWrapper
+																									observabilityAnomalies={observabilityAnomalies}
+																									observabilityRepo={_observabilityRepo}
+																									entityGuid={ea.entityGuid}
+																									noAccess={noErrorsAccess}
+																									calculatingAnomalies={calculatingAnomalies}
+																									distributedTracingEnabled={
+																										ea?.distributedTracingEnabled
+																									}
+																								/>
+																							)}
 
 																							{ea.domain === "APM" && (
 																								<>
@@ -1237,6 +1276,7 @@ export const Observability = React.memo((props: Props) => {
 																									) && (
 																										<>
 																											<ObservabilityErrorWrapper
+																												errorInboxError={errorInboxError}
 																												observabilityErrors={observabilityErrors}
 																												observabilityRepo={_observabilityRepo}
 																												observabilityAssignments={

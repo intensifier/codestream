@@ -16,6 +16,7 @@ import {
 interface Props {
 	observabilityAssignments?: ObservabilityErrorCore[];
 	entityGuid?: string;
+	errorInboxError?: string;
 }
 
 export const ObservabilityAssignmentsDropdown = React.memo((props: Props) => {
@@ -61,8 +62,8 @@ export const ObservabilityAssignmentsDropdown = React.memo((props: Props) => {
 						<>
 							<ErrorRow
 								customPadding={"0 10px 0 50px"}
-								title={"No errors assigned to me"}
-								icon="thumbsup"
+								title={props.errorInboxError ?? "No errors assigned to me"}
+								icon={props.errorInboxError ? "alert" : "thumbsup"}
 							></ErrorRow>
 						</>
 					) : (
@@ -95,6 +96,7 @@ export const ObservabilityAssignmentsDropdown = React.memo((props: Props) => {
 															occurrenceId: response.occurrenceId,
 															pendingErrorGroupGuid: _.errorGroupGuid,
 															openType: "Observability Section",
+															remote: _?.remote || undefined,
 														})
 													);
 												} else {

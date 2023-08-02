@@ -199,8 +199,9 @@ describe("Observability", () => {
 					responseTime: [
 						{
 							name: "responsename",
-							className: "myclassname",
-							functionName: "myfunctionname",
+							codeNamespace: "myclassname",
+							codeFunction: "myfunctionname",
+							language: "java",
 							newValue: 500,
 							oldValue: 300,
 							ratio: 1,
@@ -210,10 +211,13 @@ describe("Observability", () => {
 							metricTimesliceName: "metricTimesliceName",
 							sinceText: "some text",
 							chartHeaderTexts: {},
+							notificationText: "",
+							entityName: "",
 						},
 					],
 					errorRate: [],
 					detectionMethod: "Release Based",
+					didNotifyNewAnomalies: false,
 				};
 			}
 		);
@@ -340,6 +344,7 @@ describe("Observability", () => {
 					isSupported: false,
 					responseTime: [],
 					errorRate: [],
+					didNotifyNewAnomalies: false,
 				};
 				return response;
 			}
@@ -475,7 +480,15 @@ describe("Observability", () => {
 		await waitFor(() => {
 			expect(screen.queryByTestId("observability-label-title")).toHaveTextContent("Observability");
 			expect(mockTrack).toHaveBeenCalledTimes(1);
-			expect(mockTrack).toHaveBeenCalledWith("O11y Rendered", { State: "No Services" });
+			expect(mockTrack).toHaveBeenCalledWith("O11y Rendered", {
+				State: "No Services",
+				Meta: {
+					currentEntityAccounts: 0,
+					hasEntities: true,
+					hasRepoForEntityAssociator: true,
+					observabilityRepoCount: 1,
+				},
+			});
 		});
 	});
 
@@ -611,6 +624,7 @@ describe("Observability", () => {
 				errorRate: [],
 				responseTime: [],
 				isSupported: true,
+				didNotifyNewAnomalies: false,
 			};
 		});
 

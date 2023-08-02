@@ -352,7 +352,11 @@ export class FLTCodeAttributeStrategy implements FLTStrategy {
 			case "ruby":
 				// MessageBroker is a top level message broker for ruby - there is a separate function level span that we show
 				return spans
-					.filter(span => !span.name?.startsWith("MessageBroker/"))
+					.filter(
+						span =>
+							!span.name?.startsWith("MessageBroker/") &&
+							!span.name?.startsWith("ActiveJob/Async/Queue/Produce/")
+					)
 					.map(span => {
 						if (span.name?.startsWith("Nested/Controller")) {
 							span.name = span.name?.replace("Nested/", "");

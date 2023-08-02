@@ -28,7 +28,10 @@ import {
 } from "@codestream/webview/ipc/host.protocol";
 import { LoadingMessage } from "@codestream/webview/src/components/LoadingMessage";
 import { CodeStreamState } from "@codestream/webview/store";
-import { closeAllPanels } from "@codestream/webview/store/context/actions";
+import {
+	closeAllPanels,
+	setCurrentObservabilityAnomaly,
+} from "@codestream/webview/store/context/actions";
 import { useDidMount, usePrevious } from "@codestream/webview/utilities/hooks";
 import { HostApi } from "@codestream/webview/webview-api";
 import { closePanel } from "../actions";
@@ -40,6 +43,7 @@ import Icon from "../Icon";
 import { PanelHeader } from "../../src/components/PanelHeader";
 import { ErrorRow } from "../Observability";
 import { openErrorGroup } from "@codestream/webview/store/codeErrors/thunks";
+import { CLMSettings } from "@codestream/protocols/api";
 
 const Root = styled.div``;
 
@@ -78,7 +82,7 @@ export const ObservabilityAnomalyPanel = () => {
 			observabilityRepoEntities:
 				(state.users[state.session.userId!].preferences || {}).observabilityRepoEntities ||
 				EMPTY_ARRAY,
-			clmSettings: state.preferences.clmSettings || {},
+			clmSettings: (state.preferences.clmSettings || {}) as CLMSettings,
 			sessionStart: state.context.sessionStart,
 		};
 	});
@@ -138,14 +142,8 @@ export const ObservabilityAnomalyPanel = () => {
 					}
 				});
 			});
-			const maxReleaseDate = new Date();
-			maxReleaseDate.setHours(0, 0, 0, 0);
-			const nDaysAgoRelease = derivedState?.clmSettings?.compareDataLastReleaseValue || 7;
-			maxReleaseDate.setDate(maxReleaseDate.getDate() - nDaysAgoRelease);
-			let comparisonReleaseSeconds = 0;
 
 			const deploymentsObject = {};
-
 			response.deployments?.forEach(item => {
 				const { seconds, version } = item;
 
@@ -166,8 +164,8 @@ export const ObservabilityAnomalyPanel = () => {
 				const date = new Date();
 				date.setHours(0, 0, 0, 0);
 				const nDaysAgo = derivedState?.clmSettings?.compareDataLastValue;
-				date.setDate(date.getDate() - nDaysAgo);
-				const isPlural = nDaysAgo > 1 ? "s" : "";
+				date.setDate(date.getDate() - parseInt(nDaysAgo as string));
+				const isPlural = parseInt(nDaysAgo as string) > 1 ? "s" : "";
 
 				deploymentsObject[Math.floor(date.getTime() / 1000)] = [`${nDaysAgo} day${isPlural} ago`];
 			}
@@ -309,10 +307,15 @@ export const ObservabilityAnomalyPanel = () => {
 						textOverflow: "ellipsis",
 					}}
 				>
-					<PanelHeader title={derivedState.currentObservabilityAnomaly.functionName}></PanelHeader>
+					<PanelHeader title={derivedState.currentObservabilityAnomaly.codeFunction}></PanelHeader>
 				</div>
 			)}
-			<CancelButton onClick={() => dispatch(closePanel())} />
+			<CancelButton
+				onClick={() => {
+					dispatch(setCurrentObservabilityAnomaly());
+					dispatch(closePanel());
+				}}
+			/>
 
 			<div className="plane-container" style={{ padding: "5px 20px 0px 10px" }}>
 				<div className="standard-form vscroll">
@@ -463,6 +466,7 @@ export const ObservabilityAnomalyPanel = () => {
 																			occurrenceId: response?.occurrenceId || _.occurrenceId,
 																			pendingErrorGroupGuid: _.errorGroupGuid,
 																			openType: "CLM Details",
+																			remote: _?.remote || undefined,
 																		})
 																	);
 																} catch (ex) {
@@ -537,7 +541,7 @@ export const ObservabilityAnomalyPanel = () => {
 																	([key, value]: [string, any]) => {
 																		return (
 																			<ReferenceLine
-																				x={key}
+																				x={parseInt(key)}
 																				stroke={value?.length ? colorPrimary : colorSubtle}
 																				label={e => renderCustomLabel(e, value.join(", "))}
 																			/>

@@ -71,8 +71,10 @@ class UpdateConfigurationRequest(
 class ActiveEditorContextResponse(val editorContext: EditorContext? = EditorContext())
 
 class EditorSymbolRevealRequest(
-    val className: String?,
-    val functionName: String?
+    val codeFilepath: String?,
+    val codeNamespace: String?,
+    val codeFunction: String?,
+    val language: String
 )
 
 class EditorSymbolRevealResponse(

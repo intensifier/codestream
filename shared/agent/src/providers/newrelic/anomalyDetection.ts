@@ -1,28 +1,36 @@
 import { Container, SessionContainer } from "../../container";
 import {
 	AgentFilterNamespacesRequestType,
+	CodeAttributes,
+	Comparison,
 	DetectionMethod,
+	DidDetectObservabilityAnomaliesNotificationType,
+	EntityAccount,
 	GetObservabilityAnomaliesRequest,
 	GetObservabilityAnomaliesResponse,
-	ObservabilityAnomaly,
 	Named,
 	NameValue,
-	Comparison,
+	ObservabilityAnomaly,
+	ObservabilityRepo,
+	SpanWithCodeAttrs,
 } from "@codestream/protocols/agent";
 import { INewRelicProvider, NewRelicProvider } from "../newrelic";
 import { Logger } from "../../logger";
+import { getStorage } from "../../storage";
 
 export class AnomalyDetector {
 	constructor(
 		private _request: GetObservabilityAnomaliesRequest,
 		private _provider: INewRelicProvider
 	) {
-		this._dataTimeFrame = `SINCE ${_request.sinceDaysAgo} days AGO`;
+		const sinceDaysAgo = parseInt(_request.sinceDaysAgo as any);
+		const baselineDays = parseInt(_request.baselineDays as any);
+		this._dataTimeFrame = `SINCE ${sinceDaysAgo} days AGO`;
 		this._baselineTimeFrame = `SINCE ${
-			_request.sinceDaysAgo + _request.baselineDays
-		} days AGO UNTIL ${_request.sinceDaysAgo} days AGO`;
+			sinceDaysAgo + baselineDays
+		} days AGO UNTIL ${sinceDaysAgo} days AGO`;
 		this._accountId = NewRelicProvider.parseId(_request.entityGuid)!.accountId;
-		this._sinceDaysAgo = _request.sinceDaysAgo;
+		this._sinceDaysAgo = sinceDaysAgo;
 	}
 
 	private _dataTimeFrame;
@@ -36,31 +44,33 @@ export class AnomalyDetector {
 	private _releaseBased = false;
 
 	async execute(): Promise<GetObservabilityAnomaliesResponse> {
-		const benchmarkSampleSizesMetric = await this.getBenchmarkSampleSizesMetric();
-		const javaMetrics = benchmarkSampleSizesMetric.filter(_ => _.name.indexOf("Java/") >= 0);
-		if (!javaMetrics.length) {
+		const benchmarkMetrics = await this.getBenchmarkSampleSizesMetric();
+		const languageSupport = this.getLanguageSupport(benchmarkMetrics);
+		if (!languageSupport) {
 			return {
-				isSupported: false,
 				responseTime: [],
 				errorRate: [],
+				didNotifyNewAnomalies: false,
+				isSupported: false,
 			};
 		}
-		const benchmarkSampleSizesSpan = await this.getBenchmarkSampleSizesSpan();
+
+		const benchmarkSpans = await this.getBenchmarkSampleSizesSpans();
 		// Used to determine metric validity
 		const benchmarkSampleSizes = this.consolidateBenchmarkSampleSizes(
-			benchmarkSampleSizesMetric,
-			benchmarkSampleSizesSpan
+			benchmarkMetrics,
+			benchmarkSpans
 		);
 
 		const sinceDaysAgo = parseInt(this._request.sinceDaysAgo as any);
 		this._totalDays = sinceDaysAgo + parseInt(this._request.baselineDays as any);
-		this._sinceText = `${sinceDaysAgo} days ago`;
+		this._sinceText = sinceDaysAgo === 1 ? `1 day ago` : `${sinceDaysAgo} days ago`;
 		let detectionMethod: DetectionMethod = "Time Based";
-		if (this._request.sinceReleaseAtLeastDaysAgo) {
+		if (this._request.sinceLastRelease) {
 			const deployments = (
 				await this._provider.getDeployments({
 					entityGuid: this._request.entityGuid,
-					since: `31 days ago UNTIL ${this._request.sinceReleaseAtLeastDaysAgo} days ago`,
+					since: `31 days ago`,
 				})
 			).deployments;
 			const deployment = deployments[deployments.length - 1];
@@ -69,14 +79,14 @@ export class AnomalyDetector {
 				const deploymentDate = new Date(deployment.seconds * 1000);
 				const now = new Date();
 				const timeSinceDeployment = now.getTime() - deploymentDate.getTime();
-				const daysSinceDeployment = Math.round(timeSinceDeployment / (1000 * 60 * 60 * 24));
+				const daysSinceDeployment = Math.ceil(timeSinceDeployment / (1000 * 60 * 60 * 24));
 				this._sinceDaysAgo = daysSinceDeployment;
 				this._releaseBased = true;
-				this._dataTimeFrame = `SINCE ${daysSinceDeployment} days AGO`;
+				this._dataTimeFrame = `SINCE ${deployment.seconds}`;
 				const baselineDays = parseInt(this._request.baselineDays as any);
-				this._baselineTimeFrame = `SINCE ${
-					daysSinceDeployment + baselineDays
-				} days AGO UNTIL ${daysSinceDeployment} days AGO`;
+				this._baselineTimeFrame = `SINCE ${daysSinceDeployment + baselineDays} days AGO UNTIL ${
+					deployment.seconds
+				}`;
 				this._totalDays = daysSinceDeployment + baselineDays;
 
 				const options: Intl.DateTimeFormatOptions = {
@@ -89,42 +99,39 @@ export class AnomalyDetector {
 			}
 		}
 
-		const metricRoots = this.getCommonRoots(
-			benchmarkSampleSizesMetric.map(_ => this.extractSymbolStr(_.name))
-		);
-		if (!metricRoots || !metricRoots.length) {
-			return {
-				responseTime: [],
-				errorRate: [],
-			};
-		}
-
 		const { comparisons: durationComparisons, metricTimesliceNames } =
 			await this.getAnomalousDurationComparisons(
-				metricRoots,
+				languageSupport,
 				benchmarkSampleSizes,
+				benchmarkSpans,
 				this._request.minimumResponseTime,
 				this._request.minimumSampleRate,
 				this._request.minimumRatio
 			);
 
 		const { comparisons: errorRateComparisons, metricTimesliceNames: errorMetricTimesliceNames } =
-			await this.getErrorRateAnomalies(
-				metricRoots,
+			await this.getAnomalousErrorRateComparisons(
+				languageSupport,
 				benchmarkSampleSizes,
+				benchmarkSpans,
 				this._request.minimumErrorRate,
 				this._request.minimumSampleRate,
 				this._request.minimumRatio
 			);
 
 		const durationAnomalies = durationComparisons.map(_ =>
-			this.durationComparisonToAnomaly(_, errorMetricTimesliceNames)
+			this.durationComparisonToAnomaly(
+				_,
+				languageSupport,
+				benchmarkSpans,
+				errorMetricTimesliceNames
+			)
 		);
 		const errorRateAnomalies = errorRateComparisons.map(_ =>
-			this.errorRateComparisonToAnomaly(_, metricTimesliceNames)
+			this.errorRateComparisonToAnomaly(_, languageSupport, benchmarkSpans, metricTimesliceNames)
 		);
 
-		this.addChartHeaderTexts(durationAnomalies, errorRateAnomalies);
+		void (await this.addDisplayTexts(durationAnomalies, errorRateAnomalies));
 
 		const symbolStrs = new Set();
 		for (const name of metricTimesliceNames) {
@@ -139,15 +146,20 @@ export class AnomalyDetector {
 			...errorRateAnomalies.map(_ => this.extractSymbolStr(_.name)),
 		];
 		const allOtherAnomalies: ObservabilityAnomaly[] = [];
-		for (const [name] of benchmarkSampleSizes) {
+		const allMetrics = languageSupport.filterMetrics(benchmarkMetrics, benchmarkSpans);
+		for (const { name } of allMetrics) {
 			const symbolStr = this.extractSymbolStr(name);
 			if (anomalousSymbolStrs.find(_ => _ === symbolStr)) continue;
 
-			const symbol = this.extractSymbol(name);
+			const codeAttrs = languageSupport.codeAttrs(name, benchmarkSpans);
+			const text = languageSupport.displayName(codeAttrs, name);
+			if (allOtherAnomalies.find(_ => _.text === text)) continue;
+
 			const anomaly: ObservabilityAnomaly = {
 				name,
-				text: name,
-				...symbol,
+				text,
+				...codeAttrs,
+				language: languageSupport.language,
 				oldValue: 0,
 				newValue: 0,
 				ratio: 1,
@@ -156,6 +168,8 @@ export class AnomalyDetector {
 				chartHeaderTexts: {},
 				metricTimesliceName: "",
 				errorMetricTimesliceName: "",
+				notificationText: "",
+				entityName: "",
 			};
 			allOtherAnomalies.push(anomaly);
 		}
@@ -174,6 +188,7 @@ export class AnomalyDetector {
 				"Since Days Ago": this._sinceDaysAgo,
 				"Baseline Days": this._request.baselineDays,
 				"Release Based": this._releaseBased,
+				Language: languageSupport.language,
 			};
 			telemetry?.track({
 				eventName: "CLM Anomalies Calculated",
@@ -183,65 +198,66 @@ export class AnomalyDetector {
 			Logger.warn("Error generating anomaly detection telemetry", e);
 		}
 
+		let didNotifyNewAnomalies = false;
+		if (this._request.notifyNewAnomalies) {
+			try {
+				didNotifyNewAnomalies = await this.notifyNewAnomalies(
+					durationAnomalies,
+					errorRateAnomalies
+				);
+			} catch (e) {
+				Logger.warn("Error notifying newly detected observability anomalies", e);
+			}
+		}
+
 		return {
 			responseTime: durationAnomalies,
 			errorRate: errorRateAnomalies,
 			allOtherAnomalies: allOtherAnomalies,
 			detectionMethod,
+			didNotifyNewAnomalies,
 			isSupported: true,
 		};
 	}
 
-	private async getBenchmarkSampleSizesSpan() {
-		const benchmarkSampleSizesSpanLookup = "(name LIKE 'Java/%.%/%' OR name LIKE 'Custom/%.%/%')";
-		const benchmarkSampleSizesSpan = await this.getSampleSizeSpan(
-			benchmarkSampleSizesSpanLookup,
-			this._benchmarkSampleSizeTimeFrame
-		);
-		return benchmarkSampleSizesSpan;
+	private async getBenchmarkSampleSizesSpans() {
+		const query =
+			`SELECT ` +
+			`  count(*) AS 'value', latest(\`code.filepath\`) as codeFilepath, ` +
+			`  latest(\`code.function\`) as codeFunction, ` +
+			`  latest(\`code.namespace\`) as codeNamespace ` +
+			`FROM Span ` +
+			`WHERE \`entity.guid\` = '${this._request.entityGuid}' ` +
+			`FACET name ` +
+			`${this._benchmarkSampleSizeTimeFrame} LIMIT MAX`;
+
+		return this.runNrql<SpanWithCodeAttrs>(query);
 	}
 
 	private async getBenchmarkSampleSizesMetric() {
-		const benchmarkSampleSizesMetricLookup =
-			"(metricTimesliceName LIKE 'Java/%.%/%' OR metricTimesliceName LIKE 'Custom/%.%/%')";
 		const benchmarkSampleSizesMetric = await this.getSampleSizeMetric(
-			benchmarkSampleSizesMetricLookup,
 			this._benchmarkSampleSizeTimeFrame
 		);
 		return benchmarkSampleSizesMetric;
 	}
 
 	private async getAnomalousDurationComparisons(
-		metricRoots: string[],
+		languageSupport: LanguageSupport,
 		benchmarkSampleSizes: Map<string, { span?: NameValue; metric?: NameValue }>,
+		benchmarkSpans: SpanWithCodeAttrs[],
 		minimumDuration: number,
 		minimumSampleRate: number,
 		minimumRatio: number
 	): Promise<{ comparisons: Comparison[]; metricTimesliceNames: string[] }> {
-		if (!metricRoots.length) {
-			return {
-				comparisons: [],
-				metricTimesliceNames: [],
-			};
-		}
+		const data = await this.getDurationMetric(this._dataTimeFrame);
+		const dataFiltered = languageSupport.filterMetrics(data, benchmarkSpans);
 
-		const lookup = metricRoots
-			.map(
-				_ => `metricTimesliceName LIKE 'Java/%${_}%' OR metricTimesliceName LIKE 'Custom/%${_}%'`
-			)
-			.join(" OR ");
-
-		const data = await this.getDurationMetric(lookup, this._dataTimeFrame);
-
-		const baseline = await this.getDurationMetric(lookup, this._baselineTimeFrame);
-		const baselineSampleRate = await this.getSampleRateMetricFiltered(
-			lookup,
-			this._baselineTimeFrame
-		);
+		const baseline = await this.getDurationMetric(this._baselineTimeFrame);
+		const baselineSampleRate = await this.getSampleRateMetricFiltered(this._baselineTimeFrame);
 		const baselineFilter = this.getSampleRateFilterPredicate(baselineSampleRate, minimumSampleRate);
 		const baselineFiltered = baseline.filter(baselineFilter);
 
-		const allComparisons = this.compareData(data, baselineFiltered, false);
+		const allComparisons = this.compareData(dataFiltered, baselineFiltered, false);
 
 		const filteredComparisons = this.filterComparisonsByBenchmarkSampleSizes(
 			benchmarkSampleSizes,
@@ -254,9 +270,10 @@ export class AnomalyDetector {
 		};
 	}
 
-	private async getErrorRateAnomalies(
-		metricRoots: string[],
+	private async getAnomalousErrorRateComparisons(
+		languageSupport: LanguageSupport,
 		benchmarkSampleSizes: Map<string, { span?: NameValue; metric?: NameValue }>,
+		benchmarkSpans: SpanWithCodeAttrs[],
 		minimumErrorRate: number,
 		minimumSampleRate: number,
 		minimumRatio: number
@@ -264,42 +281,19 @@ export class AnomalyDetector {
 		comparisons: Comparison[];
 		metricTimesliceNames: string[];
 	}> {
-		if (!metricRoots.length) {
-			return {
-				comparisons: [],
-				metricTimesliceNames: [],
-			};
-		}
-
-		const errorCountLookup = metricRoots
-			.map(_ => `metricTimesliceName LIKE 'Errors/%${_}%'`)
-			.join(" OR ");
-		const sampleLookup = metricRoots
-			.map(
-				_ => `metricTimesliceName LIKE 'Java/%${_}%' OR metricTimesliceName LIKE 'Custom/%${_}%'`
-			)
-			.join(" OR ");
-
+		const errorCountLookup = `metricTimesliceName LIKE 'Errors/%'`;
 		const dataErrorCount = await this.getErrorCountMetric(errorCountLookup, this._dataTimeFrame);
-		const dataSampleSize = await this.getSampleSizeMetric(sampleLookup, this._dataTimeFrame);
-		// const dataSampleRate = await this.getSampleRateMetric(lookup, this._dataTimeFrame);
-		// const dataFilter = this.getSampleRateFilterPredicate(dataSampleRate, minimumSampleRate);
+		const dataErrorCountFiltered = languageSupport.filterMetrics(dataErrorCount, benchmarkSpans);
+		const dataSampleSize = await this.getSampleSizeMetric(this._dataTimeFrame);
 		const dataTransformer = this.getErrorRateTransformer(dataSampleSize);
-		// const dataErrorRate = dataErrorCount.filter(dataFilter).map(dataTransformer);
-		const dataErrorRate = dataErrorCount.map(dataTransformer);
+		const dataErrorRate = dataErrorCountFiltered.map(dataTransformer);
 
 		const baselineErrorCount = await this.getErrorCountMetric(
 			errorCountLookup,
 			this._baselineTimeFrame
 		);
-		const baselineSampleSize = await this.getSampleSizeMetric(
-			sampleLookup,
-			this._baselineTimeFrame
-		);
-		const baselineSampleRate = await this.getSampleRateMetricFiltered(
-			sampleLookup,
-			this._baselineTimeFrame
-		);
+		const baselineSampleSize = await this.getSampleSizeMetric(this._baselineTimeFrame);
+		const baselineSampleRate = await this.getSampleRateMetricFiltered(this._baselineTimeFrame);
 		const baselineTransformer = this.getErrorRateTransformer(baselineSampleSize);
 		const baselineErrorRate = baselineErrorCount.map(baselineTransformer);
 
@@ -500,26 +494,10 @@ export class AnomalyDetector {
 		return map;
 	}
 
-	private getResponseTimeSpan(lookup: string, timeFrame: string): Promise<NameValue[]> {
-		const query =
-			`SELECT average(duration) * 1000 AS 'value' ` +
-			`FROM Span WHERE \`entity.guid\` = '${this._request.entityGuid}' AND (${lookup}) FACET name ` +
-			`${timeFrame} LIMIT MAX`;
-		return this.runNrql(query);
-	}
-
-	getDurationMetric(lookup: string, timeFrame: string): Promise<NameValue[]> {
+	getDurationMetric(timeFrame: string): Promise<NameValue[]> {
 		const query =
 			`SELECT average(newrelic.timeslice.value) * 1000 AS 'value' ` +
-			`FROM Metric WHERE \`entity.guid\` = '${this._request.entityGuid}' AND (${lookup}) FACET metricTimesliceName AS name ` +
-			`${timeFrame} LIMIT MAX`;
-		return this.runNrql(query);
-	}
-
-	private getErrorCountSpan(lookup: string, timeFrame: string): Promise<NameValue[]> {
-		const query =
-			`SELECT count(*) AS 'value' ` +
-			`FROM Span WHERE \`entity.guid\` = '${this._request.entityGuid}' AND \`error.group.guid\` IS NOT NULL AND (${lookup}) FACET name ` +
+			`FROM Metric WHERE \`entity.guid\` = '${this._request.entityGuid}' FACET metricTimesliceName AS name ` +
 			`${timeFrame} LIMIT MAX`;
 		return this.runNrql(query);
 	}
@@ -530,15 +508,6 @@ export class AnomalyDetector {
 			`FROM Metric WHERE \`entity.guid\` = '${this._request.entityGuid}' AND (${lookup}) FACET metricTimesliceName AS name ` +
 			`${timeFrame} LIMIT MAX`;
 		return this.runNrql(query);
-	}
-
-	private async getSampleSizeSpan(lookup: string, timeFrame: string): Promise<NameValue[]> {
-		const query =
-			`SELECT count(*) AS 'value' ` +
-			`FROM Span WHERE \`entity.guid\` = '${this._request.entityGuid}' AND (${lookup}) FACET name ` +
-			`${timeFrame} LIMIT MAX`;
-
-		return this.runNrql<NameValue>(query);
 	}
 
 	private async filterSampleRates(sampleRates: NameValue[]) {
@@ -560,23 +529,21 @@ export class AnomalyDetector {
 		return filteredSampleRates;
 	}
 
-	private async getSampleRateMetricFiltered(
-		lookup: string,
-		timeFrame: string
-	): Promise<NameValue[]> {
+	private async getSampleRateMetricFiltered(timeFrame: string): Promise<NameValue[]> {
 		const query =
 			`SELECT rate(count(newrelic.timeslice.value), 1 minute) AS 'value' ` +
-			`FROM Metric WHERE \`entity.guid\` = '${this._request.entityGuid}' AND (${lookup}) FACET metricTimesliceName AS name ` +
+			`FROM Metric WHERE \`entity.guid\` = '${this._request.entityGuid}' FACET metricTimesliceName AS name ` +
 			`${timeFrame} LIMIT MAX`;
 		const sampleRates = await this.runNrql<NameValue>(query);
-		const filteredSampleRates = await this.filterSampleRates(sampleRates);
-		return filteredSampleRates;
+		// const filteredSampleRates = await this.filterSampleRates(sampleRates);
+		// return filteredSampleRates;
+		return sampleRates;
 	}
 
-	private async getSampleSizeMetric(lookup: string, timeFrame: string): Promise<NameValue[]> {
+	private async getSampleSizeMetric(timeFrame: string): Promise<NameValue[]> {
 		const query =
 			`SELECT count(newrelic.timeslice.value) AS 'value' ` +
-			`FROM Metric WHERE \`entity.guid\` = '${this._request.entityGuid}' AND (${lookup}) FACET metricTimesliceName AS name ` +
+			`FROM Metric WHERE \`entity.guid\` = '${this._request.entityGuid}' FACET metricTimesliceName AS name ` +
 			`${timeFrame} LIMIT MAX`;
 		return this.runNrql<NameValue>(query);
 	}
@@ -614,13 +581,16 @@ export class AnomalyDetector {
 			newValue: number;
 			ratio: number;
 		},
+		languageSupport: LanguageSupport,
+		benchmarkSpans: SpanWithCodeAttrs[],
 		errorMetricTimesliceNames: string[]
 	): ObservabilityAnomaly {
-		const symbol = this.extractSymbol(comparison.name);
+		const codeAttrs = languageSupport.codeAttrs(comparison.name, benchmarkSpans);
 		return {
 			...comparison,
-			...symbol,
-			text: this.extractSymbolStr(comparison.name),
+			...codeAttrs,
+			language: languageSupport.language,
+			text: languageSupport.displayName(codeAttrs, comparison.name),
 			totalDays: this._totalDays,
 			metricTimesliceName: comparison.name,
 			sinceText: this._sinceText,
@@ -629,6 +599,8 @@ export class AnomalyDetector {
 					_ => this.extractSymbolStr(_) === this.extractSymbolStr(comparison.name)
 				) || comparison.name,
 			chartHeaderTexts: {},
+			notificationText: "",
+			entityName: "",
 		};
 	}
 
@@ -639,13 +611,16 @@ export class AnomalyDetector {
 			newValue: number;
 			ratio: number;
 		},
+		languageSupport: LanguageSupport,
+		benchmarkSpans: SpanWithCodeAttrs[],
 		metricTimesliceNames: string[]
 	): ObservabilityAnomaly {
-		const symbol = this.extractSymbol(comparison.name);
+		const codeAttrs = languageSupport.codeAttrs(comparison.name, benchmarkSpans);
 		return {
 			...comparison,
-			...symbol,
-			text: this.extractSymbolStr(comparison.name),
+			...codeAttrs,
+			language: languageSupport.language,
+			text: languageSupport.displayName(codeAttrs, comparison.name),
 			totalDays: this._totalDays,
 			sinceText: this._sinceText,
 			metricTimesliceName:
@@ -654,27 +629,35 @@ export class AnomalyDetector {
 				) || comparison.name,
 			errorMetricTimesliceName: comparison.name,
 			chartHeaderTexts: {},
+			notificationText: "",
+			entityName: "",
 		};
 	}
 
-	private addChartHeaderTexts(
+	private async addDisplayTexts(
 		durationAnomalies: ObservabilityAnomaly[],
 		errorRateAnomalies: ObservabilityAnomaly[]
 	) {
+		const entityAccount = await this.getEntityAccount();
+
 		// FIXME temporary solution for anomaly charts
 		for (const anomaly of durationAnomalies) {
 			const percentage = ((anomaly.ratio - 1) * 100).toFixed(2);
 			const text = `+${percentage}% since ${anomaly.sinceText}`;
 			anomaly.chartHeaderTexts["Average duration (ms)"] = text;
+			anomaly.notificationText = "Average duration (ms) " + text;
+			anomaly.entityName = entityAccount?.entityName || "";
 		}
 		for (const anomaly of errorRateAnomalies) {
 			const percentage = ((anomaly.ratio - 1) * 100).toFixed(2);
 			const text = `+${percentage}% since ${anomaly.sinceText}`;
 			anomaly.chartHeaderTexts["Errors (per minute)"] = text;
+			anomaly.notificationText = "Errors (per minute) " + text;
+			anomaly.entityName = entityAccount?.entityName || "";
 		}
 		for (const anomaly of durationAnomalies) {
 			const counterpart = errorRateAnomalies.find(
-				_ => _.className === anomaly.className && _.functionName === anomaly.functionName
+				_ => _.codeNamespace === anomaly.codeNamespace && _.codeFunction === anomaly.codeFunction
 			);
 			if (counterpart) {
 				anomaly.chartHeaderTexts = {
@@ -685,7 +668,7 @@ export class AnomalyDetector {
 		}
 		for (const anomaly of errorRateAnomalies) {
 			const counterpart = durationAnomalies.find(
-				_ => _.className === anomaly.className && _.functionName === anomaly.functionName
+				_ => _.codeNamespace === anomaly.codeNamespace && _.codeFunction === anomaly.codeFunction
 			);
 			if (counterpart) {
 				anomaly.chartHeaderTexts = {
@@ -694,5 +677,368 @@ export class AnomalyDetector {
 				};
 			}
 		}
+	}
+
+	private getLanguageSupport(benchmarkMetrics: NameValue[]): LanguageSupport | undefined {
+		for (const metric of benchmarkMetrics) {
+			if (metric.name.indexOf("Java/") === 0) {
+				return new JavaLanguageSupport();
+			}
+			if (metric.name.indexOf("Ruby/") === 0 || metric.name.indexOf("RubyVM/") === 0) {
+				return new RubyLanguageSupport();
+			}
+			if (metric.name.indexOf("DotNet/") === 0) {
+				return new CSharpLanguageSupport();
+			}
+			if (metric.name.indexOf("Python/") === 0) {
+				return new PythonLanguageSupport();
+			}
+		}
+
+		return undefined;
+	}
+
+	private _observabilityRepo: ObservabilityRepo | undefined;
+	private async getObservabilityRepo(): Promise<ObservabilityRepo | undefined> {
+		if (this._observabilityRepo) return this._observabilityRepo;
+
+		const { repos: observabilityRepos } = await this._provider.getObservabilityRepos({});
+		const { entityGuid } = this._request;
+
+		if (!observabilityRepos) return undefined;
+		const observabilityRepo = observabilityRepos.find(_ =>
+			_.entityAccounts.some(_ => _.entityGuid === entityGuid)
+		);
+		return (this._observabilityRepo = observabilityRepo);
+	}
+
+	private _entityAccount: EntityAccount | undefined;
+	private async getEntityAccount(): Promise<EntityAccount | undefined> {
+		if (this._entityAccount) return this._entityAccount;
+		const observabilityRepo = await this.getObservabilityRepo();
+		return (this._entityAccount = observabilityRepo?.entityAccounts?.find(
+			_ => _.entityGuid === this._request.entityGuid
+		));
+	}
+
+	private async notifyNewAnomalies(
+		durationAnomalies: ObservabilityAnomaly[],
+		errorRateAnomalies: ObservabilityAnomaly[]
+	): Promise<boolean> {
+		const { entityGuid } = this._request;
+		const { git, users } = SessionContainer.instance();
+		const me = await users.getMe();
+		const now = Date.now();
+
+		if (me.preferences?.notifyPerformanceIssues === false) return false;
+
+		const observabilityRepo = await this.getObservabilityRepo();
+		if (!observabilityRepo) return false;
+		const gitRepo = await git.getRepositoryById(observabilityRepo.repoId);
+		if (!gitRepo) return false;
+		const storage = await getStorage(gitRepo.path);
+
+		const anomalyNotificationsCollection = storage.getCollection("anomalyNotifications");
+		const anomalyNotificationsOld = anomalyNotificationsCollection.get(
+			entityGuid
+		) as AnomalyNotifications;
+		const anomalyNotificationsNew: AnomalyNotifications = {
+			duration: {},
+			errorRate: {},
+		};
+
+		const newDurationAnomalies: ObservabilityAnomaly[] = [];
+		for (const anomaly of durationAnomalies) {
+			const lastNotification = anomalyNotificationsOld?.duration[anomaly.name];
+			if (!lastNotification) {
+				newDurationAnomalies.push(anomaly);
+				anomalyNotificationsNew.duration[anomaly.name] = {
+					lastNotified: now,
+				};
+			} else {
+				anomalyNotificationsNew.duration[anomaly.name] = lastNotification;
+			}
+		}
+
+		const newErrorRateAnomalies: ObservabilityAnomaly[] = [];
+		for (const anomaly of errorRateAnomalies) {
+			const lastNotification = anomalyNotificationsOld?.errorRate[anomaly.name];
+			if (!lastNotification) {
+				newErrorRateAnomalies.push(anomaly);
+				anomalyNotificationsNew.errorRate[anomaly.name] = {
+					lastNotified: now,
+				};
+			} else {
+				anomalyNotificationsNew.errorRate[anomaly.name] = lastNotification;
+			}
+			anomalyNotificationsNew.errorRate[anomaly.name] = lastNotification || {
+				lastNotified: now,
+			};
+		}
+
+		anomalyNotificationsCollection.set(entityGuid, anomalyNotificationsNew);
+		await storage.flush();
+
+		if (newDurationAnomalies.length || newErrorRateAnomalies.length) {
+			Container.instance().agent.sendNotification(DidDetectObservabilityAnomaliesNotificationType, {
+				entityGuid: entityGuid,
+				duration: newDurationAnomalies,
+				errorRate: newErrorRateAnomalies,
+			});
+			return true;
+		}
+
+		return false;
+	}
+}
+
+interface AnomalyNotifications {
+	duration: {
+		[id: string]: AnomalyNotification;
+	};
+	errorRate: {
+		[id: string]: AnomalyNotification;
+	};
+}
+
+interface AnomalyNotification {
+	lastNotified: number;
+}
+
+interface LanguageSupport {
+	get language(): string;
+
+	filterMetrics(data: NameValue[], benchmarkSpans: SpanWithCodeAttrs[]): NameValue[];
+
+	codeAttrs(name: string, benchmarkSpans: SpanWithCodeAttrs[]): CodeAttributes;
+
+	displayName(codeAttrs: CodeAttributes, name: string): string;
+}
+
+class JavaLanguageSupport implements LanguageSupport {
+	get language() {
+		return "java";
+	}
+
+	filterMetrics(metrics: NameValue[], benchmarkSpans: SpanWithCodeAttrs[]): NameValue[] {
+		const javaRE = /^Java\/(.+)\.(.+)\/(.+)/;
+		const customRE = /^Custom\/(.+)\.(.+)\/(.+)/;
+		const errorsRE = /^Errors\/(.+)\.(.+)\/(.+)/;
+		return metrics.filter(
+			m =>
+				benchmarkSpans.find(s => s.name === m.name && s.codeFunction) ||
+				javaRE.test(m.name) ||
+				customRE.test(m.name) ||
+				errorsRE.test(m.name)
+		);
+	}
+
+	codeAttrsFromName(name: string): CodeAttributes {
+		const parts = name.split("/");
+		const codeFunction = parts[parts.length - 1];
+		const codeNamespace = parts[parts.length - 2];
+		return {
+			codeNamespace,
+			codeFunction,
+		};
+	}
+
+	codeAttrs(name: string, benchmarkSpans: SpanWithCodeAttrs[]): CodeAttributes {
+		const span = benchmarkSpans.find(_ => _.name === name);
+		if (span && span.codeFunction) {
+			return {
+				codeFilepath: span.codeFilepath,
+				codeNamespace: span.codeNamespace,
+				codeFunction: span.codeFunction,
+			};
+		}
+		return this.codeAttrsFromName(name);
+	}
+
+	displayName(codeAttrs: CodeAttributes, name: string) {
+		if (!codeAttrs?.codeFunction) return name;
+		const parts = [];
+		if (codeAttrs.codeNamespace) parts.push(codeAttrs.codeNamespace);
+		parts.push(codeAttrs.codeFunction);
+		return parts.join("/");
+	}
+}
+
+class RubyLanguageSupport implements LanguageSupport {
+	get language() {
+		return "ruby";
+	}
+	filterMetrics(metrics: NameValue[], benchmarkSpans: SpanWithCodeAttrs[]): NameValue[] {
+		const controllerRE = /^Controller\/(.+)\/(.+)/;
+		const nestedControllerRE = /^Nested\/Controller\/(.+)\/(.+)/;
+		const errorsRE = /^Errors\/(.+)\/(.+)/;
+		return metrics.filter(
+			m =>
+				!(
+					m.name.indexOf("Nested/Controller/") === 0 &&
+					metrics.find(another => "Nested/" + another.name === m.name)
+				) &&
+				!(m.name.indexOf("Nested/Controller/Rack/") === 0) &&
+				!(m.name.indexOf("Controller/Sinatra/") === 0) &&
+				!(m.name.indexOf("Nested/Controller/Sinatra/") === 0) &&
+				!(m.name.indexOf("ActiveJob/Async/Queue/Produce/") === 0) &&
+				(benchmarkSpans.find(s => s.name === m.name && s.codeFunction) ||
+					controllerRE.test(m.name) ||
+					nestedControllerRE.test(m.name) ||
+					errorsRE.test(m.name))
+		);
+	}
+
+	codeAttrsFromName(name: string): CodeAttributes {
+		const parts = name.split("/");
+		const codeFunction = parts[parts.length - 1];
+		const codeNamespace = parts[parts.length - 2];
+
+		if (
+			(parts[0] === "Nested" && parts[1] === "Controller") ||
+			(parts[0] === "Errors" && parts[1] === "Controller") ||
+			parts[0] === "Controller"
+		) {
+			const parts = codeNamespace.split("_");
+			const camelCaseParts = parts.map(_ => _.charAt(0).toUpperCase() + _.slice(1));
+			const controllerName = camelCaseParts.join("") + "Controller";
+			return {
+				codeNamespace: controllerName,
+				codeFunction,
+			};
+		} else {
+			return {
+				codeNamespace,
+				codeFunction,
+			};
+		}
+	}
+
+	codeAttrs(name: string, benchmarkSpans: SpanWithCodeAttrs[]): CodeAttributes {
+		const span = benchmarkSpans.find(_ => _.name === name);
+		if (span && span.codeFunction) {
+			return {
+				codeFilepath: span.codeFilepath,
+				codeNamespace: span.codeNamespace,
+				codeFunction: span.codeFunction,
+			};
+		}
+		return this.codeAttrsFromName(name);
+	}
+
+	displayName(codeAttrs: CodeAttributes, name: string) {
+		if (!codeAttrs?.codeFunction) return name;
+		const parts = [];
+		if (codeAttrs.codeNamespace) parts.push(codeAttrs.codeNamespace);
+		parts.push(codeAttrs.codeFunction);
+		return parts.join("#");
+	}
+}
+
+class PythonLanguageSupport implements LanguageSupport {
+	get language() {
+		return "python";
+	}
+	filterMetrics(metrics: NameValue[], benchmarkSpans: SpanWithCodeAttrs[]): NameValue[] {
+		const errorPrefixRe = /^Errors\/WebTransaction\//;
+		return metrics.filter(m => {
+			const name = m.name.replace(errorPrefixRe, "");
+			return (
+				!name.startsWith("Function/flask.app:Flask.") &&
+				benchmarkSpans.find(
+					s =>
+						s.name === name &&
+						s.name.endsWith(s.codeFunction) &&
+						s.codeFunction &&
+						s.codeFilepath != "<builtin>"
+				)
+			);
+		});
+	}
+
+	codeAttrsFromName(name: string): CodeAttributes {
+		const [prefix, classMethod] = name.split(":");
+		const parts = classMethod.split(".");
+		const codeFunction = parts.pop() || "";
+		const namespacePrefix = prefix.replace("Function/", "");
+		const className = parts.join(".");
+		const codeNamespaceParts = [namespacePrefix];
+		if (className.length) {
+			codeNamespaceParts.push(className);
+		}
+		const codeNamespace = codeNamespaceParts.join(":");
+		return {
+			codeNamespace,
+			codeFunction,
+		};
+	}
+
+	codeAttrs(name: string, benchmarkSpans: SpanWithCodeAttrs[]): CodeAttributes {
+		const errorPrefixRe = /^Errors\/WebTransaction\//;
+		name = name.replace(errorPrefixRe, "");
+		const span = benchmarkSpans.find(_ => _.name === name && _.name.endsWith(_.codeFunction));
+		if (span && span.codeFunction) {
+			return {
+				codeFilepath: span.codeFilepath,
+				codeNamespace: span.codeNamespace,
+				codeFunction: span.codeFunction,
+			};
+		}
+		return this.codeAttrsFromName(name);
+	}
+
+	displayName(codeAttrs: CodeAttributes, name: string) {
+		const errorPrefixRe = /^Errors\/WebTransaction\/Function\//;
+		const functionRe = /^Function\//;
+		return name.replace(errorPrefixRe, "").replace(functionRe, "");
+	}
+}
+
+class CSharpLanguageSupport implements LanguageSupport {
+	get language() {
+		return "csharp";
+	}
+
+	filterMetrics(metrics: NameValue[], benchmarkSpans: SpanWithCodeAttrs[]): NameValue[] {
+		const dotNetRE = /^DotNet\/(.+)\.(.+)\/(.+)/;
+		const customRE = /^Custom\/(.+)\.(.+)\/(.+)/;
+		const errorsRE = /^Errors\/(.+)\.(.+)\/(.+)/;
+		return metrics.filter(
+			m =>
+				benchmarkSpans.find(s => s.name === m.name && s.codeFunction) ||
+				dotNetRE.test(m.name) ||
+				customRE.test(m.name) ||
+				errorsRE.test(m.name)
+		);
+	}
+
+	codeAttrsFromName(name: string): CodeAttributes {
+		const parts = name.split("/");
+		const codeFunction = parts[parts.length - 1];
+		const codeNamespace = parts[parts.length - 2];
+		return {
+			codeNamespace,
+			codeFunction,
+		};
+	}
+
+	codeAttrs(name: string, benchmarkSpans: SpanWithCodeAttrs[]): CodeAttributes {
+		const span = benchmarkSpans.find(_ => _.name === name);
+		if (span) {
+			return {
+				codeFilepath: span.codeFilepath,
+				codeNamespace: span.codeNamespace,
+				codeFunction: span.codeFunction,
+			};
+		}
+		return this.codeAttrsFromName(name);
+	}
+
+	displayName(codeAttrs: CodeAttributes, name: string) {
+		if (!codeAttrs.codeFunction) return name;
+		const parts = [];
+		if (codeAttrs.codeNamespace) parts.push(codeAttrs.codeNamespace);
+		parts.push(codeAttrs.codeFunction);
+		return parts.join("/");
 	}
 }

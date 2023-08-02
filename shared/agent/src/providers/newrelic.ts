@@ -104,7 +104,7 @@ import {
 	UpdateNewRelicOrgIdResponse,
 	DidChangeCodelensesNotificationType,
 } from "@codestream/protocols/agent";
-import { CSMe, CSNewRelicProviderInfo } from "@codestream/protocols/api";
+import { CSMe, CSNewRelicProviderInfo, DEFAULT_CLM_SETTINGS } from "@codestream/protocols/api";
 import { GraphQLClient } from "graphql-request";
 import {
 	flatten as _flatten,
@@ -146,11 +146,35 @@ import {
 import { generateClmSpanDataExistsQuery } from "./newrelic/spanQuery";
 import { ThirdPartyIssueProviderBase } from "./thirdPartyIssueProviderBase";
 import { ClmManager } from "./newrelic/clm/clmManager";
+import * as Dom from "graphql-request/dist/types.dom";
+import { makeHtmlLoggable } from "@codestream/utils/system/string";
 
 const ignoredErrors = [GraphqlNrqlTimeoutError];
 
 export function escapeNrql(nrql: string) {
 	return nrql.replace(/\\/g, "\\\\\\\\").replace(/\n/g, " ");
+}
+
+export interface HttpErrorResponse {
+	response: {
+		status: number;
+		error: string;
+		headers: Dom.Headers;
+	};
+	request: {
+		query: string;
+		variables: object;
+	};
+}
+
+function isHttpErrorResponse(ex: unknown): ex is HttpErrorResponse {
+	const httpErrorResponse = ex as HttpErrorResponse;
+	return (
+		httpErrorResponse?.response?.error !== undefined &&
+		httpErrorResponse?.response?.status !== undefined &&
+		httpErrorResponse?.response?.headers !== undefined &&
+		httpErrorResponse?.request?.query !== undefined
+	);
 }
 
 const ENTITY_CACHE_KEY = "entityCache";
@@ -174,7 +198,12 @@ export interface INewRelicProvider {
 	) => EntityAccount;
 	errorLogIfNotIgnored: (ex: Error, message: string, ...params: any[]) => void;
 	getDeployments(request: GetDeploymentsRequest): Promise<GetDeploymentsResponse>;
-	getLastObservabilityAnomaliesResponse(): GetObservabilityAnomaliesResponse | undefined;
+	getLastObservabilityAnomaliesResponse(
+		entityGuid: string
+	): GetObservabilityAnomaliesResponse | undefined;
+	getObservabilityRepos(
+		request: GetObservabilityReposRequest
+	): Promise<GetObservabilityReposResponse>;
 }
 
 @lspProvider("newrelic")
@@ -200,6 +229,7 @@ export class NewRelicProvider
 	});
 
 	private _clmManager = new ClmManager(this);
+	private _observabilityAnomaliesPollingInterval: NodeJS.Timer | undefined;
 
 	constructor(session: CodeStreamSession, config: ThirdPartyProviderConfig) {
 		super(session, config);
@@ -207,6 +237,11 @@ export class NewRelicProvider
 			this.buildRepoRemoteVariants,
 			(remotes: string[]) => remotes
 		);
+		this._observabilityAnomaliesPollingInterval = Functions.repeatInterval(
+			this.pollObservabilityAnomalies.bind(this),
+			60 * 1000,
+			24 * 60 * 60 * 1000
+		); // every 24 hours
 	}
 
 	get displayName() {
@@ -416,7 +451,7 @@ export class NewRelicProvider
 						{
 							id: number;
 							name: string;
-						}
+						},
 					];
 				};
 			}>(`{
@@ -472,6 +507,18 @@ export class NewRelicProvider
 				response = potentialResponse;
 				return true;
 			} catch (potentialEx) {
+				if (isHttpErrorResponse(potentialEx)) {
+					const contentType = potentialEx.response.headers.get("content-type");
+					const niceText = contentType?.toLocaleLowerCase()?.includes("text/html")
+						? makeHtmlLoggable(potentialEx.response.error)
+						: potentialEx.response.error;
+					const loggableError = `Error HTTP ${contentType} ${potentialEx.response.status}: ${niceText}`;
+					ex = new Error(
+						`Error HTTP ${contentType} ${potentialEx.response.status}: Internal Error`
+					);
+					Logger.warn(loggableError);
+					return false;
+				}
 				Logger.warn(potentialEx.message);
 				ex = potentialEx;
 				return false;
@@ -647,18 +694,28 @@ export class NewRelicProvider
 	async getErrorGroupMetadata(
 		request: GetObservabilityErrorGroupMetadataRequest
 	): Promise<GetObservabilityErrorGroupMetadataResponse | undefined> {
-		if (!request.errorGroupGuid) return undefined;
+		if (_isEmpty(request.errorGroupGuid) && _isEmpty(request.entityGuid)) return undefined;
 
 		try {
-			const metricResponse = await this.getMetricData(request.errorGroupGuid);
-			if (!metricResponse) return undefined;
+			if (request.errorGroupGuid) {
+				const metricResponse = await this.getMetricData(request.errorGroupGuid);
+				if (!metricResponse) return undefined;
 
-			const mappedRepoEntities = await this.findMappedRemoteByEntity(metricResponse?.entityGuid);
-			return {
-				entityId: metricResponse?.entityGuid,
-				occurrenceId: metricResponse?.traceId,
-				relatedRepos: mappedRepoEntities || [],
-			} as GetObservabilityErrorGroupMetadataResponse;
+				const mappedRepoEntities = await this.findMappedRemoteByEntity(metricResponse?.entityGuid);
+				return {
+					entityId: metricResponse?.entityGuid,
+					occurrenceId: metricResponse?.traceId,
+					relatedRepos: mappedRepoEntities || [],
+				} as GetObservabilityErrorGroupMetadataResponse;
+			}
+
+			if (request.entityGuid) {
+				const mappedRepoEntities = await this.findMappedRemoteByEntity(request.entityGuid);
+				return {
+					entityId: request.entityGuid,
+					relatedRepos: mappedRepoEntities || [],
+				} as GetObservabilityErrorGroupMetadataResponse;
+			}
 		} catch (ex) {
 			ContextLogger.error(ex, "getErrorGroupMetadata", {
 				request: request,
@@ -1279,13 +1336,75 @@ export class NewRelicProvider
 		return this._clmManager.getObservabilityResponseTimes(request);
 	}
 
-	private _observabilityAnomaliesTimedCache = new Cache<GetObservabilityAnomaliesResponse>({
-		defaultTtl: 120 * 1000,
-	});
-	private _lastObservabilityAnomaliesResponse: GetObservabilityAnomaliesResponse | undefined;
+	private _observabilityAnomaliesTimedCache = new Cache<Promise<GetObservabilityAnomaliesResponse>>(
+		{
+			defaultTtl: 45 * 60 * 1000, // 45 minutes
+		}
+	);
+	private _lastObservabilityAnomaliesResponse = new Map<
+		string,
+		GetObservabilityAnomaliesResponse
+	>();
 
-	getLastObservabilityAnomaliesResponse() {
-		return this._lastObservabilityAnomaliesResponse;
+	async pollObservabilityAnomalies() {
+		const { repos, error } = await this.getObservabilityRepos({});
+		if (error) {
+			Logger.warn("pollObservabilityAnomalies: " + (error.error.message || error.error.type));
+			return;
+		}
+		if (!repos?.length) {
+			Logger.log("pollObservabilityAnomalies: no observability repos");
+			return;
+		}
+		const entityGuids = new Set<string>();
+		for (const observabilityRepo of repos) {
+			for (const account of observabilityRepo.entityAccounts) {
+				entityGuids.add(account.entityGuid);
+			}
+		}
+
+		const me = await SessionContainer.instance().users.getMe();
+		const clmSettings = me.preferences?.clmSettings || DEFAULT_CLM_SETTINGS;
+		let didNotifyNewAnomalies = false;
+		for (const entityGuid of entityGuids) {
+			Logger.log("Getting observability anomalies for entity " + entityGuid);
+			const response = await this.getObservabilityAnomalies({
+				entityGuid,
+				sinceDaysAgo: parseInt(clmSettings.compareDataLastValue),
+				baselineDays: parseInt(clmSettings.againstDataPrecedingValue),
+				sinceLastRelease: clmSettings.compareDataLastReleaseValue,
+				minimumErrorRate: parseFloat(clmSettings.minimumErrorRateValue),
+				minimumResponseTime: parseFloat(clmSettings.minimumAverageDurationValue),
+				minimumSampleRate: parseFloat(clmSettings.minimumBaselineValue),
+				minimumRatio: parseFloat(clmSettings.minimumChangeValue) / 100 + 1,
+				notifyNewAnomalies: !didNotifyNewAnomalies,
+			});
+			if (response.didNotifyNewAnomalies) {
+				didNotifyNewAnomalies = true;
+			}
+
+			const pause = new Promise(resolve => {
+				setTimeout(resolve, 2 * 60 * 1000);
+			});
+			void (await pause);
+		}
+	}
+
+	getLastObservabilityAnomaliesResponse(entityGuid: string) {
+		return this._lastObservabilityAnomaliesResponse.get(entityGuid);
+	}
+
+	private observabilityAnomaliesCacheKey(request: GetObservabilityAnomaliesRequest): string {
+		return [
+			request.entityGuid,
+			request.sinceDaysAgo,
+			request.baselineDays,
+			request.sinceLastRelease,
+			request.minimumErrorRate,
+			request.minimumResponseTime,
+			request.minimumSampleRate,
+			request.minimumRatio,
+		].join("|");
 	}
 
 	@lspHandler(GetObservabilityAnomaliesRequestType)
@@ -1295,38 +1414,44 @@ export class NewRelicProvider
 	async getObservabilityAnomalies(
 		request: GetObservabilityAnomaliesRequest
 	): Promise<GetObservabilityAnomaliesResponse> {
-		const cached = this._observabilityAnomaliesTimedCache.get(request);
-		if (cached) {
-			this._lastObservabilityAnomaliesResponse = cached;
-			this.session.agent.sendNotification(DidChangeCodelensesNotificationType, undefined);
-			return cached;
+		const cacheKey = this.observabilityAnomaliesCacheKey(request);
+		try {
+			const cached = await this._observabilityAnomaliesTimedCache.get(cacheKey);
+			if (cached) {
+				this._lastObservabilityAnomaliesResponse.set(request.entityGuid, cached);
+				this.session.agent.sendNotification(DidChangeCodelensesNotificationType, undefined);
+				return cached;
+			}
+		} catch (e) {
+			// ignore
 		}
 
-		this._lastObservabilityAnomaliesResponse = undefined;
+		this._lastObservabilityAnomaliesResponse.delete(request.entityGuid);
 
 		let lastEx;
 		const fn = async () => {
 			try {
-				const { entityGuid } = request;
-				const { accountId } = NewRelicProvider.parseId(entityGuid)!;
 				const anomalyDetector = new AnomalyDetector(request, this);
-				const result = await anomalyDetector.execute();
-				this._observabilityAnomaliesTimedCache.put(request, result);
+				const promise = anomalyDetector.execute();
+				this._observabilityAnomaliesTimedCache.put(cacheKey, promise);
+				const response = await promise;
+				this._lastObservabilityAnomaliesResponse.set(request.entityGuid, response);
 				return true;
 			} catch (ex) {
+				this._observabilityAnomaliesTimedCache.remove(cacheKey);
 				Logger.warn(ex.message);
 				lastEx = ex.message;
 				return false;
 			}
 		};
 		await Functions.withExponentialRetryBackoff(fn, 5, 1000);
-		const response = this._observabilityAnomaliesTimedCache.get(request) || {
+		const response = this._observabilityAnomaliesTimedCache.get(cacheKey) || {
 			responseTime: [],
 			errorRate: [],
 			error: lastEx,
+			didNotifyNewAnomalies: false,
 		};
 
-		this._lastObservabilityAnomaliesResponse = response;
 		this.session.agent.sendNotification(DidChangeCodelensesNotificationType, undefined);
 
 		return response;
@@ -3399,10 +3524,11 @@ export class NewRelicProvider
 			"latest(error.class) AS 'errorClass',",
 			"latest(message) AS 'message',",
 			"latest(entityGuid) AS 'entityGuid',",
+			"latest(fingerprint) AS 'fingerprintId',",
 			"count(id) AS 'length'",
 			"FROM ErrorTrace",
-			`WHERE fingerprint IS NOT NULL and entityGuid='${applicationGuid}'`,
-			"FACET fingerprint AS 'fingerPrintId'", // group the results by fingerprint
+			`WHERE fingerprint IS NOT NULL AND NOT error.expected AND entityGuid='${applicationGuid}'`,
+			"FACET error.class, message", // group the results by identifiers
 			`SINCE ${since}`,
 			"LIMIT MAX",
 		].join(" ");

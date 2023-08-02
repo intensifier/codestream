@@ -105,6 +105,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Services\DotNetBrowserService.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Services\EditorService.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Services\EventAggregator.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Services\FileResolutionService.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Services\HttpClientService.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Services\IAuthenticationService.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Services\IAuthenticationServiceFactory.cs" />
@@ -132,6 +133,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Services\SessionService.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Services\SettingsService.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Services\SolutionEventsListener.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Services\SymbolService.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Services\ThemeEventsService.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Services\UserSettingsService.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Services\VisualStudioSettingsManager.cs" />

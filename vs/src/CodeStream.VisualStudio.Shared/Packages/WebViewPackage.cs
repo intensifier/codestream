@@ -36,7 +36,6 @@ namespace CodeStream.VisualStudio.Shared.Packages {
 		private IComponentModel _componentModel;
 		private ISolutionEventsListener _solutionEventListener;
 		private IThemeEventsListener _themeEventsService;
-
 		//public WebViewPackage() {
 		//	OptionsDialogPage = GetDialogPage(typeof(OptionsDialogPage)) as OptionsDialogPage;
 		//}
@@ -112,6 +111,8 @@ namespace CodeStream.VisualStudio.Shared.Packages {
 			else {
 				Log.Debug($"Skipped {nameof(TryTriggerLspActivationAsync)} for {sessionService.ProjectType}");
 			}
+
+			
 		}
 
 		private void Theme_Changed(object sender, ThemeChangedEventArgs e) {

@@ -35,7 +35,7 @@ import {
 } from "@codestream/webview/store/providerPullRequests/slice";
 import { HostApi } from "@codestream/webview/webview-api";
 import { CodeStreamState } from "..";
-import { action } from "../common";
+import { action, throwIfError } from "../common";
 import {
 	setCurrentPullRequest,
 	setCurrentPullRequestAndBranch,
@@ -134,7 +134,15 @@ export const getPullRequestConversations = createAppAsyncThunk<
 		const state: CodeStreamState = getState();
 		const provider = state.providerPullRequests.pullRequests[providerId];
 		if (provider) {
-			const pr = provider[id];
+			let pr = provider?.[id];
+			if (!pr) {
+				try {
+					const parsed = JSON.parse(id);
+					pr = provider[parsed.id];
+				} catch (ex) {
+					console.log(ex);
+				}
+			}
 			if (pr && pr.conversations) {
 				if (isAnHourOld(pr.conversationsLastFetch)) {
 					console.warn(
@@ -294,15 +302,6 @@ export interface PRRequest {
 	throwOnError?: boolean;
 	test?: boolean;
 	index?: number;
-}
-
-// TODO fix
-// On full build this error is thrown by lsp. On esbuild dev mode it is not, hence this workaround
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function throwIfError(response: any) {
-	if (response?.exception?.responseError?.message) {
-		throw response.exception.responseError;
-	}
 }
 
 export const getMyPullRequests = createAppAsyncThunk<

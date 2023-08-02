@@ -1,8 +1,28 @@
 # Change Log
 
+## [14.25.0] - 2023-07-03
+
+### Added
+
+- Adds a Code-Level Metrics section that highlights poorly performing methods in the code based on anomalous increases in error rate or average duration. Currently available for Java, .NET, Ruby and Python.
+
+### Changed
+
+- Updated the error grouping paradigm in the Errors section to align with the New Relic Errors Inbox
+
+### Fixed
+
+- Fixes an issue that generated an error when creating a codemark
+- Fixes an issue with stack traces lines in an error not taking you to the correct file and line number
+- Fixes an issue that would result in you being prompted to select a repo when opening an error
+- Fixes an issue that would generate an error if you submitted a Bitbucket PR against a branch that already has an open PR
+- Fixes an issue preventing you from being able to open the local files from the changeset when opening a PR
+- Fixes an issue where adding a comment to a Bitbucket PR via the "Close and Comment" button wouldn't appear without reloading the PR details
+
 ## [14.24.0] - 2023-07-19
 
 ### Fixed
+
 - Addresses [#1511](https://github.com/TeamCodeStream/codestream/issues/1511) &mdash; Can't open PR details in Bitbucket
 - Fixes an issue where you would get signed out of CodeStream when switching repos in your IDE
 - Fixes an issue where CodeStream would incorrectly allow you to remove a review with status from a Bitbucket PR
@@ -11,15 +31,18 @@
 ## [14.23.0] - 2023-06-16
 
 ### Added
+
 - Added the abillity to select a time range for viewing all errors of a service instead of showing the 5 most recent
 
 ### Changed
+
 - Removed custom queries for Bitbucket
 - Altered CodeStream loading UI to show a skeleton animation instead of loading text
 - Altered styling on buttons across CodeStream
 - Renamed the option to "Delete All" to "Delete All Replies" for comment threads in errors
 
 ### Fixed
+
 - Fixed error with Slack integration that prevented deletion of posts from CodeStream from synchronizing with Slack channels and direct messages
 - Fixed a bug that showed the repo selection prompt after opening an error from the observability section
 - Fixed a bug with Bitbucket pull requests all being expanded if there are any with the same numerical name
@@ -27,10 +50,12 @@
 ## [14.22.0] - 2023-6-01
 
 ### Changed
-- Altered Bitbucket Add Reviewers dropdown to account for no reviewers available	
-- Altered Bitbucket Icons for Pull Request Approval and Change Requests	
+
+- Altered Bitbucket Add Reviewers dropdown to account for no reviewers available
+- Altered Bitbucket Icons for Pull Request Approval and Change Requests
 
 ### Fixed
+
 - Fixed Bitbucket api request timeout issue
 - Fixed Bitbucket issue that allowed already assigned reviewer to be selected again
 - Fixed Bitbucket issue that allowed assigning reviewers to an already declined pull request
@@ -40,13 +65,15 @@
 ## [14.21.0] - 2023-5-25
 
 ### Fixed
+
 - Fixed Bitbucket issue for PR Details commit list not loading
 
 ## [14.20.0] - 2023-5-18
 
 ### Added
+
 - Adds support for reviewing Bitbucket pull requests
-- Adds "All other methods" node to Code-Level Metrics observability section 
+- Adds "All other methods" node to Code-Level Metrics observability section
 - Adds abillity for admins to mass delete all posts and individual posts on an error
 - Adds list of related errors to the code-level metrics details view
 
@@ -77,7 +104,6 @@
 ### Fixed
 
 - Fixes an issue related to vulnerability management timeouts
-
 
 ## [14.18.0] - 2023-4-13
 
@@ -110,7 +136,7 @@
 
 ### Fixed
 
--  Fixes an issue with file watchers where the agent process would crash if it encountered a file it didn't have permission to read and decreased the number of files watched
+- Fixes an issue with file watchers where the agent process would crash if it encountered a file it didn't have permission to read and decreased the number of files watched
 
 ## [14.16.0] - 2023-3-8
 
@@ -121,7 +147,7 @@
 ### Fixed
 
 - Fixes an issue where violations in the Golden Metrics section were linking to the wrong page on New Relic
-- Fixes an issue with the conversion of decimal to percentage in the display of error rate in Golden Metrics 
+- Fixes an issue with the conversion of decimal to percentage in the display of error rate in Golden Metrics
 - Fixes an issue with the parsing of Ruby stack traces in errors
 - Fixes an issue where a newly cloned repo would not be reflected in the Observability or Codemarks sections
 - Fixes an issue with the sub-sections in the Codemarks section not being collapsable
@@ -274,7 +300,7 @@
 
 - Fixes an issue that was preventing signup via New Relic api key for users that had been invited
 - Fixes an issue that would cause the list of pull requests to disappear on transient network errors
-- Fixes an issue where closed violations were being displayed in the Observability section 
+- Fixes an issue where closed violations were being displayed in the Observability section
 - Addresses [#1198](https://github.com/TeamCodeStream/CodeStream/issues/1198) &mdash; java.lang.Throwable: class com.intellij.openapi.module.ModuleManager it is a service, use getService instead of getComponent
 
 ## [14.2.0] - 2022-9-29
