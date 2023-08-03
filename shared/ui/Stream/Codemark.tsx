@@ -26,7 +26,7 @@ import { deleteCodemark, editCodemark } from "@codestream/webview/store/codemark
 import cx from "classnames";
 import { isNil } from "lodash-es";
 import React from "react";
-import { connect, useSelector } from "react-redux";
+import { connect } from "react-redux";
 import { Range } from "vscode-languageserver-protocol";
 import { HeadshotName } from "../src/components/HeadshotName";
 import { CodeStreamState } from "../store";
@@ -45,7 +45,6 @@ import { getPosts } from "../store/posts/actions";
 import { getPost } from "../store/posts/reducer";
 import { getReview } from "../store/reviews/reducer";
 import {
-	currentUserIsAdminSelector,
 	getTeamMembers,
 	getTeamTagsHash,
 	getUserByCsId,
@@ -117,7 +116,6 @@ interface DispatchProps {
 
 interface ConnectedProps {
 	teammates: CSUser[];
-	isAdmin: boolean;
 	usernames: string[];
 	author: CSUser;
 	capabilities: Capabilities;
@@ -1319,7 +1317,6 @@ export class Codemark extends React.Component<Props, State> {
 		const type = codemark && codemark.type;
 
 		const mine = author && author.id === this.props.currentUser.id;
-		const isAdmin = this.props.isAdmin;
 
 		let menuItems: any[] = [
 			// { label: "Add Reaction", action: "react" },
@@ -1363,15 +1360,11 @@ export class Codemark extends React.Component<Props, State> {
 			});
 		}
 
-		if (mine || isAdmin) {
-			if (mine) {
-				menuItems.push(
-					{ label: "Edit", action: () => this.setState({ isEditing: true }) },
-					{ label: "Delete", action: this.deleteCodemark }
-				);
-			} else if (isAdmin) {
-				menuItems.push({ label: "Delete", action: this.deleteCodemark });
-			}
+		if (mine) {
+			menuItems.push(
+				{ label: "Edit", action: () => this.setState({ isEditing: true }) },
+				{ label: "Delete", action: this.deleteCodemark }
+			);
 		}
 
 		if (renderExpandedBody && codemark.markers && codemark.markers.length > 1) {
@@ -2183,7 +2176,6 @@ const mapStateToProps = (state: CodeStreamState, props: InheritedProps): Connect
 		unread,
 		teammates: getTeamMembers(state),
 		usernames: getUsernames(state),
-		isAdmin: useSelector(currentUserIsAdminSelector),
 		teamTagsHash,
 		codeWasDeleted,
 		codeWillExist,
