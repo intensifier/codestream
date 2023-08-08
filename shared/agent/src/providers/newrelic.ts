@@ -104,7 +104,12 @@ import {
 	UpdateNewRelicOrgIdResponse,
 	DidChangeCodelensesNotificationType,
 } from "@codestream/protocols/agent";
-import { CSMe, CSNewRelicProviderInfo, DEFAULT_CLM_SETTINGS } from "@codestream/protocols/api";
+import {
+	CSBitbucketProviderInfo,
+	CSMe,
+	CSNewRelicProviderInfo,
+	DEFAULT_CLM_SETTINGS,
+} from "@codestream/protocols/api";
 import { GraphQLClient } from "graphql-request";
 import {
 	flatten as _flatten,
@@ -229,7 +234,7 @@ export class NewRelicProvider
 	});
 
 	private _clmManager = new ClmManager(this);
-	private _observabilityAnomaliesPollingInterval: NodeJS.Timer | undefined;
+	private _pollObservabilityAnomaliesTimeout: string | number | NodeJS.Timeout | undefined;
 
 	constructor(session: CodeStreamSession, config: ThirdPartyProviderConfig) {
 		super(session, config);
@@ -237,11 +242,6 @@ export class NewRelicProvider
 			this.buildRepoRemoteVariants,
 			(remotes: string[]) => remotes
 		);
-		this._observabilityAnomaliesPollingInterval = Functions.repeatInterval(
-			this.pollObservabilityAnomalies.bind(this),
-			60 * 1000,
-			24 * 60 * 60 * 1000
-		); // every 24 hours
 	}
 
 	get displayName() {
@@ -305,6 +305,14 @@ export class NewRelicProvider
 		}
 	}
 
+	async onConnected(providerInfo?: CSBitbucketProviderInfo) {
+		await super.onConnected(providerInfo);
+		this._pollObservabilityAnomaliesTimeout = setTimeout(
+			this.pollObservabilityAnomalies.bind(this),
+			2 * 60 * 1000
+		);
+	}
+
 	@log()
 	async onDisconnected(request?: ThirdPartyDisconnect) {
 		// delete the graphql client so it will be reconstructed if a new token is applied
@@ -312,6 +320,7 @@ export class NewRelicProvider
 		delete this._newRelicUserId;
 		delete this._accountIds;
 		this.clearAllCaches();
+		clearTimeout(this._pollObservabilityAnomaliesTimeout);
 
 		try {
 			// remove these when a user disconnects -- don't want them lingering around
@@ -336,6 +345,8 @@ export class NewRelicProvider
 			"Api-Key": this.accessToken!,
 			"Content-Type": "application/json",
 			"NewRelic-Requesting-Services": "CodeStream",
+			"X-Query-Source-Capability-Id": "CODESTREAM",
+			"X-Query-Source-Component-Id": "codestream.ide",
 		});
 		ContextLogger.setData({
 			nrUrl: this.graphQlBaseUrl,
@@ -372,6 +383,8 @@ export class NewRelicProvider
 			"Api-Key": accessToken!,
 			"Content-Type": "application/json",
 			"NewRelic-Requesting-Services": "CodeStream",
+			"X-Query-Source-Capability-Id": "CODESTREAM",
+			"X-Query-Source-Component-Id": "codestream.ide",
 		});
 
 		return client;
@@ -1352,6 +1365,19 @@ export class NewRelicProvider
 	>();
 
 	async pollObservabilityAnomalies() {
+		try {
+			await this.pollObservabilityAnomaliesCore();
+		} catch (ex) {
+			Logger.warn(ex);
+		} finally {
+			this._pollObservabilityAnomaliesTimeout = setTimeout(
+				this.pollObservabilityAnomaliesCore.bind(this),
+				24 * 60 * 60 * 1000
+			);
+		}
+	}
+
+	private async pollObservabilityAnomaliesCore() {
 		const { repos, error } = await this.getObservabilityRepos({});
 		if (error) {
 			Logger.warn("pollObservabilityAnomalies: " + (error.error.message || error.error.type));
@@ -1389,7 +1415,7 @@ export class NewRelicProvider
 			}
 
 			const pause = new Promise(resolve => {
-				setTimeout(resolve, 2 * 60 * 1000);
+				setTimeout(resolve, 10 * 60 * 1000);
 			});
 			void (await pause);
 		}

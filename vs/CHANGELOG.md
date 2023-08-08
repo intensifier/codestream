@@ -1,5 +1,16 @@
 # Change Log
 
+## [14.26.0] - 2023-08-08
+
+### Changed
+
+- Admins can now delete other users' codemarks
+- Optimizes queries for metric data in the calculation of anomalies in code-level metrics
+
+### Fixed
+
+- Fixes an issue where the selected line in an error's stack trace wasn't legible
+
 ## [14.25.0] - 2023-07-03
 
 ### Added

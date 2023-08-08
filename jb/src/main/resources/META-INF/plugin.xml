@@ -37,7 +37,7 @@
         <toolWindow id="CodeStream" icon="/images/codestream.svg" anchor="left"
                     factoryClass="com.codestream.webview.CodeStreamToolWindowFactory"/>
 
-        <statusBarWidgetFactory implementation="com.codestream.widgets.CodeStreamStatusBarWidgetFactory"/>
+        <statusBarWidgetFactory id="com.codestream.jetbrains-codestream" implementation="com.codestream.widgets.CodeStreamStatusBarWidgetFactory"/>
 
         <applicationService serviceImplementation="com.codestream.settings.ApplicationSettingsService"/>
         <applicationService serviceImplementation="com.codestream.webview.JxBrowserEngineService"/>

@@ -45,6 +45,7 @@ import { getPosts } from "../store/posts/actions";
 import { getPost } from "../store/posts/reducer";
 import { getReview } from "../store/reviews/reducer";
 import {
+	currentUserIsAdminSelector,
 	getTeamMembers,
 	getTeamTagsHash,
 	getUserByCsId,
@@ -139,6 +140,7 @@ interface ConnectedProps {
 	post?: CSPost;
 	moveMarkersEnabled: boolean;
 	unread: boolean;
+	isAdmin: boolean;
 }
 
 export type DisplayType = "default" | "collapsed" | "activity";
@@ -1360,11 +1362,15 @@ export class Codemark extends React.Component<Props, State> {
 			});
 		}
 
-		if (mine) {
-			menuItems.push(
-				{ label: "Edit", action: () => this.setState({ isEditing: true }) },
-				{ label: "Delete", action: this.deleteCodemark }
-			);
+		if (mine || this.props.isAdmin) {
+			if (mine) {
+				menuItems.push(
+					{ label: "Edit", action: () => this.setState({ isEditing: true }) },
+					{ label: "Delete", action: this.deleteCodemark }
+				);
+			} else if (this.props.isAdmin) {
+				menuItems.push({ label: "Delete", action: this.deleteCodemark });
+			}
 		}
 
 		if (renderExpandedBody && codemark.markers && codemark.markers.length > 1) {
@@ -2184,6 +2190,7 @@ const mapStateToProps = (state: CodeStreamState, props: InheritedProps): Connect
 		textEditorUri: editorContext.textEditorUri || "",
 		isRepositioning: context.isRepositioning,
 		moveMarkersEnabled: isFeatureEnabled(state, "moveMarkers2"),
+		isAdmin: currentUserIsAdminSelector(state),
 	};
 };
 
@@ -2206,6 +2213,7 @@ export default connect(
 		setCurrentReview,
 		setCurrentPullRequest,
 		setCurrentCodeError,
+		currentUserIsAdminSelector,
 	}
 	// @ts-ignore
 )(Codemark);
