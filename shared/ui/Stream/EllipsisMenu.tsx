@@ -5,14 +5,18 @@ import {
 import { isEmpty as _isEmpty, sortBy as _sortBy } from "lodash-es";
 import React from "react";
 import styled from "styled-components";
-import { OpenUrlRequestType } from "@codestream/protocols/webview";
+import {
+	WebviewModals,
+	WebviewPanelNames,
+	OpenUrlRequestType,
+} from "@codestream/protocols/webview";
 import {
 	logout,
 	switchToForeignCompany,
 	switchToTeam,
 } from "@codestream/webview/store/session/thunks";
 import { useAppDispatch, useAppSelector } from "@codestream/webview/utilities/hooks";
-import { WebviewModals, WebviewPanelNames, WebviewPanels } from "../ipc/webview.protocol.common";
+import { WebviewPanels, SidebarPanes } from "@codestream/protocols/api";
 import { CodeStreamState } from "../store";
 import { isFeatureEnabled } from "../store/apiVersioning/reducer";
 import { openModal, setCurrentOrganizationInvite, setProfileUser } from "../store/context/actions";
@@ -24,6 +28,7 @@ import Menu from "./Menu";
 import { multiStageConfirmPopup } from "./MultiStageConfirm";
 import { AVAILABLE_PANES, DEFAULT_PANE_SETTINGS } from "./Sidebar";
 import { EMPTY_STATUS } from "./StartWork";
+
 const RegionSubtext = styled.div`
 	font-size: smaller;
 	margin: 0 0 0 21px;
@@ -62,9 +67,22 @@ export function EllipsisMenu(props: EllipsisMenuProps) {
 		const currentHost = environmentHosts?.find(host => host.shortName === environment);
 		const supportsMultiRegion = isFeatureEnabled(state, "multiRegion");
 
+		let sidebarPanes: SidebarPanes = state.preferences.sidebarPanes || (EMPTY_HASH as SidebarPanes);
+		let sidebarPaneOrder: WebviewPanels[] = state.preferences.sidebarPaneOrder || AVAILABLE_PANES;
+		if (!isFeatureEnabled(state, "showCodeAnalyzers")) {
+			// Filter by key name
+			sidebarPanes = Object.keys(sidebarPanes)
+				.filter(key => key !== WebviewPanels.CodeAnalyzers)
+				.reduce((obj, key) => {
+					obj[key] = sidebarPanes[key];
+					return obj;
+				}, {} as SidebarPanes);
+			sidebarPaneOrder = sidebarPaneOrder.filter(_ => _ !== WebviewPanels.CodeAnalyzers);
+		}
+
 		return {
-			sidebarPanePreferences: state.preferences.sidebarPanes || EMPTY_HASH,
-			sidebarPaneOrder: state.preferences.sidebarPaneOrder || AVAILABLE_PANES,
+			sidebarPanePreferences: sidebarPanes,
+			sidebarPaneOrder: sidebarPaneOrder,
 			userCompanies: _sortBy(Object.values(state.companies), "name"),
 			userTeams: _sortBy(
 				Object.values(state.teams).filter(t => !t.deactivated),

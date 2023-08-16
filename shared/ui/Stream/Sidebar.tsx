@@ -17,12 +17,13 @@ import { findLastIndex } from "../utils";
 import { setUserPreference } from "./actions";
 import CICD from "./CICD";
 import Codemarks from "./Codemarks";
+import CodeAnalyzers from "./CodeAnalyzers";
 import { CreateCodemarkIcons } from "./CreateCodemarkIcons";
 import IssuesPane from "./CrossPostIssueControls/IssuesPane";
 import { Observability } from "./Observability";
 import { OpenPullRequests } from "./OpenPullRequests";
 import { OpenReviews } from "./OpenReviews";
-import { WebviewPanels } from "@codestream/webview/ipc/webview.protocol.common";
+import { WebviewPanels } from "@codestream/protocols/api";
 import { isFeatureEnabled } from "../store/apiVersioning/reducer";
 
 const Root = styled.div`
@@ -65,6 +66,7 @@ _defaultPaneSettings[WebviewPanels.CodemarksForFile] = {};
 // default this one to not show
 _defaultPaneSettings[WebviewPanels.Tasks] = {};
 _defaultPaneSettings[WebviewPanels.Observability] = {};
+_defaultPaneSettings[WebviewPanels.CodeAnalyzers] = {};
 // _defaultPaneSettings[WebviewPanels.Team] = {};
 _defaultPaneSettings[WebviewPanels.CICD] = {
 	collapsed: true,
@@ -80,6 +82,7 @@ export const AVAILABLE_PANES = [
 	WebviewPanels.OpenReviews,
 	WebviewPanels.CodemarksForFile,
 	WebviewPanels.Tasks,
+	WebviewPanels.CodeAnalyzers,
 	WebviewPanels.CICD,
 ];
 
@@ -115,6 +118,10 @@ export const Sidebar = React.memo(function Sidebar() {
 				_ => _ !== WebviewPanels.OpenReviews && _ !== WebviewPanels.CodemarksForFile
 			);
 		}
+		if (!isFeatureEnabled(state, "showCodeAnalyzers")) {
+			sidebarPaneOrder = sidebarPaneOrder.filter(_ => _ !== WebviewPanels.CodeAnalyzers);
+		}
+
 		return {
 			repos,
 			sidebarPanes: preferences.sidebarPanes || EMPTY_HASH,
@@ -128,6 +135,7 @@ export const Sidebar = React.memo(function Sidebar() {
 	}, shallowEqual);
 	const { sidebarPanes } = derivedState;
 	const [openRepos, setOpenRepos] = useState<ReposScm[]>(EMPTY_ARRAY);
+	const [reposLoading, setReposLoading] = useState<boolean>(true);
 	const [dragCombinedHeight, setDragCombinedHeight] = useState<number | undefined>(undefined);
 	// const [previousSizes, setPreviousSizes] = useState(EMPTY_HASH);
 	const [sizes, setSizes] = useState(EMPTY_HASH);
@@ -151,6 +159,7 @@ export const Sidebar = React.memo(function Sidebar() {
 		if (response && response.repositories) {
 			setOpenRepos(response.repositories);
 		}
+		setReposLoading(false);
 		requestAnimationFrame(() => {
 			setInitialRender(false);
 		});
@@ -209,7 +218,7 @@ export const Sidebar = React.memo(function Sidebar() {
 	// }, [derivedState.hasPRProvider, openRepos]);
 
 	const panes: {
-		id: WebviewPanels;
+		id: string;
 		removed: boolean;
 		collapsed: boolean;
 		maximized: boolean;
@@ -407,6 +416,10 @@ export const Sidebar = React.memo(function Sidebar() {
 				return <Observability paneState={paneState} />;
 			case WebviewPanels.CICD:
 				return <CICD openRepos={openRepos} paneState={paneState} />;
+			case WebviewPanels.CodeAnalyzers:
+				return (
+					<CodeAnalyzers openRepos={openRepos} reposLoading={reposLoading} paneState={paneState} />
+				);
 		}
 		return null;
 	};

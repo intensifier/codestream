@@ -8,7 +8,7 @@ import {
 	Vuln,
 } from "@codestream/protocols/agent";
 import { isEmpty, lowerCase } from "lodash-es";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import styled from "styled-components";
 
 import { Link } from "@codestream/webview/Stream/Link";
@@ -30,6 +30,7 @@ interface Props {
 	currentRepoId: string;
 	entityGuid: string;
 	accountId: number;
+	setHasVulnerabilities: (value: boolean) => void;
 }
 
 function isResponseUrlError<T>(obj: unknown): obj is ResponseError<{ url: string }> {
@@ -45,7 +46,7 @@ function isResponseUrlError<T>(obj: unknown): obj is ResponseError<{ url: string
 	);
 }
 
-const CardTitle = styled.div`
+export const CardTitle = styled.div`
 	font-size: 16px;
 	line-height: 20px;
 	display: flex;
@@ -270,7 +271,7 @@ export const SecurityIssuesWrapper = React.memo((props: Props) => {
 			rows,
 		},
 		[selectedItems, props.entityGuid, rows, expanded],
-		expanded
+		true
 	);
 
 	function handleSelect(severity: RiskSeverity) {
@@ -319,8 +320,17 @@ export const SecurityIssuesWrapper = React.memo((props: Props) => {
 			}
 			return unexpectedError;
 		},
-		[error]
+		[error],
 	);
+
+	useEffect(() => {
+		if (data && data.totalRecords > 0) {
+			props.setHasVulnerabilities(true);
+		}
+	}, [data, props.setHasVulnerabilities]);
+
+	const warningTooltip =
+		data && data.totalRecords === 1 ? "1 vulnerability" : `${data?.totalRecords} vulnerabilities`;
 
 	return (
 		<>
@@ -337,6 +347,16 @@ export const SecurityIssuesWrapper = React.memo((props: Props) => {
 				{expanded && <Icon name="chevron-down-thin" />}
 				{!expanded && <Icon name="chevron-right-thin" />}
 				<span style={{ marginLeft: "2px", marginRight: "5px" }}>Vulnerabilities</span>
+
+				{data && data.totalRecords > 0 && (
+					<Icon
+						name="alert"
+						style={{ color: "rgb(188,20,24)", paddingRight: "5px" }}
+						className="alert"
+						title={warningTooltip}
+						delay={1}
+					/>
+				)}
 				<InlineMenu
 					title="Filter Items"
 					preventMenuStopPropagation={true}

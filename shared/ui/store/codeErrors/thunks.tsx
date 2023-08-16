@@ -1,6 +1,7 @@
 import {
 	CreateShareableCodeErrorRequestType,
-	CSAsyncError,
+	CSAsyncGrokError,
+	CSGrokStream,
 	DidResolveStackTraceLineNotification,
 	ExecuteThirdPartyTypedType,
 	GetNewRelicErrorGroupRequest,
@@ -40,9 +41,9 @@ import {
 } from "@codestream/webview/store/codeErrors/actions";
 import { getCodeError } from "@codestream/webview/store/codeErrors/reducer";
 import { setCurrentCodeError } from "@codestream/webview/store/context/actions";
-import { addPosts } from "@codestream/webview/store/posts/actions";
+import { addPosts, appendGrokStreamingResponse } from "@codestream/webview/store/posts/actions";
 import { addStreams } from "@codestream/webview/store/streams/actions";
-import { createPostAndCodeError } from "@codestream/webview/Stream/actions";
+import { createPostAndCodeError, deletePost } from "@codestream/webview/Stream/actions";
 import { highlightRange } from "@codestream/webview/Stream/api-functions";
 import { confirmPopup } from "@codestream/webview/Stream/Confirm";
 import { HostApi } from "@codestream/webview/webview-api";
@@ -51,6 +52,7 @@ import React from "react";
 import { getGrokPostLength } from "@codestream/webview/store/posts/reducer";
 import { URI } from "vscode-uri";
 import { clearResolvedFlag } from "@codestream/utils/api/codeErrorCleanup";
+import { GrokStreamEvent } from "@codestream/webview/store/posts/types";
 
 export const updateCodeErrors =
 	(codeErrors: CSCodeError[]) => async (dispatch, getState: () => CodeStreamState) => {
@@ -662,7 +664,23 @@ export const startGrokLoading = (codeError: CSCodeError) => async (dispatch, get
 	dispatch(setGrokRepliesLength(grokPostLength));
 };
 
-export const handleGrokError = (grokError: CSAsyncError) => async dispatch => {
+export const handleGrokError = (grokError: CSAsyncGrokError) => async dispatch => {
 	dispatch(setGrokLoading(false));
 	dispatch(setGrokError(grokError));
+	if (grokError.extra.streamId && grokError.extra.postId) {
+		dispatch(deletePost(grokError.extra.streamId, grokError.extra.postId));
+	}
+};
+
+export const handleGrokChonk = (events: CSGrokStream[]) => async dispatch => {
+	if (events.length === 0) return;
+	const grokStoreEvents: GrokStreamEvent[] = events.map(e => ({
+		sequence: e.sequence,
+		postId: e.extra.postId,
+		streamId: e.extra.streamId,
+		content: e?.content?.content,
+		done: e.extra.done === true,
+	}));
+
+	dispatch(appendGrokStreamingResponse(grokStoreEvents));
 };

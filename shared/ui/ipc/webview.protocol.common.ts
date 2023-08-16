@@ -1,5 +1,5 @@
 import { EnvironmentHost, GetFileScmInfoResponse } from "@codestream/protocols/agent";
-import { CSEligibleJoinCompany } from "@codestream/protocols/api";
+import { CSEligibleJoinCompany, WebviewPanels } from "@codestream/protocols/api";
 import { Position, Range } from "vscode-languageserver-types";
 
 import { NewPullRequestBranch } from "./webview.protocol";
@@ -37,44 +37,6 @@ export interface EditorSelection extends Range {
 	cursor: Position;
 }
 
-/* NOTE: there can be dynamic panel names that begin with configure-provider- or configure-enterprise- */
-export enum WebviewPanels {
-	Activity = "activity",
-	Codemarks = "knowledge",
-	CodemarksForFile = "codemarks-for-file",
-	Export = "export",
-	FilterSearch = "filter-search",
-	Invite = "invite",
-	NewComment = "new-comment",
-	NewIssue = "new-issue",
-	NewReview = "new-review",
-	Profile = "profile", // DO NOT USE
-	PullRequest = "pull-request",
-	Review = "review",
-	Status = "status",
-	Tasks = "tasks",
-	LandingRedirect = "landing-redirect", // new customers and signins go here
-	PRInfo = "pr-info",
-	Integrations = "integrations",
-	GettingStarted = "gtting-started", // this is a typo but now baked into user data, so let's just leave it
-	NewPullRequest = "new-pull-request",
-	Flow = "flow",
-	Tester = "tester",
-	Sidebar = "sidebar",
-	OpenReviews = "open-reviews",
-	OpenPullRequests = "open-pull-requests",
-	Onboard = "onboard",
-	OnboardNewRelic = "onboard-newrelic",
-	Commits = "commits",
-	ErrorsInbox = "errorsinbox",
-	CodeError = "code-error",
-	Observability = "observability",
-	PixieDynamicLogging = "pixie-dynamic-logging",
-	MethodLevelTelemetry = "method-level-telemetry",
-	ObservabilityAnomaly = "observability-anomaly",
-	CICD = "ci-cd",
-}
-
 // this is for mixpanel and maps the values from WebviewPanels to their
 // corresponding human-readable names
 export const WebviewPanelNames = {
@@ -99,6 +61,7 @@ export const WebviewPanelNames = {
 	observability: "Observability",
 	"pixie-dynamic-logging": "Dynamic Logging Using Pixie",
 	"ci-cd": "CI/CD",
+	"code-analyzers": "Code Analyzers",
 };
 
 export enum WebviewModals {

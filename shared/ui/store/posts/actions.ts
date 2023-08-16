@@ -3,7 +3,7 @@ import { CSPost } from "@codestream/protocols/api";
 import { logError } from "@codestream/webview/logger";
 import { HostApi } from "@codestream/webview/webview-api";
 import { action } from "../common";
-import { PendingPost, Post, PostsActionsType } from "./types";
+import { GrokStreamEvent, PendingPost, Post, PostsActionsType } from "./types";
 
 export const reset = () => action("RESET");
 
@@ -31,6 +31,9 @@ export const addPostsForStream = (streamId: string, posts: CSPost[]) =>
 export const updatePost = (post: CSPost) => action(PostsActionsType.Update, post);
 
 export const deletePost = (post: CSPost) => action(PostsActionsType.Delete, post);
+
+export const appendGrokStreamingResponse = (event: GrokStreamEvent[]) =>
+	action(PostsActionsType.AppendGrokStreamingResponse, event);
 
 export const getPosts =
 	(streamId: string, postIds: string[], parentPostId?: string) => async dispatch => {

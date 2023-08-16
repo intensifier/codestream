@@ -47,10 +47,18 @@ import {
 	FetchThirdPartyChannelsRequest,
 	FetchThirdPartyChannelsRequestType,
 	FetchThirdPartyChannelsResponse,
+	FetchThirdPartyCodeAnalyzersRequest,
+	FetchThirdPartyLicenseDependenciesResponse,
+	FetchThirdPartyLicenseDependenciesRequestType,
 	FetchThirdPartyPullRequestCommitsRequest,
 	FetchThirdPartyPullRequestCommitsType,
 	FetchThirdPartyPullRequestRequest,
 	FetchThirdPartyPullRequestRequestType,
+	FetchThirdPartyRepoMatchToFossaRequest,
+	FetchThirdPartyRepoMatchToFossaRequestType,
+	FetchThirdPartyRepoMatchToFossaResponse,
+	FetchThirdPartyVulnerabilitiesResponse,
+	FetchThirdPartyVulnerabilitiesRequestType,
 	GetMyPullRequestsResponse,
 	MoveThirdPartyCardRequest,
 	MoveThirdPartyCardRequestType,
@@ -80,6 +88,7 @@ import {
 	ProviderCreatePullRequestResponse,
 	ProviderGetRepoInfoRequest,
 	ThirdPartyBuildProvider,
+	ThirdPartyCodeAnalyzerProvider,
 	ThirdPartyIssueProvider,
 	ThirdPartyPostProvider,
 	ThirdPartyProvider,
@@ -793,6 +802,85 @@ export class ThirdPartyProviderRegistry {
 		}
 
 		const response = await buildProvider.fetchBuilds(request);
+		return response;
+	}
+
+	@log()
+	@lspHandler(FetchThirdPartyLicenseDependenciesRequestType)
+	async fetchLicenseDependencies(
+		request: FetchThirdPartyCodeAnalyzersRequest
+	): Promise<FetchThirdPartyLicenseDependenciesResponse> {
+		const provider = getProvider(request.providerId);
+		if (provider === undefined) {
+			throw new Error(`No registered provider for '${request.providerId}'`);
+		}
+
+		const codeAnalyzersProvider = provider as ThirdPartyCodeAnalyzerProvider;
+		if (
+			codeAnalyzersProvider == null ||
+			typeof codeAnalyzersProvider.supportsCodeAnalysis !== "function" ||
+			!codeAnalyzersProvider.supportsCodeAnalysis()
+		) {
+			throw new Error(`Provider(${provider.name}) doesn't support code analyzers`);
+		}
+
+		const response = await codeAnalyzersProvider.fetchLicenseDependencies(request, {
+			category: "licensing",
+			type: "project",
+			page: request.pageNumber,
+		});
+
+		return response;
+	}
+
+	@log()
+	@lspHandler(FetchThirdPartyVulnerabilitiesRequestType)
+	async fetchVulnerabilities(
+		request: FetchThirdPartyCodeAnalyzersRequest
+	): Promise<FetchThirdPartyVulnerabilitiesResponse> {
+		const provider = getProvider(request.providerId);
+		if (provider === undefined) {
+			throw new Error(`No registered provider for '${request.providerId}'`);
+		}
+
+		const codeAnalyzersProvider = provider as ThirdPartyCodeAnalyzerProvider;
+		if (
+			codeAnalyzersProvider == null ||
+			typeof codeAnalyzersProvider.supportsCodeAnalysis !== "function" ||
+			!codeAnalyzersProvider.supportsCodeAnalysis()
+		) {
+			throw new Error(`Provider(${provider.name}) doesn't support code analyzers`);
+		}
+
+		const response = await codeAnalyzersProvider.fetchVulnerabilities(request, {
+			category: "vulnerability",
+			sort: "package_asc",
+			type: "project",
+			page: request.pageNumber,
+		});
+		return response;
+	}
+
+	@log()
+	@lspHandler(FetchThirdPartyRepoMatchToFossaRequestType)
+	async fetchIsRepoMatch(
+		request: FetchThirdPartyRepoMatchToFossaRequest
+	): Promise<FetchThirdPartyRepoMatchToFossaResponse> {
+		const provider = getProvider(request.providerId);
+		if (provider === undefined) {
+			throw new Error(`No registered provider for '${request.providerId}'`);
+		}
+
+		const codeAnalyzersProvider = provider as ThirdPartyCodeAnalyzerProvider;
+		if (
+			codeAnalyzersProvider == null ||
+			typeof codeAnalyzersProvider.supportsCodeAnalysis !== "function" ||
+			!codeAnalyzersProvider.supportsCodeAnalysis()
+		) {
+			throw new Error(`Provider(${provider.name}) doesn't support code analyzers`);
+		}
+
+		const response = await codeAnalyzersProvider.fetchIsRepoMatch(request);
 		return response;
 	}
 

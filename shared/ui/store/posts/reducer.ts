@@ -6,12 +6,18 @@ import { ActionType } from "../common";
 import * as actions from "./actions";
 import { isPending, Post, PostsActionsType, PostsState } from "./types";
 import { PostPlus } from "@codestream/protocols/agent";
+import {
+	advanceRecombinedStream,
+	isGrokStreamDone,
+	RecombinedStream,
+} from "@codestream/webview/store/posts/recombinedStream";
 
 type PostsActions = ActionType<typeof actions>;
 
-const initialState = {
+const initialState: PostsState = {
 	byStream: {},
 	pending: [],
+	streamingPosts: {},
 };
 
 const addPost = (byStream, post: CSPost) => {
@@ -27,16 +33,39 @@ export function reducePosts(state: PostsState = initialState, action: PostsActio
 		case PostsActionsType.Bootstrap: {
 			if (action.payload.length === 0) return state;
 
-			const nextState = {
+			const nextState: PostsState = {
 				pending: [...state.pending],
 				byStream: { ...state.byStream },
+				streamingPosts: state.streamingPosts,
 			};
 			action.payload.forEach(post => {
 				if (isPending(post)) nextState.pending.push(post);
 				else {
 					nextState.byStream = addPost(nextState.byStream, post);
 				}
+				delete nextState.streamingPosts[post.id];
 			});
+			return nextState;
+		}
+		case PostsActionsType.AppendGrokStreamingResponse: {
+			const nextState: PostsState = {
+				pending: [...state.pending],
+				byStream: { ...state.byStream },
+				streamingPosts: { ...state.streamingPosts },
+			};
+			const { streamId, postId } = action.payload[0];
+			const recombinedStream: RecombinedStream = nextState.streamingPosts[postId] ?? {
+				items: [],
+				receivedDoneEvent: false,
+				content: "",
+			};
+			advanceRecombinedStream(recombinedStream, action.payload);
+			// console.debug(`=== recombinedStream ${JSON.stringify(recombinedStream, null, 2)}`);
+			nextState.streamingPosts[postId] = recombinedStream;
+			const post = nextState.byStream[streamId][postId];
+			if (recombinedStream.content && post) {
+				post.text = recombinedStream.content;
+			}
 			return nextState;
 		}
 		case PostsActionsType.AddForStream: {
@@ -64,6 +93,7 @@ export function reducePosts(state: PostsState = initialState, action: PostsActio
 			return {
 				byStream: addPost(state.byStream, post),
 				pending: state.pending.filter(post => post.id !== pendingId),
+				streamingPosts: state.streamingPosts,
 			};
 		}
 		case PostsActionsType.FailPendingPost: {
@@ -96,6 +126,19 @@ export function reducePosts(state: PostsState = initialState, action: PostsActio
 			return state;
 	}
 }
+
+const _isGrokLoading = (state: PostsState) => {
+	const recombinedStreams = state.streamingPosts;
+	return Object.keys(recombinedStreams).some(postId => {
+		const stream = recombinedStreams[postId];
+		return !isGrokStreamDone(stream);
+	});
+};
+
+export const isGrokStreamLoading = createSelector(
+	(state: CodeStreamState) => state.posts,
+	_isGrokLoading
+);
 
 export const getPostsForStream = createSelector(
 	(state: CodeStreamState) => state.posts,

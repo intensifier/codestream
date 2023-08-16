@@ -539,6 +539,7 @@ describe("Observability", () => {
 				"Errors Listed": true,
 				"SLOs Listed": true,
 				"CLM Anomalies Listed": true,
+				"Vulnerabilities Listed": false,
 			});
 		});
 	});
@@ -575,6 +576,7 @@ describe("Observability", () => {
 				"Errors Listed": false,
 				"SLOs Listed": true,
 				"CLM Anomalies Listed": true,
+				"Vulnerabilities Listed": false,
 			});
 		});
 	});
@@ -611,6 +613,7 @@ describe("Observability", () => {
 				"Errors Listed": true,
 				"CLM Anomalies Listed": true,
 				"SLOs Listed": false,
+				"Vulnerabilities Listed": false,
 			});
 		});
 	});
@@ -650,6 +653,7 @@ describe("Observability", () => {
 				"Errors Listed": true,
 				"CLM Anomalies Listed": false,
 				"SLOs Listed": true,
+				"Vulnerabilities Listed": false,
 			});
 		});
 	});

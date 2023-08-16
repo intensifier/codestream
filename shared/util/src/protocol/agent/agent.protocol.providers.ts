@@ -9,6 +9,7 @@ import {
 } from "./agent.protocol";
 import { CodeErrorPlus } from "./agent.protocol.codeErrors";
 import { CodemarkPlus } from "./agent.protocol.codemarks";
+import { IssueParams, LicenseDependencyIssue, VulnerabilityIssue } from "./agent.protocol.fossa";
 import { ReviewPlus } from "./agent.protocol.reviews";
 import { CSRepository, PullRequestQuery } from "./api.protocol.models";
 import { TrunkCheckResults } from "./agent.protocol.trunk";
@@ -490,6 +491,53 @@ export const FetchThirdPartyBuildsRequestType = new RequestType<
 	void,
 	void
 >("codestream/provider/builds");
+
+export interface FetchThirdPartyCodeAnalyzersRequest {
+	providerId: string;
+	pageNumber: number;
+	repoId?: string;
+}
+export interface FetchThirdPartyLicenseDependenciesResponse {
+	issues?: LicenseDependencyIssue[];
+	error?: string;
+}
+
+export const FetchThirdPartyLicenseDependenciesRequestType = new RequestType<
+	FetchThirdPartyCodeAnalyzersRequest,
+	FetchThirdPartyLicenseDependenciesResponse,
+	void,
+	void
+>("codestream/provider/licenseDependencies");
+
+export interface FetchThirdPartyVulnerabilitiesResponse {
+	issues?: VulnerabilityIssue[];
+	error?: string;
+}
+
+export const FetchThirdPartyVulnerabilitiesRequestType = new RequestType<
+	FetchThirdPartyCodeAnalyzersRequest,
+	FetchThirdPartyVulnerabilitiesResponse,
+	void,
+	void
+>("codestream/provider/vulnerablitlies");
+
+export { LicenseDependencyIssue, VulnerabilityIssue } from "./agent.protocol.fossa";
+
+export interface FetchThirdPartyRepoMatchToFossaRequest {
+	providerId: string;
+	repoId?: string;
+}
+export interface FetchThirdPartyRepoMatchToFossaResponse {
+	isRepoMatch?: boolean;
+	error?: string;
+}
+
+export const FetchThirdPartyRepoMatchToFossaRequestType = new RequestType<
+	FetchThirdPartyRepoMatchToFossaRequest,
+	FetchThirdPartyRepoMatchToFossaResponse,
+	void,
+	void
+>("codestream/provider/fossaRepoMatch");
 
 export type CheckConclusionState =
 	| "ACTION_REQUIRED"

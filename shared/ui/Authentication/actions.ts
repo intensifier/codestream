@@ -53,7 +53,7 @@ import { moveCursorToLine } from "../Stream/api-functions";
 import { localStore } from "../utilities/storage";
 import { emptyObject, uuid } from "../utils";
 import { HostApi } from "../webview-api";
-import { WebviewPanels } from "@codestream/webview/ipc/webview.protocol.common";
+import { WebviewPanels } from "@codestream/protocols/api";
 
 export enum SignupType {
 	JoinTeam = "joinTeam",

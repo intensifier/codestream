@@ -21,12 +21,16 @@ import {
 	FetchThirdPartyCardWorkflowResponse,
 	FetchThirdPartyChannelsRequest,
 	FetchThirdPartyChannelsResponse,
+	FetchThirdPartyRepoMatchToFossaRequest,
+	FetchThirdPartyRepoMatchToFossaResponse,
+	FetchThirdPartyCodeAnalyzersRequest,
 	FetchThirdPartyPullRequestCommitsRequest,
 	FetchThirdPartyPullRequestCommitsResponse,
 	FetchThirdPartyPullRequestRequest,
 	FetchThirdPartyPullRequestResponse,
 	GetMyPullRequestsRequest,
 	GetMyPullRequestsResponse,
+	IssueParams,
 	MoveThirdPartyCardRequest,
 	MoveThirdPartyCardResponse,
 	ProviderConfigurationData,
@@ -35,6 +39,8 @@ import {
 	ThirdPartyProviderConfig,
 	UpdateThirdPartyStatusRequest,
 	UpdateThirdPartyStatusResponse,
+	FetchThirdPartyLicenseDependenciesResponse,
+	FetchThirdPartyVulnerabilitiesResponse,
 } from "@codestream/protocols/agent";
 import { CSMe, CSProviderInfos } from "@codestream/protocols/api";
 import { Response } from "undici";
@@ -63,6 +69,7 @@ export const providerDisplayNamesByNameKey = new Map<string, string>([
 	["linear", "Linear"],
 	["newrelic", "New Relic"],
 	["circleci", "Circle CI"],
+	["fossa", "FOSSA"],
 ]);
 
 export interface ThirdPartyProviderSupportsIssues {
@@ -71,7 +78,7 @@ export interface ThirdPartyProviderSupportsIssues {
 	getCards(request: FetchThirdPartyCardsRequest): Promise<FetchThirdPartyCardsResponse>;
 
 	getCardWorkflow(
-		request: FetchThirdPartyCardWorkflowRequest
+		request: FetchThirdPartyCardWorkflowRequest,
 	): Promise<FetchThirdPartyCardWorkflowResponse>;
 
 	moveCard(request: MoveThirdPartyCardRequest): Promise<MoveThirdPartyCardResponse>;
@@ -79,7 +86,7 @@ export interface ThirdPartyProviderSupportsIssues {
 	getAssignableUsers(request: FetchAssignableUsersRequest): Promise<FetchAssignableUsersResponse>;
 
 	getAssignableUsersAutocomplete(
-		request: FetchAssignableUsersAutocompleteRequest
+		request: FetchAssignableUsersAutocompleteRequest,
 	): Promise<FetchAssignableUsersResponse>;
 
 	createCard(request: CreateThirdPartyCardRequest): Promise<CreateThirdPartyCardResponse>;
@@ -105,29 +112,29 @@ export interface ThirdPartyProviderSupportsPullRequests {
 	getOwnerFromRemote(remote: string): { owner: string; name: string };
 	getPullRequestsContainigSha(
 		repoIdentifier: { owner: string; name: string }[],
-		sha: string
+		sha: string,
 	): Promise<any[]>;
 }
 
 export interface ThirdPartyProviderSupportsCreatingPullRequests
 	extends ThirdPartyProviderSupportsPullRequests {
 	createPullRequest(
-		request: ProviderCreatePullRequestRequest
+		request: ProviderCreatePullRequestRequest,
 	): Promise<ProviderCreatePullRequestResponse | undefined>;
 }
 
 export interface ThirdPartyProviderSupportsViewingPullRequests
 	extends ThirdPartyProviderSupportsPullRequests {
 	getPullRequest(
-		request: FetchThirdPartyPullRequestRequest
+		request: FetchThirdPartyPullRequestRequest,
 	): Promise<FetchThirdPartyPullRequestResponse>;
 
 	getPullRequestCommits(
-		request: FetchThirdPartyPullRequestCommitsRequest
+		request: FetchThirdPartyPullRequestCommitsRequest,
 	): Promise<FetchThirdPartyPullRequestCommitsResponse>;
 
 	getMyPullRequests(
-		request: GetMyPullRequestsRequest
+		request: GetMyPullRequestsRequest,
 	): Promise<GetMyPullRequestsResponse[][] | undefined>;
 }
 
@@ -135,9 +142,25 @@ export interface ThirdPartyProviderSupportsBuilds {
 	fetchBuilds(request: FetchThirdPartyBuildsRequest): Promise<FetchThirdPartyBuildsResponse>;
 }
 
+export interface ThirdPartyProviderSupportsCodeAnalyzers {
+	fetchLicenseDependencies(
+		request: FetchThirdPartyCodeAnalyzersRequest,
+		params: IssueParams,
+	): Promise<FetchThirdPartyLicenseDependenciesResponse>;
+
+	fetchVulnerabilities(
+		request: FetchThirdPartyCodeAnalyzersRequest,
+		params: IssueParams,
+	): Promise<FetchThirdPartyVulnerabilitiesResponse>;
+
+	fetchIsRepoMatch(
+		request: FetchThirdPartyRepoMatchToFossaRequest,
+	): Promise<FetchThirdPartyRepoMatchToFossaResponse>;
+}
+
 export namespace ThirdPartyIssueProvider {
 	export function supportsIssues(
-		provider: ThirdPartyProvider
+		provider: ThirdPartyProvider,
 	): provider is ThirdPartyProvider & ThirdPartyProviderSupportsIssues {
 		return (
 			(provider as any).getBoards !== undefined &&
@@ -147,13 +170,13 @@ export namespace ThirdPartyIssueProvider {
 	}
 
 	export function supportsViewingPullRequests(
-		provider: ThirdPartyProvider
+		provider: ThirdPartyProvider,
 	): provider is ThirdPartyProvider & ThirdPartyProviderSupportsPullRequests {
 		return (provider as any).getMyPullRequests !== undefined;
 	}
 
 	export function supportsCreatingPullRequests(
-		provider: ThirdPartyProvider
+		provider: ThirdPartyProvider,
 	): provider is ThirdPartyProvider & ThirdPartyProviderSupportsPullRequests {
 		return (provider as any).createPullRequest !== undefined;
 	}
@@ -161,13 +184,13 @@ export namespace ThirdPartyIssueProvider {
 
 export namespace ThirdPartyPostProvider {
 	export function supportsSharing(
-		provider: ThirdPartyPostProvider
+		provider: ThirdPartyPostProvider,
 	): provider is ThirdPartyPostProvider & ThirdPartyProviderSupportsPosts {
 		return (provider as any).createPost !== undefined;
 	}
 
 	export function supportsStatus(
-		provider: ThirdPartyProvider
+		provider: ThirdPartyProvider,
 	): provider is ThirdPartyProvider & ThirdPartyProviderSupportsStatus {
 		return (provider as any).updateStatus !== undefined;
 	}
@@ -175,9 +198,21 @@ export namespace ThirdPartyPostProvider {
 
 export namespace ThirdPartyBuildProvider {
 	export function supportsBuilds(
-		provider: ThirdPartyBuildProvider
+		provider: ThirdPartyBuildProvider,
 	): provider is ThirdPartyBuildProvider & ThirdPartyProviderSupportsBuilds {
 		return (provider as any).fetchBuilds !== undefined;
+	}
+}
+
+export namespace ThirdPartyCodeAnalyzerProvider {
+	export function supportsCodeAnalysis(
+		provider: ThirdPartyCodeAnalyzerProvider,
+	): provider is ThirdPartyCodeAnalyzerProvider & ThirdPartyProviderSupportsCodeAnalyzers {
+		return (
+			(provider as any).fetchIsRepoMatch !== undefined &&
+			(provider as any).fetchLicenseDependencies !== undefined &&
+			(provider as any).fetchVulnerabilities !== undefined
+		);
 	}
 }
 
@@ -236,6 +271,11 @@ export interface ThirdPartyBuildProvider extends ThirdPartyProvider {
 	supportsBuilds(): this is ThirdPartyBuildProvider & ThirdPartyProviderSupportsBuilds;
 }
 
+export interface ThirdPartyCodeAnalyzerProvider extends ThirdPartyProvider {
+	supportsCodeAnalysis(): this is ThirdPartyCodeAnalyzerProvider &
+		ThirdPartyProviderSupportsCodeAnalyzers;
+}
+
 export interface ApiResponse<T> {
 	body: T;
 	response: Response;
@@ -250,7 +290,7 @@ interface RefreshableProviderInfo {
 }
 
 export function isRefreshable<TProviderInfo extends CSProviderInfos>(
-	providerInfo: TProviderInfo
+	providerInfo: TProviderInfo,
 ): providerInfo is TProviderInfo & RefreshableProviderInfo {
 	return typeof (providerInfo as any).expiresAt === "number";
 }
@@ -329,7 +369,7 @@ export interface PullRequestComment {
 export async function getOpenedRepos<R>(
 	predicate: (remote: GitRemote) => boolean,
 	queryFn: (path: string) => Promise<ApiResponse<R>>,
-	remoteRepos: Map<string, R>
+	remoteRepos: Map<string, R>,
 ): Promise<Map<string, R>> {
 	const openRepos = new Map<string, R>();
 
@@ -367,7 +407,7 @@ export async function getOpenedRepos<R>(
 export async function getRemotePaths<R extends { path: string }>(
 	repo: GitRepository | undefined,
 	predicate: (remote: GitRemote) => boolean,
-	remoteRepos: Map<string, R>
+	remoteRepos: Map<string, R>,
 ): Promise<string[] | undefined> {
 	try {
 		if (repo === undefined) return undefined;

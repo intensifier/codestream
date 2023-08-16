@@ -1,5 +1,11 @@
 # Change Log
 
+## [14.27.0] - 2023-08-17
+
+### Added
+
+- Adds New Relic's generative AI assistant, Grok, to help analyze and fix errors (limited preview)
+
 ## [14.26.0] - 2023-08-08
 
 ### Changed

@@ -43,7 +43,7 @@ import {
 } from "@codestream/protocols/webview";
 import { SecurityIssuesWrapper } from "@codestream/webview/Stream/SecurityIssuesWrapper";
 import { ObservabilityServiceLevelObjectives } from "@codestream/webview/Stream/ObservabilityServiceLevelObjectives";
-import { WebviewPanels } from "../ipc/webview.protocol.common";
+import { WebviewPanels } from "@codestream/protocols/api";
 import { Button } from "../src/components/Button";
 import {
 	NoContent,
@@ -73,7 +73,7 @@ import Icon from "./Icon";
 import { Provider } from "./IntegrationsPanel";
 import { Link } from "./Link";
 import { ObservabilityAddAdditionalService } from "./ObservabilityAddAdditionalService";
-import { ObservabilityCurrentRepo } from "./ObservabilityCurrentRepo";
+import { CurrentRepoContext } from "./CurrentRepoContext";
 import { ObservabilityErrorWrapper } from "./ObservabilityErrorWrapper";
 import { ObservabilityGoldenMetricDropdown } from "./ObservabilityGoldenMetricDropdown";
 import Timestamp from "./Timestamp";
@@ -335,6 +335,7 @@ export const Observability = React.memo((props: Props) => {
 	const [recentAlertViolationsError, setRecentAlertViolationsError] = useState<string>();
 	const previousNewRelicIsConnected = usePrevious(derivedState.newRelicIsConnected);
 	const [anomalyDetectionSupported, setAnomalyDetectionSupported] = useState<boolean>(true);
+	const [isVulnPresent, setIsVulnPresent] = useState(false);
 
 	const buildFilters = (repoIds: string[]) => {
 		return repoIds.map(repoId => {
@@ -627,6 +628,7 @@ export const Observability = React.memo((props: Props) => {
 				"Errors Listed": !_isEmpty(filteredCurrentRepoErrors) || !_isEmpty(filteredAssigments),
 				"SLOs Listed": hasServiceLevelObjectives,
 				"CLM Anomalies Listed": hasAnomalies,
+				"Vulnerabilities Listed": isVulnPresent,
 			};
 
 			console.debug(`o11y: NR Service Clicked`, event);
@@ -1054,7 +1056,7 @@ export const Observability = React.memo((props: Props) => {
 				title="Observability"
 				id={WebviewPanels.Observability}
 				subtitle={
-					<ObservabilityCurrentRepo
+					<CurrentRepoContext
 						observabilityRepos={observabilityRepos}
 						currentRepoCallback={setCurrentRepoId}
 					/>
@@ -1295,6 +1297,7 @@ export const Observability = React.memo((props: Props) => {
 																									currentRepoId={currentRepoId}
 																									entityGuid={ea.entityGuid}
 																									accountId={ea.accountId}
+																									setHasVulnerabilities={setIsVulnPresent}
 																								/>
 																							)}
 																							{currentRepoId && (

@@ -1,5 +1,6 @@
 import { CodemarkPlus, PostPlus } from "@codestream/protocols/agent";
 import { Index } from "@codestream/utils/types";
+import { RecombinedStream } from "@codestream/webview/store/posts/recombinedStream";
 
 export interface PendingPost
 	extends Pick<
@@ -25,11 +26,22 @@ export function isPending(post: object | undefined): post is PendingPost {
 	return (post as PendingPost).pending;
 }
 
+export type GrokStreamEvent = {
+	sequence: number;
+	streamId: string;
+	postId: string;
+	content?: string;
+	done: boolean;
+};
+
 export interface PostsState {
 	byStream: {
 		[streamId: string]: Index<PostPlus>;
 	};
 	pending: PendingPost[];
+	streamingPosts: {
+		[postId: string]: RecombinedStream;
+	};
 }
 
 export enum PostsActionsType {
@@ -43,4 +55,5 @@ export enum PostsActionsType {
 	CancelPendingPost = "CANCEL_PENDING_POST",
 	Delete = "DELETE_POST",
 	Save = "@posts/Save",
+	AppendGrokStreamingResponse = "APPEND_GROK_STREAMING_RESPONSE",
 }

@@ -8,6 +8,7 @@ import { logError } from "../logger";
 import { CodeStreamState } from "../store";
 import { getUsernames } from "../store/users/reducer";
 import { escapeHtml } from "../utils";
+import Icons8 from "./Icons8";
 
 interface MarkdownOptions {
 	/**
@@ -21,14 +22,22 @@ interface MarkdownOptions {
 	 */
 	inline: boolean;
 	excludeOnlyEmoji: boolean;
+	includeCodeBlockCopy: boolean;
 }
+
+const copyIcon = (text: string) => {
+	const copyText = text.replace(/"/g, "\\x22").replace(/'/g, "\\x27");
+	return `<div class="code-buttons copy-icon-display-none"><span class="icon clickable" onclick="navigator.clipboard.writeText(\`${copyText}\`).then(() => console.log('Successfully copied'), () => { const textArea = document.createElement('textarea'); textArea.value = \`${copyText}\`; textArea.style.top = '0'; textArea.style.left = '0'; textArea.style.position = 'fixed'; document.body.appendChild(textArea); textArea.focus(); textArea.select(); try { document.execCommand('copy') ? console.log('Successfully copied (fallback)') : console('Copy failed'); } catch (e) { console.error('Copy error', e); } document.body.removeChild(textArea); })">${Icons8.copy.toSVG()}</span></div>`;
+};
 
 const md = new MarkdownIt({
 	breaks: true,
 	linkify: true,
 	highlight: function (str, lang) {
 		const codeHTML = prettyPrintOne(escapeHtml(str), lang, true);
-		return `<pre class="code prettyprint" data-scrollable="true">${codeHTML}</pre>`;
+		return `<pre class="code prettyprint" data-scrollable="true">${codeHTML}</pre>${copyIcon(
+			str
+		)}</div>`; // we need it to begin with <pre for markdown-it to behave properly, so we add the beginning div later
 	},
 })
 	.use(markdownItSlack)
@@ -47,7 +56,9 @@ const mdPlain = new MarkdownIt({
 	linkify: true,
 	highlight: function (str, lang) {
 		const codeHTML = prettyPrintOne(escapeHtml(str), lang, true);
-		return `<pre class="code prettyprint" data-scrollable="true">${codeHTML}</pre>`;
+		return `<pre class="code prettyprint" data-scrollable="true">${codeHTML}</pre>${copyIcon(
+			str
+		)}</div>`; // we need it to begin with <pre for markdown-it to behave properly, so we add the beginning div later
 	},
 })
 	.use(markdownItSlack)
@@ -78,7 +89,12 @@ export const markdownify = (text: string, options?: MarkdownOptions) => {
 			.replace(/<ul>\n/g, "<ul>")
 			.replace(/<ol>\n/g, "<ol>")
 			.replace(/<\/li>\n/g, "</li>")
-			.replace(/<br\/><\/blockquote>/g, "</blockquote>");
+			.replace(/<br\/><\/blockquote>/g, "</blockquote>")
+			// we need this for the copy icon to display properly, but we can't include it above
+			.replace(/<pre/g, '<div class="related"><pre');
+		if (options?.includeCodeBlockCopy) {
+			replaced = replaced.replace(" copy-icon-display-none", "");
+		}
 		// console.log('markdownify input/output', text, replaced);
 		if (identifyOnlyEmoji && text.trim().match(/^(:[\w_+]+:|\s)+$/))
 			return "<span class='only-emoji'>" + replaced + "</span>";
