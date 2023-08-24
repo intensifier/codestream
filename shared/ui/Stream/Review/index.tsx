@@ -45,6 +45,7 @@ import { getThreadPosts } from "@codestream/webview/store/posts/reducer";
 import { getReview } from "@codestream/webview/store/reviews/reducer";
 import { deleteReview, fetchReview } from "@codestream/webview/store/reviews/thunks";
 import {
+	currentUserIsAdminSelector,
 	findMentionedUserIds,
 	getTeamMates,
 	getTeamTagsHash,
@@ -272,6 +273,7 @@ export const BaseReviewHeader = (props: PropsWithChildren<BaseReviewHeaderProps>
 
 export const BaseReviewMenu = (props: BaseReviewMenuProps) => {
 	const { review, post, collapsed, setIsAmending } = props;
+	const isAdmin = useSelector(currentUserIsAdminSelector);
 
 	const dispatch = useAppDispatch();
 	const derivedState = useSelector((state: CodeStreamState) => {
@@ -402,41 +404,44 @@ export const BaseReviewMenu = (props: BaseReviewMenuProps) => {
 			});
 		}
 
+		const editLabel = {
+			label: "Edit",
+			key: "edit",
+			action: () => props.setIsEditing(true),
+		};
+
+		const deleteLabel = {
+			label: "Delete",
+			action: () => {
+				confirmPopup({
+					title: "Are you sure?",
+					message: "Deleting a feedback request cannot be undone.",
+					centered: true,
+					buttons: [
+						{ label: "Go Back", className: "control-button" },
+						{
+							label: "Delete Feedback Request",
+							className: "delete",
+							wait: true,
+							action: () => {
+								dispatch(deleteReview(review.id, post?.sharedTo));
+								dispatch(setCurrentReview());
+							},
+						},
+					],
+				});
+			},
+		};
+
 		if (review.creatorId === derivedState.currentUser.id) {
-			items.push(
-				{
-					label: "Edit",
-					key: "edit",
-					action: () => props.setIsEditing(true),
-				},
-				{
-					label: "Delete",
-					action: () => {
-						confirmPopup({
-							title: "Are you sure?",
-							message: "Deleting a feedback request cannot be undone.",
-							centered: true,
-							buttons: [
-								{ label: "Go Back", className: "control-button" },
-								{
-									label: "Delete Feedback Request",
-									className: "delete",
-									wait: true,
-									action: () => {
-										dispatch(deleteReview(review.id, post?.sharedTo));
-										dispatch(setCurrentReview());
-									},
-								},
-							],
-						});
-					},
-				}
-			);
+			items.unshift(editLabel, deleteLabel);
+		} else if (isAdmin) {
+			items.unshift(deleteLabel);
 		}
 
 		const { approvedBy = {}, creatorId, pullRequestUrl } = review;
 		const hasPullRequest = pullRequestUrl != null;
-		if (props.collapsed) {
+		if (collapsed) {
 			items.unshift({ label: "-" });
 			switch (review.status) {
 				case "open": {

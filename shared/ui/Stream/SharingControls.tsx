@@ -21,7 +21,7 @@ import {
 import { useAppDispatch, useAppSelector, useDidMount, useUpdates } from "../utilities/hooks";
 import { safe } from "../utils";
 import { HostApi } from "../webview-api";
-import { setUserPreference } from "./actions";
+import { openPanel, setUserPreference } from "./actions";
 import Icon from "./Icon";
 import { Modal } from "./Modal";
 
@@ -386,7 +386,7 @@ export const SharingControls = React.memo(
 		const { teamSettings } = derivedState;
 		const providers = teamSettings.messagingProviders || {};
 		const showSlack = !teamSettings.limitMessaging || providers["slack*com"];
-		const showTeams = !teamSettings.limitMessaging || providers["login*microsoftonline*com"];
+		const showTeams = !teamSettings.limitMessaging || providers["msteams"];
 
 		const shareProviderMenuItems = React.useMemo(() => {
 			const targetItems = derivedState.shareTargets.map(target => ({
@@ -543,7 +543,7 @@ export const SharingControls = React.memo(
 
 		const authenticateWithMSTeams = () => {
 			setAuthenticationState({ isAuthenticating: true, label: "MS Teams" });
-			dispatch(connectProvider(derivedState.msTeamsConfig!.id, "Compose Modal"));
+			dispatch(openPanel(`configure-provider-msteams-msteams-Compose Modal`));
 		};
 
 		if (derivedState.slackConfig == undefined) return null;

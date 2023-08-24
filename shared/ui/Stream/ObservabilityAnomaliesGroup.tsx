@@ -150,7 +150,7 @@ export const ObservabilityAnomaliesGroup = React.memo((props: Props) => {
 													direction: "rtl",
 												}}
 											>
-												<span>{anomaly.text}</span>
+												<span>&#x200e;{anomaly.text}</span>
 											</div>
 										</Tooltip>
 

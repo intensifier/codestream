@@ -1,15 +1,15 @@
 "use strict";
 
-import { promises as fs } from "fs";
+import fs from "fs/promises";
+import { Blob } from "node:buffer";
 import { Agent as HttpAgent } from "http";
 import { Agent as HttpsAgent } from "https";
 import * as qs from "querystring";
 import { ParsedUrlQueryInput } from "querystring";
 
 import { isEmpty, isEqual } from "lodash";
-import { BodyInit, Headers, RequestInit, Response } from "undici";
+import { BodyInit, FormData, Headers, RequestInit, Response } from "undici";
 import sanitize from "sanitize-filename";
-import FormData from "form-data";
 
 import { Emitter, Event } from "vscode-languageserver";
 import {
@@ -176,6 +176,9 @@ import {
 	UploadFileRequest,
 	UploadFileRequestType,
 	VerifyConnectivityResponse,
+	GenerateMSTeamsConnectCodeRequest,
+	GenerateMSTeamsConnectCodeResponse,
+	ERROR_GENERIC_USE_ERROR_MESSAGE,
 } from "@codestream/protocols/agent";
 import {
 	CSAddMarkersRequest,
@@ -328,6 +331,7 @@ import { CodeStreamPreferences } from "../preferences";
 import { BroadcasterEvents } from "./events";
 import { CodeStreamUnreads } from "./unreads";
 import { clearResolvedFlag } from "@codestream/utils/api/codeErrorCleanup";
+import { ResponseError } from "vscode-jsonrpc/lib/messages";
 
 @lsp
 export class CodeStreamApiProvider implements ApiProvider {
@@ -635,6 +639,16 @@ export class CodeStreamApiProvider implements ApiProvider {
 
 	async generateLoginCode(request: GenerateLoginCodeRequest): Promise<void> {
 		await this.post<GenerateLoginCodeRequest, {}>("/no-auth/generate-login-code", request);
+	}
+
+	async generateMSTeamsConnectCode(
+		request: GenerateMSTeamsConnectCodeRequest
+	): Promise<GenerateMSTeamsConnectCodeResponse> {
+		return await this.post<GenerateMSTeamsConnectCodeRequest, GenerateMSTeamsConnectCodeResponse>(
+			"/msteams/generate-connect-code",
+			request,
+			this._token
+		);
 	}
 
 	async register(request: CSRegisterRequest) {
@@ -2500,6 +2514,9 @@ export class CodeStreamApiProvider implements ApiProvider {
 	async uploadFile(request: UploadFileRequest) {
 		const formData = new FormData();
 		if (request.buffer) {
+			if (typeof request.buffer !== "string") {
+				throw new ResponseError(ERROR_GENERIC_USE_ERROR_MESSAGE, "Unsupported buffer type");
+			}
 			const base64String = request.buffer;
 			// string off dataUri / content info from base64 string
 			let bareString = "";
@@ -2509,21 +2526,21 @@ export class CodeStreamApiProvider implements ApiProvider {
 			} else {
 				bareString = base64String.substring(commaIndex + 1);
 			}
-			formData.append("file", Buffer.from(bareString, "base64"), {
-				filename: request.name,
-				contentType: request.mimetype,
-			});
-		} else {
-			formData.append("file", require("fs").createReadStream(request.path));
+			formData.append("file", new Blob([await Buffer.from(bareString, "base64")]), request.name);
 		}
 		const url = `${this.baseUrl}/upload-file/${this.teamId}`;
 		const headers = new Headers({
 			Authorization: `Bearer ${this._token}`,
 		});
 
-		// note, this bypasses the built-in fetch wrapper and calls node fetch directly,
-		// because we're not dealing with json data in the request
 		const response = await customFetch(url, { method: "post", body: formData, headers });
+		if (!response.ok) {
+			const body = await response.text();
+			throw new ResponseError(
+				ERROR_GENERIC_USE_ERROR_MESSAGE,
+				`Error uploading file: ${response.status} ${body}`
+			);
+		}
 		return await response.json();
 	}
 
@@ -2861,8 +2878,6 @@ export class CodeStreamApiProvider implements ApiProvider {
 	}
 
 	async verifyConnectivity() {
-		const controller = new AbortController();
-		const timeout = setTimeout(() => controller.abort(), 5000);
 		const response: VerifyConnectivityResponse = {
 			ok: true,
 		};
@@ -2871,7 +2886,7 @@ export class CodeStreamApiProvider implements ApiProvider {
 			Logger.log("Verifying API server connectivity");
 
 			const resp = await customFetch(this.baseUrl + "/no-auth/capabilities", {
-				signal: controller.signal,
+				timeout: 5000,
 			});
 
 			Logger.log(`API server status: ${resp.status}`);
@@ -2904,16 +2919,12 @@ export class CodeStreamApiProvider implements ApiProvider {
 					message: err.message,
 				};
 			}
-		} finally {
-			clearTimeout(timeout);
 		}
 
 		return response;
 	}
 
 	async pollForMaintenanceMode() {
-		const controller = new AbortController();
-		const timeout = setTimeout(() => controller.abort(), 5000);
 		const response: PollForMaintenanceModeResponse = {
 			ok: true,
 		};
@@ -2924,7 +2935,7 @@ export class CodeStreamApiProvider implements ApiProvider {
 			const nonJsonCapabilitiesResponse = await customFetch(
 				this.baseUrl + "/no-auth/capabilities",
 				{
-					signal: controller.signal,
+					timeout: 5000,
 				}
 			);
 
@@ -2943,8 +2954,6 @@ export class CodeStreamApiProvider implements ApiProvider {
 					message: err.message,
 				};
 			}
-		} finally {
-			clearTimeout(timeout);
 		}
 
 		return response;

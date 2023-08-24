@@ -1,5 +1,15 @@
 # Change Log
 
+## [14.28.0] - 2023-08-24
+
+### Added
+
+- Adds anomaly detection for code-level metrics for Node
+
+### Changed
+
+- Changes the authentication process with MS Teams to generate a sign-in code from the CodeStream Integrations page
+
 ## [14.27.0] - 2023-08-17
 
 ### Added
@@ -13,7 +23,7 @@
 - Admins can now delete other users' codemarks
 - Optimizes queries for metric data in the calculation of anomalies in code-level metrics
 
-## [14.25.0] - 2023-07-03
+## [14.25.0] - 2023-08-03
 
 ### Added
 

@@ -19,6 +19,7 @@ iex "git clone --depth 1 git@github.com:teamcodestream/codestream -b $($branch)"
     }
     else {
         iex $gitCommand
+        iex "git fetch && git rebase" # try to eliminate race conditions when all builds are running simultaneously
         iex "git push"
         if ($LastExitCode -ne $null -and $LastExitCode -ne 0) {
             exit 1

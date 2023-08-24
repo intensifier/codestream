@@ -1159,7 +1159,7 @@ const ProviderButtons = (props: { providerIds: string[]; setShowNextMessagingSte
 							variant={connected ? "success" : undefined}
 							onClick={() => {
 								if (connected) return;
-								if (provider.id == "login*microsoftonline*com") {
+								if (provider.id == "msteams") {
 									HostApi.instance.send(OpenUrlRequestType, {
 										url: "https://docs.newrelic.com/docs/codestream/codestream-integrations/msteams-integration/",
 									});

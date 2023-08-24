@@ -73,6 +73,12 @@ const criticalityToRiskSeverity = (riskSeverity: VulnSeverity): VulnSeverity => 
 	}
 };
 
+const eventClicked = (
+	trackingData: { "Analyzer Service": string; Category: string } | undefined
+) => {
+	HostApi.instance.track("Analyzer Result Clicked", trackingData);
+};
+
 const ModalView = (props: {
 	displays: {
 		label: string;
@@ -81,11 +87,8 @@ const ModalView = (props: {
 	}[];
 	title: string;
 	details: string;
-	trackingData: { "Analyzer Service": string; Category: string };
-	onClose: () => void;
 }) => {
-	const { displays, title, details, trackingData } = props;
-	HostApi.instance.track("Analyzer Result Clicked", trackingData);
+	const { displays, title, details } = props;
 
 	return (
 		<div className="codemark-form-container">
@@ -219,6 +222,9 @@ const VulnerabilityRow = (props: { issue: VulnerabilityIssue }) => {
 				style={{ padding: "0 10px 0 30px" }}
 				className={"pr-row"}
 				onClick={() => {
+					if (!expanded) {
+						eventClicked({ "Analyzer Service": "FOSSA", Category: "Vulnerability" });
+					}
 					setExpanded(!expanded);
 				}}
 			>
@@ -240,7 +246,6 @@ const VulnerabilityRow = (props: { issue: VulnerabilityIssue }) => {
 					<ModalView
 						title={vuln.title}
 						details={vuln.details}
-						trackingData={{ "Analyzer Service": "FOSSA", Category: "Vulnerability" }}
 						displays={[
 							{ label: "Dependency", description: vuln.source.name },
 							{ label: "Remediation Advice", description: vuln.remediation },
@@ -259,7 +264,6 @@ const VulnerabilityRow = (props: { issue: VulnerabilityIssue }) => {
 							},
 							{ label: "References", description: vuln.references, link: true },
 						]}
-						onClose={() => setExpanded(false)}
 					/>
 				</Modal>
 			)}
@@ -280,6 +284,9 @@ const LicenseDependencyRow = (props: { issue: LicenseDependencyIssue }) => {
 				style={{ padding: "0 10px 0 30px" }}
 				className={"pr-row"}
 				onClick={() => {
+					if (!expanded) {
+						eventClicked({ "Analyzer Service": "FOSSA", Category: "License Dependency" });
+					}
 					setExpanded(!expanded);
 				}}
 			>
@@ -299,7 +306,6 @@ const LicenseDependencyRow = (props: { issue: LicenseDependencyIssue }) => {
 					<ModalView
 						title={`${capitalize(licenseDependency.source.name)}: ${licenseDependency.license}`}
 						details={licenseDependency.details ?? ""}
-						trackingData={{ "Analyzer Service": "FOSSA", Category: "License Dependency" }}
 						displays={[
 							{ label: "Dependency", description: licenseDependency.source.name },
 							{ label: "Issue Type", description: licenseDependency.type.split("_").join(" ") },
@@ -314,7 +320,6 @@ const LicenseDependencyRow = (props: { issue: LicenseDependencyIssue }) => {
 								description: licenseDependency.depths.direct ? "Direct" : "Transitive",
 							},
 						]}
-						onClose={() => setExpanded(false)}
 					/>
 				</Modal>
 			)}
