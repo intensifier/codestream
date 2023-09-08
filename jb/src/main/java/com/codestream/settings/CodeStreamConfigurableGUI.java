@@ -11,9 +11,6 @@ public class CodeStreamConfigurableGUI {
     private JTextField serverUrl;
     private JCheckBox disableStrictSSL;
     private JTextField extraCerts;
-    private JCheckBox showAvatars;
-    private JCheckBox showFeedbackSmiley;
-    private JCheckBox autoHideMarkers;
     private JCheckBox showMarkers;
     private JComboBox<ProxySupport> proxySupport;
     private JCheckBox proxyStrictSSL;
@@ -21,7 +18,6 @@ public class CodeStreamConfigurableGUI {
     private JCheckBox showNewCodemarkGutterIconOnHover;
     private JCheckBox showGoldenSignalsInEditor;
     private JTextField goldenSignalsInEditorFormat;
-    private JCheckBox showGitBlame;
 
     public JPanel getRootPanel() {
         return rootPanel;
@@ -39,18 +35,6 @@ public class CodeStreamConfigurableGUI {
         return disableStrictSSL;
     }
 
-    public JCheckBox getShowAvatars() {
-        return showAvatars;
-    }
-
-    public JCheckBox getShowFeedbackSmiley() {
-        return showFeedbackSmiley;
-    }
-
-    public JCheckBox getAutoHideMarkers() {
-        return autoHideMarkers;
-    }
-
     public JCheckBox getShowMarkers() {
         return showMarkers;
     }
@@ -58,8 +42,6 @@ public class CodeStreamConfigurableGUI {
     public JCheckBox getShowNewCodemarkGutterIconOnHover() {
         return showNewCodemarkGutterIconOnHover;
     }
-
-    public JCheckBox getShowGitBlame() { return showGitBlame; }
 
     public JComboBox<ProxySupport> getProxySupport() {
         return proxySupport;

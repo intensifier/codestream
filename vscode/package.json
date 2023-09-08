@@ -1,8 +1,8 @@
 {
 	"name": "codestream",
 	"displayName": "New Relic CodeStream",
-	"description": "Simplify your workflow by bringing performance data from New Relic, pull requests from GitHub, and issues from Jira together in your IDE. Also integrates with Slack, Teams, GitLab, Bitbucket and more.",
-	"version": "14.28.0",
+	"description": "Bring production telemetry into your IDE to quickly identify and resolve performance issues.",
+  "version": "14.29.0",
 	"author": "CodeStream",
 	"publisher": "CodeStream",
 	"extensionKind": [
@@ -62,12 +62,6 @@
 			"type": "object",
 			"title": "CodeStream",
 			"properties": {
-				"codestream.autoHideMarkers": {
-					"type": "boolean",
-					"default": false,
-					"description": "Specifies whether to automatically hide editor marker glyphs when the CodeStream panel is showing codemarks in the current file",
-					"scope": "window"
-				},
 				"codestream.autoSignIn": {
 					"type": "boolean",
 					"default": true,
@@ -108,12 +102,6 @@
 					"description": "Specifies the url to use to connect to the CodeStream service",
 					"scope": "window"
 				},
-				"codestream.showAvatars": {
-					"type": "boolean",
-					"default": true,
-					"description": "Specifies whether to show avatars",
-					"scope": "window"
-				},
 				"codestream.showInStatusBar": {
 					"type": "string",
 					"enum": [
@@ -130,28 +118,10 @@
 					"description": "Specifies whether to show CodeStream in the status bar",
 					"scope": "window"
 				},
-				"codestream.showLineLevelBlame": {
-					"type": "boolean",
-					"default": true,
-					"description": "Specifies whether to show git blame information at the end of lines",
-					"scope": "window"
-				},
-				"codestream.showMarkerCodeLens": {
-					"type": "boolean",
-					"default": false,
-					"description": "Specifies whether to show code lens above lines with associated codemarks in the editor",
-					"scope": "window"
-				},
 				"codestream.showMarkerGlyphs": {
 					"type": "boolean",
 					"default": true,
 					"description": "Specifies whether to show glyph indicators at the start of lines with associated codemarks in the editor",
-					"scope": "window"
-				},
-				"codestream.showShortcutTipOnSelection": {
-					"type": "boolean",
-					"default": false,
-					"description": "Specifies whether to show a shortcut key tip attached to the selection when you select code",
 					"scope": "window"
 				},
 				"codestream.traceLevel": {
@@ -177,36 +147,10 @@
 					"default": "avg duration: ${averageDuration} | error rate: ${errorRate} - ${sampleSize} samples in the last ${since}",
 					"description": "Specifies how to format code-level metrics in the editor",
 					"scope": "window"
-				},
-				"codestream.promptToEnableCodeLensInDiffs": {
-					"type": "boolean",
-					"default": true,
-					"description": "Specifies whether to prompt to enable Code Lens in diffs in order to show golden signals",
-					"scope": "window"
 				}
 			}
 		},
 		"commands": [
-			{
-				"command": "codestream.showReviewDiff",
-				"title": "Show Review Diff",
-				"category": "CodeStream"
-			},
-			{
-				"command": "codestream.showNextChangedFile",
-				"title": "Show Next Changed File",
-				"category": "CodeStream"
-			},
-			{
-				"command": "codestream.showPreviousChangedFile",
-				"title": "Show Previous Changed File",
-				"category": "CodeStream"
-			},
-			{
-				"command": "codestream.closeReviewDiff",
-				"title": "Close Review Diff",
-				"category": "CodeStream"
-			},
 			{
 				"command": "codestream.goOffline",
 				"title": "Go Offline",
@@ -228,11 +172,6 @@
 				"category": "CodeStream"
 			},
 			{
-				"command": "codestream.startWork",
-				"title": "Start Work",
-				"category": "CodeStream"
-			},
-			{
 				"command": "codestream.newComment",
 				"title": "Add Comment",
 				"category": "CodeStream"
@@ -241,30 +180,6 @@
 				"command": "codestream.newIssue",
 				"title": "Create Issue",
 				"category": "CodeStream"
-			},
-			{
-				"command": "codestream.newReview",
-				"title": "Request Feedback",
-				"category": "CodeStream"
-			},
-			{
-				"command": "codestream.newPermalink",
-				"title": "Get Permalink",
-				"category": "CodeStream"
-			},
-			{
-				"command": "codestream.copyPermalink",
-				"title": "Copy Permalink to Clipboard",
-				"category": "CodeStream"
-			},
-			{
-				"command": "codestream.newPullRequest",
-				"title": "New Pull Request",
-				"category": "CodeStream",
-				"icon": {
-					"light": "assets/images/light/pull-request.svg",
-					"dark": "assets/images/dark/pull-request.svg"
-				}
 			},
 			{
 				"command": "codestream.viewMethodLevelTelemetry",
@@ -288,15 +203,6 @@
 				},
 				"key": "ctrl+shift+/ ctrl+shift+/",
 				"mac": "ctrl+/ ctrl+/",
-				"when": "codestream:status == signedIn"
-			},
-			{
-				"command": "codestream.startWork",
-				"args": {
-					"source": "Shortcut"
-				},
-				"key": "ctrl+shift+/ w",
-				"mac": "ctrl+/ w",
 				"when": "codestream:status == signedIn"
 			},
 			{
@@ -334,105 +240,6 @@
 				"key": "ctrl+shift+/ ctrl+shift+i",
 				"mac": "ctrl+/ ctrl+i",
 				"when": "codestream:status == signedIn"
-			},
-			{
-				"command": "codestream.newReview",
-				"args": {
-					"source": "Shortcut"
-				},
-				"key": "ctrl+shift+/ r",
-				"mac": "ctrl+/ r",
-				"when": "codestream:status == signedIn"
-			},
-			{
-				"command": "codestream.newReview",
-				"args": {
-					"source": "Shortcut"
-				},
-				"key": "ctrl+shift+/ ctrl+shift+r",
-				"mac": "ctrl+/ ctrl+r",
-				"when": "codestream:status == signedIn"
-			},
-			{
-				"command": "codestream.newPullRequest",
-				"args": {
-					"source": "Shortcut"
-				},
-				"key": "ctrl+shift+/ m",
-				"mac": "ctrl+/ m",
-				"when": "codestream:status == signedIn"
-			},
-			{
-				"command": "codestream.newPullRequest",
-				"args": {
-					"source": "Shortcut"
-				},
-				"key": "ctrl+shift+/ p",
-				"mac": "ctrl+/ p",
-				"when": "codestream:status == signedIn"
-			},
-			{
-				"command": "codestream.newPullRequest",
-				"args": {
-					"source": "Shortcut"
-				},
-				"key": "ctrl+shift+/ ctrl+shift+m",
-				"mac": "ctrl+/ ctrl+m",
-				"when": "codestream:status == signedIn"
-			},
-			{
-				"command": "codestream.newPullRequest",
-				"args": {
-					"source": "Shortcut"
-				},
-				"key": "ctrl+shift+/ ctrl+shift+p",
-				"mac": "ctrl+/ ctrl+p",
-				"when": "codestream:status == signedIn"
-			},
-			{
-				"command": "codestream.showNextChangedFile",
-				"args": {
-					"source": "Shortcut"
-				},
-				"key": "alt+f6",
-				"mac": "alt+f6",
-				"when": "codestream:status == signedIn"
-			},
-			{
-				"command": "codestream.showPreviousChangedFile",
-				"args": {
-					"source": "Shortcut"
-				},
-				"key": "alt+shift+f6",
-				"mac": "alt+shift+f6",
-				"when": "codestream:status == signedIn"
-			},
-			{
-				"command": "codestream.newPermalink",
-				"args": {
-					"source": "Shortcut"
-				},
-				"key": "ctrl+shift+/ l",
-				"mac": "ctrl+/ l",
-				"when": "codestream:status == signedIn"
-			},
-			{
-				"command": "codestream.newPermalink",
-				"args": {
-					"source": "Shortcut"
-				},
-				"key": "ctrl+shift+/ ctrl+shift+l",
-				"mac": "ctrl+/ ctrl+l",
-				"when": "codestream:status == signedIn"
-			},
-			{
-				"command": "codestream.copyPermalink",
-				"args": {
-					"source": "Shortcut"
-				},
-				"key": "ctrl+shift+/ shift+l",
-				"mac": "ctrl+/ shift+l",
-				"when": "editorTextFocus && codestream:status == signedIn"
 			}
 		],
 		"menus": {
@@ -454,39 +261,11 @@
 					"when": "codestream:status == signedIn"
 				},
 				{
-					"command": "codestream.startWork",
-					"when": "codestream:status == signedIn"
-				},
-				{
 					"command": "codestream.newComment",
 					"when": "codestream:status == signedIn"
 				},
 				{
 					"command": "codestream.newIssue",
-					"when": "codestream:status == signedIn"
-				},
-				{
-					"command": "codestream.newReview",
-					"when": "codestream:status == signedIn"
-				},
-				{
-					"command": "codestream.showPreviousChangedFile",
-					"when": "codestream:status == signedIn"
-				},
-				{
-					"command": "codestream.showNextChangedFile",
-					"when": "codestream:status == signedIn"
-				},
-				{
-					"command": "codestream.newPermalink",
-					"when": "codestream:status == signedIn"
-				},
-				{
-					"command": "codestream.copyPermalink",
-					"when": "codestream:status == signedIn"
-				},
-				{
-					"command": "codestream.newPullRequest",
 					"when": "codestream:status == signedIn"
 				}
 			],
@@ -500,11 +279,6 @@
 					"command": "codestream.newIssue",
 					"when": "codestream:status == signedIn && resourceScheme == file",
 					"group": "9_zcodestream@2"
-				},
-				{
-					"command": "codestream.newPermalink",
-					"when": "codestream:status == signedIn && resourceScheme == file",
-					"group": "9_zcodestream@4"
 				}
 			]
 		},

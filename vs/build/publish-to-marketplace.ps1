@@ -31,8 +31,8 @@ $x64Asset = $x64AssetDir + '\codestream-vs-' + $buildNumber + '-x64.vsix'
 Write-Host 'Here is the x86 VSIX file (' $x86Asset '):'
 Get-ChildItem $x86Asset
 if ($LastExitCode -ne $null -and $LastExitCode -ne 0) {
-    if((Test-Path -Path $tokenPath) -eq $True){
-        Remove-Item $tokenPath
+    if((Test-Path -Path $localVSCETokenFile) -eq $True){
+        Remove-Item $localVSCETokenFile
     }
     exit 1
 }
@@ -40,16 +40,16 @@ if ($LastExitCode -ne $null -and $LastExitCode -ne 0) {
 Write-Host 'Here is the x64 VSIX file (' $x64Asset '):'
 Get-ChildItem $x64Asset
 if ($LastExitCode -ne $null -and $LastExitCode -ne 0) {
-    if((Test-Path -Path $tokenPath) -eq $True){
-        Remove-Item $tokenPath
+    if((Test-Path -Path $localVSCETokenFile) -eq $True){
+        Remove-Item $localVSCETokenFile
     }
     exit 1
 }
 
 $pat = (Get-Content -Raw -Path $localVSCETokenFile | ConvertFrom-Json).publishers.Where({$_.Name -eq "CodeStream"}).pat
 if ($LastExitCode -ne $null -and $LastExitCode -ne 0) {
-    if((Test-Path -Path $tokenPath) -eq $True){
-        Remove-Item $tokenPath
+    if((Test-Path -Path $localVSCETokenFile) -eq $True){
+        Remove-Item $localVSCETokenFile
     }
     exit 1
 }
@@ -86,8 +86,8 @@ else {
     }
     finally{
         # Clean up the token file so it doesn't hang around longer than necessary
-        if((Test-Path -Path $tokenPath) -eq $True){
-            Remove-Item $tokenPath
+        if((Test-Path -Path $localVSCETokenFile) -eq $True){
+            Remove-Item $localVSCETokenFile
         }
     }
 

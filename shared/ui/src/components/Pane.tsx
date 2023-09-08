@@ -46,6 +46,7 @@ interface PaneNodeNameProps {
 	forceExpand?: boolean;
 	showChildIconOnCollapse?: boolean;
 	customPadding?: string;
+	"data-testid"?: string;
 }
 export const PaneNodeName = styled((props: PropsWithChildren<PaneNodeNameProps>) => {
 	const dispatch = useAppDispatch();
@@ -84,6 +85,11 @@ export const PaneNodeName = styled((props: PropsWithChildren<PaneNodeNameProps>)
 				{props.isLoading && <Icon name="sync" className="spin" />}
 				{!props.isLoading && (
 					<Icon
+						data-testid={
+							props["data-testid"]
+								? `${props["data-testid"]}-${derivedState.collapsed ? "collapsed" : "expanded"}`
+								: undefined
+						}
 						name={derivedState.collapsed ? "chevron-right-thin" : "chevron-down-thin"}
 						className="expander"
 					/>
@@ -246,18 +252,7 @@ export const PaneHeader = React.memo((props: PropsWithChildren<PaneHeaderProps>)
 				{props.warning && props.warning}
 			</div>
 			{!derivedState.collapsed && (!derivedState.anyMaximized || derivedState.maximized) && (
-				<div className="actions">
-					{props.children}
-					<Icon
-						name={derivedState.maximized ? "minimize" : "maximize"}
-						title={derivedState.maximized ? "Minimize" : "Maximize"}
-						placement={"bottomRight"}
-						delay={1}
-						className="maximize"
-						onClick={maximize}
-						tabIndex={1}
-					/>
-				</div>
+				<div className="actions">{props.children}</div>
 			)}
 			{props.isLoading && (
 				<div className="progress-container">

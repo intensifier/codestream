@@ -95,6 +95,7 @@ import { HostApi } from "../webview-api";
 import { SetUserPreferenceRequest } from "./actions.types";
 import { confirmPopup } from "./Confirm";
 import { throwIfError } from "@codestream/webview/store/common";
+import { setPostThreadsLoading } from "../store/posts/actions";
 
 export {
 	openPanel,
@@ -952,6 +953,7 @@ export const fetchPosts =
 export const fetchThread =
 	(streamId: string, parentPostId: string) => async (dispatch, getState) => {
 		try {
+			dispatch(setPostThreadsLoading(parentPostId, true));
 			const { posts, codemarks } = await HostApi.instance.send(FetchPostRepliesRequestType, {
 				streamId,
 				postId: parentPostId,
@@ -975,6 +977,8 @@ export const fetchThread =
 			await dispatch(postsActions.addPostsForStream(streamId, posts));
 		} catch (error) {
 			logError(error, { detail: `There was an error fetching a thread`, parentPostId });
+		} finally {
+			dispatch(setPostThreadsLoading(parentPostId, false));
 		}
 	};
 

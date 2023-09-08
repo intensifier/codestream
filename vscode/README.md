@@ -1,14 +1,13 @@
 # New Relic CodeStream
 
-Shift left by making code performance, code review and code discussion part of the earliest stages of the development process. 
+Shift left by making code performance, code quality and code discussion part of the earliest stages of the development process. 
 
-- Get performance data for individual methods in the code, as well as the services built from that code.
-- Review pull requests from GitHub and GitLab right in your IDE.
+- Get performance data for individual methods in the code, including notifications about poorly performing methods.
+- Get actionable information, such as errors, vulnerabilities and non-compliant SLOs, for the services built from your code.
 - Discuss any block of code, with options for sharing to Slack or Teams, or creating a ticket on Jira, Trello and many other issue trackers.
 
 ### Integrations
 
-- **Code Hosts:** Bitbucket, Bitbucket Server, GitHub, GitHub Enterprise, GitLab, GitLab Self-Managed
 - **Issue Trackers:** Asana, Azure DevOps, Bitbucket, GitHub, GitHub Enterprise, GitLab, GitLab Self-Managed, Jira, Linear, Shortcut, Trello, YouTrack
 - **Messaging Services:** Slack, Microsoft Teams
 
@@ -34,12 +33,6 @@ Discover errors happening in the code you’re responsible for. Quickly step thr
 Get an in-IDE view of how the services built from your code are performing, in any environment. Golden metrics, service-level objectives and related services give you the big picture at a glance.
 
 ![Application Performance Monitoring](https://raw.githubusercontent.com/TeamCodeStream/CodeStream/develop/images/marketplace-vsc-slt.png)
-
-# Review Pull Requests
-
-Create and review pull requests from GitHub or GitLab, including on-prem versions of both, right from your IDE. Full-file side-by-side diffs give you all of the context you’ll need. Manage the PR’s details, assign reviewers and even merge the changes. 
-
-![Review Pull Requests](https://raw.githubusercontent.com/TeamCodeStream/CodeStream/develop/images/marketplace-vsc-pr.png)
 
 # Simplified Code Discussion
 

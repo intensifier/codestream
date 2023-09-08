@@ -5,11 +5,7 @@ import {
 import { isEmpty as _isEmpty, sortBy as _sortBy } from "lodash-es";
 import React from "react";
 import styled from "styled-components";
-import {
-	WebviewModals,
-	WebviewPanelNames,
-	OpenUrlRequestType,
-} from "@codestream/protocols/webview";
+import { WebviewModals, OpenUrlRequestType } from "@codestream/protocols/webview";
 import {
 	logout,
 	switchToForeignCompany,
@@ -21,12 +17,12 @@ import { CodeStreamState } from "../store";
 import { isFeatureEnabled } from "../store/apiVersioning/reducer";
 import { openModal, setCurrentOrganizationInvite, setProfileUser } from "../store/context/actions";
 import { HostApi } from "../webview-api";
-import { openPanel, setUserPreference } from "./actions";
+import { openPanel } from "./actions";
 import Icon from "./Icon";
 import { MarkdownText } from "./MarkdownText";
 import Menu from "./Menu";
 import { multiStageConfirmPopup } from "./MultiStageConfirm";
-import { AVAILABLE_PANES, DEFAULT_PANE_SETTINGS } from "./Sidebar";
+import { AVAILABLE_PANES } from "./Sidebar";
 import { EMPTY_STATUS } from "./StartWork";
 
 const RegionSubtext = styled.div`
@@ -314,42 +310,6 @@ export function EllipsisMenu(props: EllipsisMenuProps) {
 					action: () => dispatch(openModal(WebviewModals.TeamSetup)),
 					disabled: !derivedState.autoJoinSupported,
 				},
-				{
-					label: "Feedback Request Settings...",
-					key: "feedback-request-settings",
-					action: () => dispatch(openModal(WebviewModals.ReviewSettings)),
-					disabled: !derivedState.multipleReviewersApprove,
-				},
-				// {
-				// 	label: "Live View Settings",
-				// 	key: "live-view-settings",
-				// 	submenu: [
-				// 		{
-				// 			label: "Always On",
-				// 			checked: xraySetting === "on",
-				// 			action: () => changeXray("on")
-				// 		},
-				// 		{
-				// 			label: "Always Off",
-				// 			checked: xraySetting === "off",
-				// 			action: () => changeXray("off")
-				// 		},
-				// 		{
-				// 			label: "User Selectable",
-				// 			checked: !xraySetting || xraySetting === "user",
-				// 			action: () => changeXray("user")
-				// 		},
-				// 		{ label: "-", action: () => {} },
-				// 		{
-				// 			label: "What is Live View?",
-				// 			action: () => {
-				// 				HostApi.instance.send(OpenUrlRequestType, {
-				// 					url: "https://docs.newrelic.com/docs/codestream/how-use-codestream/my-organization/"
-				// 				});
-				// 			}
-				// 		}
-				// 	]
-				// },
 				{ label: "-" },
 				{ label: "Export Data", action: () => go(WebviewPanels.Export) },
 				{ label: "-" },
@@ -395,7 +355,6 @@ export function EllipsisMenu(props: EllipsisMenuProps) {
 						popup(WebviewModals.Profile);
 					},
 				},
-				{ label: "Change Profile Photo", action: () => popup(WebviewModals.ChangeAvatar) },
 				{ label: "Change Email", action: () => popup(WebviewModals.ChangeEmail) },
 				{ label: "Change Username", action: () => popup(WebviewModals.ChangeUsername) },
 				{ label: "Change Full Name", action: () => popup(WebviewModals.ChangeFullName) },
@@ -404,38 +363,10 @@ export function EllipsisMenu(props: EllipsisMenuProps) {
 			],
 		},
 		{
-			label: "View",
-			action: "view",
-			submenu: derivedState.sidebarPaneOrder
-				.filter(id => AVAILABLE_PANES.includes(id))
-				.map(id => {
-					const settings =
-						derivedState.sidebarPanePreferences[id] || DEFAULT_PANE_SETTINGS[id] || {};
-					return {
-						key: id,
-						label: WebviewPanelNames[id],
-						checked: !settings.removed,
-						action: () => {
-							dispatch(
-								setUserPreference({
-									prefPath: ["sidebarPanes", id, "removed"],
-									value: !settings.removed,
-								})
-							);
-							if (!settings.removed) {
-								HostApi.instance.track("Sidebar Adjusted", {
-									Section: id,
-									Adjustment: "Hidden",
-								});
-							}
-						},
-					};
-				}),
-		},
-		{
 			label: "Notifications",
 			action: () => dispatch(openModal(WebviewModals.Notifications)),
-		}
+		},
+		{ label: "Integrations", action: () => dispatch(openPanel(WebviewPanels.Integrations)) }
 	);
 
 	menuItems.push(
@@ -475,17 +406,6 @@ export function EllipsisMenu(props: EllipsisMenuProps) {
 	// - Keybindings
 	// - FAQ
 	menuItems.push(
-		{ label: "Integrations", action: () => dispatch(openPanel(WebviewPanels.Integrations)) },
-		{
-			label: "New Relic Setup",
-			key: "onboard-newrelic",
-			action: () => go(WebviewPanels.OnboardNewRelic),
-		},
-		{ label: "-" },
-		{
-			label: "Feedback",
-			action: () => openUrl("https://github.com/TeamCodeStream/codestream/issues"),
-		},
 		{
 			label: "Help",
 			key: "help",
@@ -494,11 +414,6 @@ export function EllipsisMenu(props: EllipsisMenuProps) {
 					label: "Documentation",
 					key: "documentation",
 					action: () => openUrl("https://docs.newrelic.com/docs/codestream"),
-				},
-				{
-					label: "Video Library",
-					key: "videos",
-					action: () => openUrl("https://www.codestream.com/video-library"),
 				},
 				{
 					label: "Keybindings",
@@ -510,17 +425,6 @@ export function EllipsisMenu(props: EllipsisMenuProps) {
 				// 	key: "getting-started",
 				// 	action: () => dispatch(openPanel(WebviewPanels.GettingStarted))
 				// },
-				{
-					label: "CodeStream Flow",
-					key: "flow",
-					action: () => dispatch(openPanel(WebviewPanels.Flow)),
-				},
-				// { label: "Onboard", key: "onboard", action: () => go(WebviewPanels.Onboard) },
-				{
-					label: "What's New",
-					key: "whats-new",
-					action: () => openUrl("https://www.codestream.com/blog"),
-				},
 				{
 					label: "Report an Issue",
 					key: "issue",

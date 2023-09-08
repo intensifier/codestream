@@ -11,6 +11,7 @@ import {
 	isGrokStreamDone,
 	RecombinedStream,
 } from "@codestream/webview/store/posts/recombinedStream";
+import { Index } from "@codestream/utils/types";
 
 type PostsActions = ActionType<typeof actions>;
 
@@ -18,9 +19,10 @@ const initialState: PostsState = {
 	byStream: {},
 	pending: [],
 	streamingPosts: {},
+	postThreadsLoading: {},
 };
 
-const addPost = (byStream, post: CSPost) => {
+const addPost = (byStream: { [streamId: string]: Index<PostPlus> }, post: CSPost) => {
 	const streamId = post.streamId;
 	const streamPosts = byStream[streamId] || {};
 	return { ...byStream, [streamId]: { ...streamPosts, [post.id]: post } };
@@ -37,6 +39,7 @@ export function reducePosts(state: PostsState = initialState, action: PostsActio
 				pending: [...state.pending],
 				byStream: { ...state.byStream },
 				streamingPosts: state.streamingPosts,
+				postThreadsLoading: state.postThreadsLoading,
 			};
 			action.payload.forEach(post => {
 				if (isPending(post)) nextState.pending.push(post);
@@ -52,6 +55,7 @@ export function reducePosts(state: PostsState = initialState, action: PostsActio
 				pending: [...state.pending],
 				byStream: { ...state.byStream },
 				streamingPosts: { ...state.streamingPosts },
+				postThreadsLoading: state.postThreadsLoading,
 			};
 			const { streamId, postId } = action.payload[0];
 			const recombinedStream: RecombinedStream = nextState.streamingPosts[postId] ?? {
@@ -94,6 +98,7 @@ export function reducePosts(state: PostsState = initialState, action: PostsActio
 				byStream: addPost(state.byStream, post),
 				pending: state.pending.filter(post => post.id !== pendingId),
 				streamingPosts: state.streamingPosts,
+				postThreadsLoading: state.postThreadsLoading,
 			};
 		}
 		case PostsActionsType.FailPendingPost: {
@@ -119,6 +124,11 @@ export function reducePosts(state: PostsState = initialState, action: PostsActio
 				...state,
 				byStream: { ...state.byStream, [streamId]: streamPosts },
 			};
+		}
+		case PostsActionsType.SetPostThreadsLoading: {
+			const nextPostThreadsLoading = { ...state.postThreadsLoading };
+			nextPostThreadsLoading[action.payload.parentPostId] = action.payload.loading;
+			return { ...state, postThreadsLoading: nextPostThreadsLoading };
 		}
 		case "RESET":
 			return initialState;

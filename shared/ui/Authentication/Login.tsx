@@ -399,6 +399,7 @@ class Login extends React.Component<Props, State> {
 										</div>
 
 										<Button
+											data-testid="signInWithPasswordButton"
 											className="row-button"
 											onClick={this.submitCredentials}
 											loading={this.state.loading}
@@ -426,7 +427,10 @@ class Login extends React.Component<Props, State> {
 										</Button>
 										<p>
 											We’ll email you a code so you can sign in without a password. Or,{" "}
-											<a onClick={this.handleClickSwitchToPasswordMode}>
+											<a
+												data-testid="signInManuallyLink"
+												onClick={this.handleClickSwitchToPasswordMode}
+											>
 												you can sign in manually.
 											</a>
 										</p>

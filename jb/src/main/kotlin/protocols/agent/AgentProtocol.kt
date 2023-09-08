@@ -471,14 +471,6 @@ class GetFileContentsAtRevisionResult(
     val error: String?
 )
 
-class CreateReviewsForUnreviewedCommitsParams(
-    val sequence: Int
-)
-
-class CreateReviewsForUnreviewedCommitsResult(
-    val reviewIds: List<String>
-)
-
 class FollowReviewParams(
     val id: String,
     val value: Boolean

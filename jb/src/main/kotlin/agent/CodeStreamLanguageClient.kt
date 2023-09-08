@@ -169,11 +169,6 @@ class CodeStreamLanguageClient(private val project: Project) : LanguageClient {
         project.reviewService?.createReviewFromExternalCommit()
     }
 
-    @JsonNotification("codestream/didDetectUnreviewedCommits")
-    fun didDetectUnreviewedCommits(notification: DidDetectUnreviewedCommitsNotification) {
-        project.notificationComponent?.didDetectUnreviewedCommits(notification.message, notification.sequence, notification.openReviewId)
-    }
-
     @JsonNotification("codestream/didDetectObservabilityAnomalies")
     fun didDetectObservabilityAnomalies(notification: DidDetectObservabilityAnomaliesNotification) {
         project.notificationComponent?.didDetectObservabilityAnomalies(notification.entityGuid, notification.duration, notification.errorRate)
@@ -355,8 +350,6 @@ enum class LogoutReason {
 }
 
 class UserDidCommitNotification(val sha: String)
-
-class DidDetectUnreviewedCommitsNotification(val message: String, val sequence: Int, val openReviewId: String?)
 
 class DidDetectObservabilityAnomaliesNotification(val entityGuid: String, val duration: List<ObservabilityAnomaly>, val errorRate: List<ObservabilityAnomaly>)
 

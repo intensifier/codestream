@@ -320,7 +320,7 @@ export const SecurityIssuesWrapper = React.memo((props: Props) => {
 			}
 			return unexpectedError;
 		},
-		[error],
+		[error]
 	);
 
 	useEffect(() => {
@@ -343,10 +343,16 @@ export const SecurityIssuesWrapper = React.memo((props: Props) => {
 				onClick={() => {
 					setExpanded(!expanded);
 				}}
+				data-testid={`security-issues-dropdown`}
 			>
 				{expanded && <Icon name="chevron-down-thin" />}
 				{!expanded && <Icon name="chevron-right-thin" />}
-				<span style={{ marginLeft: "2px", marginRight: "5px" }}>Vulnerabilities</span>
+				<span
+					data-testid={`vulnerabilities-${props.entityGuid}`}
+					style={{ marginLeft: "2px", marginRight: "5px" }}
+				>
+					Vulnerabilities
+				</span>
 
 				{data && data.totalRecords > 0 && (
 					<Icon
@@ -355,6 +361,7 @@ export const SecurityIssuesWrapper = React.memo((props: Props) => {
 						className="alert"
 						title={warningTooltip}
 						delay={1}
+						data-testid={`vulnerabilities-alert-icon`}
 					/>
 				)}
 				<InlineMenu
@@ -382,7 +389,9 @@ export const SecurityIssuesWrapper = React.memo((props: Props) => {
 				</>
 			)}
 			{expanded && !loading && data && data.totalRecords === 0 && (
-				<Row style={{ padding: "0 10px 0 49px" }}>👍 No vulnerabilities found</Row>
+				<Row data-testid={`no-vulnerabilties-found`} style={{ padding: "0 10px 0 49px" }}>
+					👍 No vulnerabilities found
+				</Row>
 			)}
 		</>
 	);

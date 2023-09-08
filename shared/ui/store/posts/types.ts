@@ -42,6 +42,7 @@ export interface PostsState {
 	streamingPosts: {
 		[postId: string]: RecombinedStream;
 	};
+	postThreadsLoading: { [parentPostId: string]: boolean };
 }
 
 export enum PostsActionsType {
@@ -49,6 +50,7 @@ export enum PostsActionsType {
 	Add = "ADD_POSTS", // this is a legacy action dispatched on pubnub updates
 	AddPendingPost = "ADD_PENDING_POST",
 	AddForStream = "ADD_POSTS_FOR_STREAM",
+	SetPostThreadsLoading = "SET_POST_THREADS_LOADING",
 	Update = "UPDATE_POST",
 	ResolvePendingPost = "RESOLVE_PENDING_POST",
 	FailPendingPost = "PENDING_POST_FAILED",

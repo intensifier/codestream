@@ -3,7 +3,6 @@ package com.codestream.editor;
 import com.codestream.DirectoryKt;
 import com.codestream.actions.AddComment;
 import com.codestream.actions.CreateIssue;
-import com.codestream.actions.GetPermalink;
 import com.codestream.actions.NewCodemark;
 import com.codestream.protocols.agent.GetBlameResultLineInfo;
 import com.codestream.protocols.webview.ReviewNotifications;
@@ -97,7 +96,6 @@ public class BlameHover {
     private JLabel userIcon;
     private JLabel commitMessage;
     private JLabel commitSha;
-    private ActionLink sharePermalink;
     private ActionLink addComment;
     private ActionLink createIssue;
     private JPanel externalContents;
@@ -113,12 +111,6 @@ public class BlameHover {
         });
         createIssue = new ActionLink("Create issue", actionEvent -> {
             NewCodemark action = (new CreateIssue());
-            action.setTelemetrySource("Blame Hover");
-            action.invoke(_project, _editor, _psiFile);
-            notifyActionInvokedListeners();
-        });
-        sharePermalink = new ActionLink("Share permalink", actionEvent -> {
-            NewCodemark action = (new GetPermalink());
             action.setTelemetrySource("Blame Hover");
             action.invoke(_project, _editor, _psiFile);
             notifyActionInvokedListeners();

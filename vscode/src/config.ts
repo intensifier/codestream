@@ -8,7 +8,6 @@ export enum Notifications {
 }
 
 export interface Config {
-	autoHideMarkers: boolean;
 	autoSignIn: boolean;
 	disableStrictSSL: boolean;
 	extraCerts: string;
@@ -16,17 +15,12 @@ export interface Config {
 	notifications: Notifications | null;
 	proxySupport: "override" | "on" | "off" | null;
 	serverUrl: string;
-	showAvatars: boolean;
 	showInStatusBar: "left" | "right" | false;
-	showLineLevelBlame: boolean;
-	showMarkerCodeLens: boolean;
 	showMarkerGlyphs: boolean;
 	goldenSignalsInEditor: boolean;
-	showShortcutTipOnSelection: boolean;
 	traceLevel: TraceLevel;
 	showInstrumentationGlyphs?: boolean;
 	goldenSignalsInEditorFormat?: string;
-	promptToEnableCodeLensInDiffs?: boolean;
 }
 
 export const ConfigSettingsNeedingReload = [

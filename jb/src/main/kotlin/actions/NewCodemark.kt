@@ -106,12 +106,3 @@ class CreateIssue : NewCodemark("Create issue", CodemarkType.ISSUE) {
     }
 }
 
-class GetPermalink : NewCodemark("Get permalink", CodemarkType.LINK) {
-    override fun getIcon(flags: Int) = IconLoader.getIcon("/images/marker-permalink.svg", this::class.java)
-
-    override fun update(e: AnActionEvent) {
-        val virtualFile = CommonDataKeys.VIRTUAL_FILE.getData(e.dataContext)
-        val canCreatePermalink = e.project?.settingsService?.webViewContext?.canCreatePermalink == true
-        e.presentation.isVisible = virtualFile?.isInLocalFileSystem == true && canCreatePermalink
-    }
-}

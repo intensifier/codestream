@@ -12,14 +12,6 @@ import {
 } from "@codestream/protocols/api";
 import Icon from "./Icon";
 import { Dialog } from "../src/components/Dialog";
-import * as providerSelectors from "../store/providers/reducer";
-
-const prNotificationProviders = new Set([
-	"github*com",
-	"github/enterprise",
-	"gitlab*com",
-	"gitlab/enterprise",
-]);
 
 export const Notifications = props => {
 	const dispatch = useAppDispatch();
@@ -27,48 +19,22 @@ export const Notifications = props => {
 		const hasDesktopNotifications = state.ide.name === "VSC" || state.ide.name === "JETBRAINS";
 		const notificationDeliverySupported = isFeatureEnabled(state, "notificationDeliveryPreference");
 		const emailSupported = isFeatureEnabled(state, "emailSupport");
-		const prConnectedProviderIds = providerSelectors
-			.getConnectedSupportedPullRequestHosts(state)
-			.map(it => it.id);
-		const showPRNotificationSetting = prConnectedProviderIds.some(p =>
-			prNotificationProviders.has(p)
-		);
-
-		// disable FROP for new users by default
-		const me = state.users[state.session.userId!];
-		let createReviewOnDetectUnreviewedCommits;
-		if (me.createdAt > 1641405000000) {
-			createReviewOnDetectUnreviewedCommits =
-				state.preferences.reviewCreateOnDetectUnreviewedCommits === true ? true : false;
-		} else {
-			createReviewOnDetectUnreviewedCommits =
-				state.preferences.reviewCreateOnDetectUnreviewedCommits === false ? false : true;
-		}
 
 		return {
 			notificationPreference: state.preferences.notifications || CSNotificationPreference.InvolveMe,
 			notificationDeliveryPreference:
 				state.preferences.notificationDelivery || CSNotificationDeliveryPreference.All,
-			reviewReminderDelivery: state.preferences.reviewReminderDelivery === false ? false : true,
-			createReviewOnDetectUnreviewedCommits: createReviewOnDetectUnreviewedCommits,
 			notifyPerformanceIssues: state.preferences.notifyPerformanceIssues === false ? false : true,
 			weeklyEmailDelivery: state.preferences.weeklyEmailDelivery === false ? false : true,
-			toastPrNotify: state.preferences.toastPrNotify === false ? false : true,
 			hasDesktopNotifications,
 			notificationDeliverySupported,
 			emailSupported,
-			showPRNotificationSetting,
 		};
 	});
+
 	const [loading, setLoading] = useState(false);
 	const [loadingDelivery, setLoadingDelivery] = useState(false);
-	const [loadingReminderDelivery, setLoadingReminderDelivery] = useState(false);
-	const [
-		loadingCreateReviewOnDetectUnreviewedCommits,
-		setLoadingCreateReviewOnDetectUnreviewedCommits,
-	] = useState(false);
 	const [loadingNotifyPerformanceIssues, setLoadingNotifyPerformanceIssues] = useState(false);
-	const [loadingToastPrNotify, setLoadingToastPrNotify] = useState(false);
 	const [loadingWeeklyEmailDelivery, setLoadingWeeklyEmailDelivery] = useState(false);
 
 	const handleChange = async (value: string) => {
@@ -76,12 +42,6 @@ export const Notifications = props => {
 		HostApi.instance.track("Notification Preference Changed", { Value: value });
 		dispatch(setUserPreference({ prefPath: ["notifications"], value }));
 		setLoading(false);
-	};
-
-	const handleChangeReviewReminders = async (value: boolean) => {
-		setLoadingReminderDelivery(true);
-		dispatch(setUserPreference({ prefPath: ["reviewReminderDelivery"], value }));
-		setLoadingReminderDelivery(false);
 	};
 
 	const handleChangeWeeklyEmailDelivery = async (value: boolean) => {
@@ -97,25 +57,11 @@ export const Notifications = props => {
 		setLoadingDelivery(false);
 	};
 
-	const handleChangeCreateReviewOnDetectUnreviewedCommits = async (value: boolean) => {
-		setLoadingCreateReviewOnDetectUnreviewedCommits(true);
-		HostApi.instance.track("Review Create On Detect Unreviewed Commits Changed", { Value: value });
-		dispatch(setUserPreference({ prefPath: ["reviewCreateOnDetectUnreviewedCommits"], value }));
-		setLoadingCreateReviewOnDetectUnreviewedCommits(false);
-	};
-
 	const handleChangeNotifyPerformanceIssues = async (value: boolean) => {
 		setLoadingNotifyPerformanceIssues(true);
 		HostApi.instance.track("Notify Performance Issues Changed", { Value: value });
 		dispatch(setUserPreference({ prefPath: ["notifyPerformanceIssues"], value }));
 		setLoadingNotifyPerformanceIssues(false);
-	};
-
-	const handleToastPrNotify = async (value: boolean) => {
-		setLoadingToastPrNotify(true);
-		HostApi.instance.track("Toast New PR Notify Changed", { Value: value });
-		dispatch(setUserPreference({ prefPath: ["toastPrNotify"], value }));
-		setLoadingToastPrNotify(false);
 	};
 
 	return (
@@ -135,8 +81,8 @@ export const Notifications = props => {
 					)}
 					<p className="explainer">
 						{derivedState.hasDesktopNotifications
-							? "Follow codemarks and feedback requests to receive desktop and email notifications."
-							: "Follow codemarks and feedback requests to receive email notifications."}
+							? "Follow discussions to receive desktop and email notifications."
+							: "Follow discussions to receive email notifications."}
 					</p>
 					<div id="controls">
 						<RadioGroup
@@ -145,16 +91,11 @@ export const Notifications = props => {
 							onChange={handleChange}
 							loading={loading}
 						>
-							<Radio value="all">
-								Automatically follow all new codemarks and feedback requests
-							</Radio>
+							<Radio value="all">Automatically follow all new discussions</Radio>
 							<Radio value="involveMe">
-								Follow codemarks and feedback requests I have created, I have been mentioned in, or
-								I have replied to
+								Follow discussions I have created, I have been mentioned in, or I have replied to
 							</Radio>
-							<Radio value="off">
-								Don't automatically follow any codemarks or feedback requests
-							</Radio>
+							<Radio value="off">Don't automatically follow any discussions</Radio>
 						</RadioGroup>
 						{derivedState.hasDesktopNotifications && derivedState.notificationDeliverySupported && (
 							<div style={{ marginTop: "20px" }}>
@@ -188,26 +129,18 @@ export const Notifications = props => {
 							</div>
 						)}
 						<h3>Email Notifications</h3>
-						<div style={{ marginTop: "20px" }}>
-							<Checkbox
-								name="frReminders"
-								checked={derivedState.reviewReminderDelivery}
-								onChange={handleChangeReviewReminders}
-								loading={loadingReminderDelivery}
-							>
-								Send me an email reminder for outstanding feedback requests
-							</Checkbox>
-						</div>
-						<div style={{ marginTop: "20px" }}>
-							<Checkbox
-								name="weeklyEmails"
-								checked={derivedState.weeklyEmailDelivery}
-								onChange={handleChangeWeeklyEmailDelivery}
-								loading={loadingWeeklyEmailDelivery}
-							>
-								Send me weekly emails summarizing my activity
-							</Checkbox>
-						</div>
+						{
+							<div style={{ marginTop: "20px" }}>
+								<Checkbox
+									name="weeklyEmails"
+									checked={derivedState.weeklyEmailDelivery}
+									onChange={handleChangeWeeklyEmailDelivery}
+									loading={loadingWeeklyEmailDelivery}
+								>
+									Send me weekly emails summarizing my activity
+								</Checkbox>
+							</div>
+						}
 						{derivedState.hasDesktopNotifications && derivedState.notificationDeliverySupported && (
 							<div>
 								<h3>Desktop Notifications</h3>
@@ -221,28 +154,6 @@ export const Notifications = props => {
 										Notify me about performance issues
 									</Checkbox>
 								</div>
-								<div style={{ marginTop: "20px" }}>
-									<Checkbox
-										name="createReviewOnDetectUnreviewedCommits"
-										checked={derivedState.createReviewOnDetectUnreviewedCommits}
-										onChange={handleChangeCreateReviewOnDetectUnreviewedCommits}
-										loading={loadingCreateReviewOnDetectUnreviewedCommits}
-									>
-										Notify me about new unreviewed commits from teammates when I pull
-									</Checkbox>
-								</div>
-								{derivedState.showPRNotificationSetting && (
-									<div style={{ marginTop: "20px" }}>
-										<Checkbox
-											name="toastPrNotify"
-											checked={derivedState.toastPrNotify}
-											onChange={handleToastPrNotify}
-											loading={loadingToastPrNotify}
-										>
-											Notify me about pull requests assigned to me
-										</Checkbox>
-									</div>
-								)}
 							</div>
 						)}
 						<p>&nbsp;</p>

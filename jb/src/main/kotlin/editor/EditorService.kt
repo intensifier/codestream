@@ -35,7 +35,9 @@ import com.codestream.review.ReviewDiffVirtualFile
 import com.codestream.sessionService
 import com.codestream.settings.ApplicationSettingsService
 import com.codestream.settingsService
+import com.codestream.system.isSameUri
 import com.codestream.system.sanitizeURI
+import com.codestream.system.toFile
 import com.codestream.webViewService
 import com.intellij.diff.DiffContentFactory
 import com.intellij.diff.DiffManager
@@ -246,11 +248,11 @@ class EditorService(val project: Project) {
     }
 
     fun updateMarkers(uri: String) {
-        val document = managedDocuments.keys.find { it.uri == uri }
+        val document = managedDocuments.keys.find { it.uri.isSameUri(uri) }
         document?.let {
             updateMarkers(it)
         }
-        val gitDocuments = gitDocuments.filter { it.uri == uri }
+        val gitDocuments = gitDocuments.filter { it.uri.isSameUri(uri) }
         gitDocuments.forEach {
             updateMarkers(it)
         }
@@ -308,7 +310,7 @@ class EditorService(val project: Project) {
 
     private val showGutterIcons: Boolean
         get() {
-            return !codeStreamVisible || !spatialViewActive || !appSettings.autoHideMarkers
+            return !codeStreamVisible || !spatialViewActive
         }
 
     inner class DocumentSynchronizer : DocumentListener {
@@ -608,7 +610,7 @@ class EditorService(val project: Project) {
                     val virtualFile = if (uri.scheme == ReviewDiffFileSystem.protocol) {
                         FileEditorManager.getInstance(project).openFiles.find { it.uri == uriString }
                     } else {
-                        LocalFileSystem.getInstance().findFileByIoFile(File(uri))
+                        LocalFileSystem.getInstance().findFileByIoFile(uriString.toFile())
                     }
 
                     if (virtualFile == null) {

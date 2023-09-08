@@ -6,7 +6,6 @@ import com.codestream.appDispatcher
 import com.codestream.clmService
 import com.codestream.codeStream
 import com.codestream.protocols.agent.Codemark
-import com.codestream.protocols.agent.CreateReviewsForUnreviewedCommitsParams
 import com.codestream.protocols.agent.FollowReviewParams
 import com.codestream.protocols.agent.ObservabilityAnomaly
 import com.codestream.protocols.agent.Post
@@ -57,44 +56,6 @@ class NotificationComponent(val project: Project) {
 
     init {
         project.sessionService?.onPostsChanged(this::didChangePosts)
-        project.sessionService?.onPullRequestsChanged(this::didChangePullRequests)
-    }
-
-    private fun didChangePullRequests(pullRequestNotifications: List<PullRequestNotification>) {
-        appDispatcher.launch {
-            pullRequestNotifications.forEach { didChangePullRequest(it) }
-        }
-    }
-
-    private fun didChangePullRequest(pullRequestNotification: PullRequestNotification) {
-        val session = project.sessionService ?: return
-        val userLoggedIn = session.userLoggedIn ?: return
-
-        if (!userLoggedIn.user.wantsToastNotifications()) {
-            return
-        }
-
-	    val verb = if (pullRequestNotification.pullRequest.providerId.contains("gitlab", ignoreCase = true)) "Merge" else "Pull"
-        val text = "${verb} Request \"${pullRequestNotification.pullRequest.title}\" ${pullRequestNotification.queryName}"
-
-        val notification = priorityNotificationGroup.createNotification(
-            null, null, text, NotificationType.INFORMATION
-        )
-
-        notification.addAction(NotificationAction.createSimple("Open") {
-            project.codeStream?.show {
-                project.webViewService?.run {
-                    postNotification(PullRequestNotifications.Show(
-                        pullRequestNotification.pullRequest.providerId,
-                        pullRequestNotification.pullRequest.id
-                    ))
-                    notification.expire()
-                    telemetry(TelemetryEvent.TOAST_CLICKED, "PR")
-                }
-            }
-        })
-        notification.notify(project)
-        telemetry(TelemetryEvent.TOAST_NOTIFICATION, "PR")
     }
 
     private fun didChangePosts(posts: List<Post>) {
@@ -143,29 +104,6 @@ class NotificationComponent(val project: Project) {
 
     fun showError(title: String, content: String) {
         val notification = notificationGroup.createNotification(title, null, content, NotificationType.ERROR)
-        notification.notify(project)
-    }
-
-    fun didDetectUnreviewedCommits(message: String, sequence: Int, openReviewId: String?) {
-        val notification = notificationGroup.createNotification("Unreviewed code", null, message, NotificationType.INFORMATION)
-
-        notification.addAction(NotificationAction.createSimple("Review") {
-            appDispatcher.launch {
-                if (openReviewId != null) {
-                    project.agentService?.followReview(FollowReviewParams(openReviewId, true))
-                    project.webViewService?.postNotification(ReviewNotifications.Show(openReviewId, null, true))
-                } else {
-                    val result = project.agentService?.createReviewsForUnreviewedCommits(CreateReviewsForUnreviewedCommitsParams(sequence))
-                    result?.reviewIds?.firstOrNull()?.let {
-                        project.webViewService?.postNotification(ReviewNotifications.Show(it, null, true))
-                    }
-                }
-            }
-            notification.expire()
-            telemetry(TelemetryEvent.TOAST_CLICKED, "Unreviewed Commit")
-        })
-
-        telemetry(TelemetryEvent.TOAST_NOTIFICATION, "Unreviewed Commit")
         notification.notify(project)
     }
 

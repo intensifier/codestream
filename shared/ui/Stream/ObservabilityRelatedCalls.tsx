@@ -64,12 +64,17 @@ export const ObservabilityRelatedCalls = React.memo((props: Props) => {
 				</>
 			)}
 			{!loading && expanded && _isEmpty(relatedEntitiesSlicedSorted) && (
-				<ErrorRow customPadding={"0 10px 0 50px"} title={"No related services"}></ErrorRow>
+				<ErrorRow
+					dataTestId={`no-related-services-calls`}
+					customPadding={"0 10px 0 50px"}
+					title={"No related services"}
+				></ErrorRow>
 			)}
 			{!loading && expanded && !_isEmpty(relatedEntitiesForSearch) && (
 				<ObservabilityRelatedSearch
 					currentRepoId={props.currentRepoId}
 					searchItems={relatedEntitiesForSearch || []}
+					entityGuid={props.entityGuid}
 				/>
 			)}
 			{loading && expanded && <ObservabilityLoadingRelatedServiceEntities />}

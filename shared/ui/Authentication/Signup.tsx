@@ -504,7 +504,11 @@ export const Signup = (props: Props) => {
 								<SignupButtonsContainer>
 									{!limitAuthentication && (
 										<SignupButtonContainer>
-											<Button className="row-button no-top-margin" onClick={onClickNewRelicSignup}>
+											<Button
+												data-testid="newRelicSignupButton"
+												className="row-button no-top-margin"
+												onClick={onClickNewRelicSignup}
+											>
 												<Icon name="newrelic" />
 												<div className="copy">New Relic</div>
 												<Icon name="chevron-right" />
@@ -549,7 +553,11 @@ export const Signup = (props: Props) => {
 									)}
 									{(!limitAuthentication || authenticationProviders["email"]) && !showEmailForm && (
 										<SignupButtonContainer>
-											<Button className="row-button no-top-margin" onClick={onClickEmailSignup}>
+											<Button
+												data-testid="emailSignupButton"
+												className="row-button no-top-margin"
+												onClick={onClickEmailSignup}
+											>
 												<Icon name="codestream" />
 												<div className="copy">Email</div>
 												<Icon name="chevron-right" />
@@ -694,6 +702,7 @@ export const Signup = (props: Props) => {
 								<p>
 									Already have an account?{" "}
 									<Link
+										data-testid="alreadyHaveAccountSignInLink"
 										onClick={e => {
 											e.preventDefault();
 											dispatch(goToLogin());

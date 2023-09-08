@@ -1170,6 +1170,9 @@ const BaseCodeError = (props: BaseCodeErrorProps) => {
 	}, shallowEqual);
 	const renderedFooter = props.renderFooter && props.renderFooter(CardFooter, ComposeWrapper);
 	const { codeError, errorGroup } = derivedState;
+	const isPostThreadsLoading: boolean | undefined = useAppSelector(
+		state => state.posts.postThreadsLoading[codeError.postId]
+	);
 
 	const [currentSelectedLine, setCurrentSelectedLineIndex] = useState<number>(
 		derivedState.currentCodeErrorData?.lineIndex || 0
@@ -1178,6 +1181,7 @@ const BaseCodeError = (props: BaseCodeErrorProps) => {
 	const [didCopyMethod, setDidCopyMethod] = useState(false);
 	const [jumpLocation, setJumpLocation] = useState<number | undefined>();
 	const [loadGrokTimeout, setLoadGrokTimeout] = useState<NodeJS.Timeout | undefined>();
+	const [grokRequested, setGrokRequested] = useState(false);
 
 	const functionToEdit = useAppSelector(state => state.codeErrors.functionToEdit);
 	const functionToEditFailed = useAppSelector(state => state.codeErrors.functionToEditFailed);
@@ -1191,6 +1195,7 @@ const BaseCodeError = (props: BaseCodeErrorProps) => {
 			const submitGrok = async (codeBlock?: string) => {
 				// console.debug("===--- useEffect startGrokLoading");
 				props.setGrokRequested();
+				setGrokRequested(true);
 				dispatch(startGrokLoading(props.codeError));
 				const actualCodeError = (await dispatch(
 					upgradePendingCodeError(props.codeError.id, "Comment", codeBlock, true)
@@ -1210,13 +1215,32 @@ const BaseCodeError = (props: BaseCodeErrorProps) => {
 				// setText("");
 				// setAttachments([]);
 			};
-			if (currentGrokRepliesLength === 0 && (functionToEdit || functionToEditFailed)) {
-				// setIsLoading(true);
+			// Case 1 - pending post, will never try to fetch replies
+			if (
+				codeError.postId === undefined &&
+				!isGrokLoading &&
+				!grokRequested &&
+				(functionToEdit || functionToEditFailed)
+			) {
+				submitGrok(functionToEdit?.codeBlock).catch(e => {
+					console.error("submitGrok failed", e);
+				});
+				return;
+			}
+			// Case 2 - give a chance for replies to load before deciding to submitGrok
+			if (
+				!isGrokLoading &&
+				isPostThreadsLoading !== undefined && // Hasn't attempted to load yet
+				!isPostThreadsLoading && // Not currently loading
+				!grokRequested &&
+				derivedState.replies.length === 0 && // Has loaded replies and they are empty
+				(functionToEdit || functionToEditFailed)
+			) {
 				submitGrok(functionToEdit?.codeBlock).catch(e => {
 					console.error("submitGrok failed", e);
 				});
 			}
-		}, [functionToEdit, functionToEditFailed]);
+		}, [functionToEdit, functionToEditFailed, isPostThreadsLoading, derivedState.replies]);
 	}
 
 	const onClickStackLine = async (event, lineIndex) => {
@@ -1646,7 +1670,7 @@ const AskGrok = (props: { setText: (text: string) => void; onClose: () => void }
 					But the conversation doesn't have to stop there! Mention Grok in any reply to ask followup
 					questions or have Grok do some work for you.
 				</p>
-				<MetaLabel>Examples</MetaLabel>
+				<MetaLabel data-testid="grok-examples">Examples</MetaLabel>
 				<GrokSuggestion query={"Write a test case for the suggested fix."} onSelect={onSelect} />
 				<GrokSuggestion
 					query={"Write a commit message for the suggested fix."}
@@ -1715,6 +1739,7 @@ const ReplyInput = (props: { codeError: CSCodeError; setGrokRequested: () => voi
 				attachments={attachments}
 				attachmentContainerType="reply"
 				setAttachments={setAttachments}
+				suggestGrok={showGrok}
 			/>
 			<ButtonRow
 				style={{
@@ -1862,7 +1887,10 @@ const CodeErrorForCodeError = (props: PropsWithCodeError) => {
 			// console.debug(`===--- length: ${currentGrokRepliesLength} isGrokLoading: ${isGrokLoading} ---===`);
 
 			return (
-				<Footer className="replies-to-review" style={{ borderTop: "none", marginTop: 0 }}>
+				<Footer
+					className={isGrokLoading ? "grok-loading" : "grok-not-loading" + " replies-to-review"}
+					style={{ borderTop: "none", marginTop: 0 }}
+				>
 					{props.codeError.postId && (
 						<>
 							{<MetaLabel>Activity</MetaLabel>}

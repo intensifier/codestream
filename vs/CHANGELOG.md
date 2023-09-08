@@ -1,5 +1,13 @@
 # Change Log
 
+## [14.29.0] - 2023-09-12
+
+### Changed
+
+- Shifts CodeStream's product focus to exclusively observability, and removes the Pull Request and Feedback Request features
+- The ability to add code comments and issues remains, but the Codemarks and Issues sections of the CodeStream pane have been removed
+- CodeStream now determines your repository context even when you don't have a file open in the editor
+
 ## [14.28.0] - 2023-08-24
 
 ### Added

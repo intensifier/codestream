@@ -1,10 +1,10 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011" xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">
   <Metadata>
-    <Identity Id="codestream-vs" Version="14.28.0.0" Language="en-US" Publisher="New Relic" />
+    <Identity Id="codestream-vs" Version="14.29.0.0" Language="en-US" Publisher="New Relic" />
     <!-- DisplayName maxLength=50 -->
     <DisplayName>New Relic CodeStream</DisplayName>
-    <Description xml:space="preserve">Simplify your workflow by bringing performance data from New Relic, pull requests from GitHub, and issues from Jira together in your IDE. Also integrates with Slack, Teams, GitLab, Bitbucket and more.</Description>
+    <Description xml:space="preserve">Bring production telemetry into your IDE to quickly identify and resolve performance issues.</Description>
     <MoreInfo>https://codestream.com/</MoreInfo>
     <ReleaseNotes>https://github.com/TeamCodeStream/codestream/blob/master/vs/CHANGELOG.md</ReleaseNotes>
     <Icon>resources\assets\codestream.png</Icon>

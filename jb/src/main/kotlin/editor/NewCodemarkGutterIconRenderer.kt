@@ -2,7 +2,6 @@ package com.codestream.editor
 
 import com.codestream.actions.AddComment
 import com.codestream.actions.CreateIssue
-import com.codestream.actions.GetPermalink
 import com.codestream.actions.NewCodemark
 import com.codestream.appDispatcher
 import com.codestream.codeStream
@@ -94,9 +93,6 @@ class NewCodemarkGutterIconRenderer(
             val actions = mutableListOf<NewCodemark>(AddComment().also { it.telemetrySource = "Gutter" })
             if (editor.project?.settingsService?.webViewContext?.canCreateIssue == true) {
                 actions.add(CreateIssue().also { it.telemetrySource = "Gutter" })
-            }
-            if (editor.project?.settingsService?.webViewContext?.canCreatePermalink == true) {
-                actions.add(GetPermalink().also { it.telemetrySource = "Gutter" })
             }
             DefaultActionGroup(actions)
         }

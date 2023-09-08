@@ -184,6 +184,7 @@ export const ErrorRow = (props: {
 	onClick?: Function;
 	customPadding?: any;
 	icon?: "alert" | "thumbsup";
+	dataTestId?: string;
 }) => {
 	const derivedState = useAppSelector((state: CodeStreamState) => {
 		return {
@@ -198,6 +199,7 @@ export const ErrorRow = (props: {
 				props.onClick && props.onClick();
 			}}
 			style={{ padding: props.customPadding ? props.customPadding : "0 10px 0 40px" }}
+			data-testid={props.dataTestId}
 		>
 			<div>
 				{props.isLoading ? (
@@ -318,7 +320,8 @@ export const Observability = React.memo((props: Props) => {
 	const [serviceLevelObjectiveError, setServiceLevelObjectiveError] = useState<string>();
 	const [hasServiceLevelObjectives, setHasServiceLevelObjectives] = useState<boolean>(false);
 	const [expandedEntity, setExpandedEntity] = useState<string | undefined>();
-	const [pendingTelemetryCall, setPendingTelemetryCall] = useState<boolean>(true);
+	const [pendingServiceClickedTelemetryCall, setPendingServiceClickedTelemetryCall] =
+		useState<boolean>(false);
 	const [currentRepoId, setCurrentRepoId] = useMemoizedState<string | undefined>(undefined);
 	const [loadingGoldenMetrics, setLoadingGoldenMetrics] = useState<boolean>(false);
 	const [loadingServiceLevelObjectives, setLoadingServiceLevelObjectives] =
@@ -616,16 +619,20 @@ export const Observability = React.memo((props: Props) => {
 	const callServiceClickedTelemetry = () => {
 		console.debug("o11y: callServiceClickedTelemetry");
 		try {
-			let currentRepoErrors = observabilityErrors?.find(_ => _ && _.repoId === currentRepoId)
+			const currentRepoErrors = observabilityErrors?.find(_ => _ && _.repoId === currentRepoId)
 				?.errors;
-			let filteredCurrentRepoErrors = currentRepoErrors?.filter(_ => _.entityId === expandedEntity);
-			let filteredAssigments = observabilityAssignments?.filter(_ => _.entityId === expandedEntity);
+			const filteredCurrentRepoErrors = currentRepoErrors?.filter(
+				_ => _.entityId === expandedEntity
+			);
+			const filteredAssignments = observabilityAssignments?.filter(
+				_ => _.entityId === expandedEntity
+			);
 			const hasAnomalies =
 				observabilityAnomalies.errorRate.length > 0 ||
 				observabilityAnomalies.responseTime.length > 0;
 
 			const event = {
-				"Errors Listed": !_isEmpty(filteredCurrentRepoErrors) || !_isEmpty(filteredAssigments),
+				"Errors Listed": !_isEmpty(filteredCurrentRepoErrors) || !_isEmpty(filteredAssignments),
 				"SLOs Listed": hasServiceLevelObjectives,
 				"CLM Anomalies Listed": hasAnomalies,
 				"Vulnerabilities Listed": isVulnPresent,
@@ -634,11 +641,30 @@ export const Observability = React.memo((props: Props) => {
 			console.debug(`o11y: NR Service Clicked`, event);
 
 			HostApi.instance.track("NR Service Clicked", event);
-			setPendingTelemetryCall(false);
+			setPendingServiceClickedTelemetryCall(false);
 		} catch (ex) {
 			console.error(ex);
 		}
 	};
+
+	useEffect(() => {
+		if (
+			pendingServiceClickedTelemetryCall &&
+			!hasLoadedOnce &&
+			didMount &&
+			!loadingEntities &&
+			currentEntityAccounts
+		) {
+			setPendingServiceClickedTelemetryCall(false);
+			callServiceClickedTelemetry();
+		}
+	}, [
+		pendingServiceClickedTelemetryCall,
+		hasLoadedOnce,
+		didMount,
+		loadingEntities,
+		currentEntityAccounts,
+	]);
 
 	async function fetchObservabilityRepos(force: boolean, repoId?: string, entityGuid?: string) {
 		setLoadingEntities(true);
@@ -865,45 +891,12 @@ export const Observability = React.memo((props: Props) => {
 		if (entityGuid === expandedEntity) {
 			setExpandedEntity(undefined);
 		} else {
+			setTimeout(() => {
+				setPendingServiceClickedTelemetryCall(true);
+			}, 500);
 			setExpandedEntity(entityGuid);
 		}
-
-		setTimeout(() => {
-			setPendingTelemetryCall(true);
-		}, 500);
 	};
-
-	// Telemetry calls post clicking service and loading of errors
-	useEffect(() => {
-		console.debug(`o11y: useEffect (callServiceClickedTelemetry) 
-		didMount: ${didMount} 
-		pendingTelemetryCall: ${pendingTelemetryCall} 
-		expandedEntity: ${expandedEntity}
-		loadingObservabilityErrors: ${loadingObservabilityErrors} 
-		loadingAssignments: ${loadingAssignments}
-		calculatingAnomalies: ${calculatingAnomalies}
-		loadingServiceLevelObjectives: ${loadingServiceLevelObjectives}
-		`);
-		if (
-			didMount &&
-			pendingTelemetryCall &&
-			expandedEntity &&
-			!loadingObservabilityErrors &&
-			!loadingAssignments &&
-			!calculatingAnomalies &&
-			!loadingServiceLevelObjectives
-		) {
-			console.debug(`o11y: useEffect calling callServiceClickedTelemetry`);
-			callServiceClickedTelemetry();
-		}
-	}, [
-		didMount,
-		// pendingTelemetryCall, // Not enabled on purpose
-		loadingObservabilityErrors,
-		loadingAssignments,
-		calculatingAnomalies,
-		loadingServiceLevelObjectives,
-	]);
 
 	const handleClickCLMBroadcast = (entityGuid, e?) => {
 		if (e) {
@@ -1181,6 +1174,7 @@ export const Observability = React.memo((props: Props) => {
 																return (
 																	<>
 																		<PaneNodeName
+																			data-testid={`entity-name-${ea.entityGuid}`}
 																			title={
 																				<div
 																					style={{
@@ -1190,13 +1184,16 @@ export const Observability = React.memo((props: Props) => {
 																				>
 																					<HealthIcon color={alertSeverityColor} />
 																					<div>
-																						<span>{ea.entityName}</span>
+																						<span data-testid={`entity-name-${ea.entityGuid}`}>
+																							{ea.entityName}
+																						</span>
 																						<span
 																							className="subtle"
 																							style={{
 																								fontSize: "11px",
 																								verticalAlign: "bottom",
 																							}}
+																							data-testid={`entity-account-name-${ea.entityGuid}`}
 																						>
 																							{ea.accountName && ea.accountName.length > 25
 																								? ea.accountName.substr(0, 25) + "..."
@@ -1251,6 +1248,7 @@ export const Observability = React.memo((props: Props) => {
 																								recentAlertViolations={
 																									recentAlertViolations ? recentAlertViolations : {}
 																								}
+																								entityGuid={ea.entityGuid}
 																							/>
 																							{hasServiceLevelObjectives && (
 																								<ObservabilityServiceLevelObjectives

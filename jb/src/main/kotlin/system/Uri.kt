@@ -1,5 +1,9 @@
 package com.codestream.system
 
+import java.io.File
+import java.nio.file.Path
+import java.nio.file.Paths
+
 private enum class OS {
     WINDOWS, UNIX
 }
@@ -21,6 +25,7 @@ const val WINDOWS_NETWORK_FILE_BEGIN = "file:////"
 const val URI_PATH_SEP: Char = '/'
 const val URI_VALID_FILE_BEGIN: String = "file:///"
 const val VCS_FILE_BEGIN = "vcs:/"
+const val WSL_FROM_AGENT_BEGIN = "file://wsl%24"
 
 fun String.replaceReservedUriCharacters(): String = this.replace(" ", SPACE_ENCODED)
     .replace("#", HASH_ENCODED)
@@ -34,8 +39,10 @@ fun sanitizeURI(_uri: String?): String? {
         uri = uri.replace(VCS_FILE_BEGIN, URI_VALID_FILE_BEGIN)
     }
 
-    if (uri.startsWith(WINDOWS_NETWORK_FILE_BEGIN)) {
-        return uri.replace("file:////", "file://")
+    if (uri.startsWith(WSL_FROM_AGENT_BEGIN)) {
+        return uri.replace("file://wsl%24", "file://wsl$")
+    } else if (uri.startsWith(WINDOWS_NETWORK_FILE_BEGIN)) {
+        return uri.replace("file:////", "file://").replace("%24", "$")
     } else if (!uri.startsWith(URI_FILE_BEGIN)) {
         // LOG.warn("Malformed uri : " + uri)
         return uri // Probably not an uri
@@ -61,5 +68,23 @@ fun sanitizeURI(_uri: String?): String? {
             }
             reconstructed.append(uriCp.dropWhile { c -> c != URI_PATH_SEP }).toString()
         }
+    }
+}
+
+fun String?.isSameUri(uri: String): Boolean {
+    if (this == uri) return true
+    if (sanitizeURI(this) == uri) return true
+    if (this == sanitizeURI(uri)) return true
+    if (sanitizeURI(this) == sanitizeURI(uri)) return true
+    return false
+}
+
+fun String.toFile(): File {
+    return if (this.startsWith("file://wsl$/")) {
+        val filePathString = this.replace("file:", "")
+        val filePath: Path = Paths.get(filePathString)
+        filePath.toFile()
+    } else {
+        File(this)
     }
 }

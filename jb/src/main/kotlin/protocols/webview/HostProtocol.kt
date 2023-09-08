@@ -36,9 +36,7 @@ class Configs(
     val environment: String,
     val serverUrl: String,
     val email: String?,
-    val showHeadshots: Boolean,
     val debug: Boolean,
-    val showFeedbackSmiley: Boolean,
     val showGoldenSignalsInEditor: Boolean
 )
 class Services {

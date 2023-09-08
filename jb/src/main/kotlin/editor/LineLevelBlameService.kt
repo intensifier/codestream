@@ -151,7 +151,7 @@ private class BlameManager(private val editor: EditorImpl, private val iconsCach
     fun renderBlame() = ApplicationManager.getApplication().invokeLater {
         inlay?.dispose()
         inlay = null
-        if (!settingsService.showGitBlame) return@invokeLater
+//        if (!settingsService.showGitBlame) return@invokeLater
         val project = editor.project ?: return@invokeLater
         appDispatcher.launch {
             try {

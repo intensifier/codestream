@@ -26,6 +26,8 @@ if ($WhatIfPreference.IsPresent -eq $True) {
     Write-Host "would have run: 'git push'"
 }
 else {
+    iex "git fetch"
+    iex "git rebase" # try to eliminate race conditions when all builds are running simultaneously
     iex $gitCommand
     if ($LastExitCode -ne $null -and $LastExitCode -ne 0) {
 		Write-Error "Did you remember to cherry-pick the Auto Bump commit?"

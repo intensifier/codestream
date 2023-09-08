@@ -18,12 +18,9 @@ import { StatusBarController } from "./controllers/statusBarController";
 import { WebviewController } from "./controllers/webviewController";
 import { Logger, TraceLevel } from "./logger";
 import { CodeStreamCodeActionProvider } from "./providers/codeActionProvider";
-import { CodemarkCodeLensProvider } from "./providers/markerCodeLensProvider";
 import { CodemarkDecorationProvider } from "./providers/markerDecorationProvider";
 import { CodemarkPatchContentProvider } from "./providers/patchContentProvider";
-import { SelectionDecorationProvider } from "./providers/selectionDecorationProvider";
 import { SetServerUrlRequestType } from "@codestream/protocols/agent";
-import { BlameDecorationProvider } from "./providers/blameDecorationProvider";
 // import { WebviewSidebarActivator } from "./views/webviewSidebarActivator";
 
 export class Container {
@@ -55,16 +52,13 @@ export class Container {
 		context.subscriptions.push((this._notifications = new NotificationsController()));
 		context.subscriptions.push((this._commands = new Commands()));
 		context.subscriptions.push((this._codeActions = new CodeStreamCodeActionProvider()));
-		context.subscriptions.push((this._codeLens = new CodemarkCodeLensProvider()));
 		context.subscriptions.push((this._diffContents = new ReviewDiffContentProvider()));
 		context.subscriptions.push((this._gitContents = new GitContentProvider()));
 		context.subscriptions.push((this._markerDecorations = new CodemarkDecorationProvider()));
-		context.subscriptions.push((this._blameDecorations = new BlameDecorationProvider()));
 		context.subscriptions.push(
 			(this._instrumentableCodeLensController = new InstrumentableCodeLensController())
 		);
 		context.subscriptions.push(new CodemarkPatchContentProvider());
-		context.subscriptions.push((this._selectionDecoration = new SelectionDecorationProvider()));
 		context.subscriptions.push((this._statusBar = new StatusBarController()));
 
 		context.subscriptions.push((this._webview = new WebviewController(this._session, webviewLike)));
@@ -143,11 +137,6 @@ export class Container {
 		return this._codeActions;
 	}
 
-	private static _codeLens: CodemarkCodeLensProvider;
-	static get codeLens() {
-		return this._codeLens;
-	}
-
 	private static _commands: Commands;
 	static get commands() {
 		return this._commands;
@@ -181,11 +170,6 @@ export class Container {
 		return this._markerDecorations;
 	}
 
-	private static _blameDecorations: BlameDecorationProvider;
-	static get blameDecorations() {
-		return this._blameDecorations;
-	}
-
 	private static _instrumentableCodeLensController: InstrumentableCodeLensController;
 	static get instrumentableCodeLensController() {
 		return this._instrumentableCodeLensController;
@@ -194,11 +178,6 @@ export class Container {
 	private static _notifications: NotificationsController;
 	static get notifications() {
 		return this._notifications;
-	}
-
-	private static _selectionDecoration: SelectionDecorationProvider;
-	static get selectionDecoration() {
-		return this._selectionDecoration;
 	}
 
 	private static _statusBar: StatusBarController;
