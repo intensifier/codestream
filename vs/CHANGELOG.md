@@ -1,5 +1,11 @@
 # Change Log
 
+## [14.29.1] - 2023-09-12
+
+### Fixed
+
+- Fixes an issue loading CodeStream in Visual Studio 2019 due to invalid dependencies
+
 ## [14.29.0] - 2023-09-12
 
 ### Changed
