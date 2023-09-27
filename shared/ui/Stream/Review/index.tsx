@@ -81,7 +81,7 @@ import { Link } from "../Link";
 import { LocateRepoButton } from "../LocateRepoButton";
 import { MarkdownText } from "../MarkdownText";
 import Menu from "../Menu";
-import MessageInput, { AttachmentField } from "../MessageInput";
+import { MessageInput, AttachmentField } from "../MessageInput";
 import { RepliesToPost } from "../Posts/RepliesToPost";
 import { PRErrorBox } from "../PullRequestComponents";
 import { AddReactionIcon, Reactions } from "../Reactions";
@@ -387,10 +387,6 @@ export const BaseReviewMenu = (props: BaseReviewMenuProps) => {
 					HostApi.instance.send(FollowReviewRequestType, {
 						id: review.id,
 						value,
-					});
-					HostApi.instance.track("Notification Change", {
-						Change: `Review ${changeType}`,
-						"Source of Change": "Review menu",
 					});
 				},
 			},

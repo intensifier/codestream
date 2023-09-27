@@ -57,7 +57,6 @@ class CodeStreamProjectService(val project: Project) : Disposable {
         ApplicationManager.getApplication().invokeLater {
             initWindowVisibilityListener()
             initWindowFocusListener()
-            initUnreadsListener()
         }
         project.agentService?.onDidStart {
             val webViewService = project.webViewService ?: return@onDidStart
@@ -148,19 +147,6 @@ class CodeStreamProjectService(val project: Project) : Disposable {
                     }
                 }
             )
-        }
-    }
-
-    private fun initUnreadsListener() {
-        if (project.isDisposed) return
-        project.sessionService?.onUnreadsChanged {
-            ApplicationManager.getApplication().invokeLater {
-                toolWindow?.setIcon(if (it > 0) {
-                    IconLoader.getIcon("/images/codestream-unread.svg", this::class.java)
-                } else {
-                    IconLoader.getIcon("/images/codestream.svg", this::class.java)
-                })
-            }
         }
     }
 

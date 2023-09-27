@@ -13,6 +13,7 @@ git clone https://github.com/TeamCodeStream/codestream.git
   - Various workloads including:
     - Visual Studio extension development
     - .NET Framework 4.8
+    - .NET 5+ (to manage local/global tool installs)
     - Desktop Development with C++
 - [Git](https://git-scm.com/) >=2.32.0
 - [NodeJS](https://nodejs.org/en/) = 16.17.1
@@ -23,25 +24,10 @@ git clone https://github.com/TeamCodeStream/codestream.git
 
 The webview (shared/ui) and the agent (shared/agent) are js/node dependencies that must be built before running CodeStream for Visual Studio.
 
->NOTE: you will need an elevated prompt the first time you run the following commands to create various symlinks.
-
 1. From a terminal, where you have cloned the `codestream` repository, cd to `shared/agent` and execute the following command to build the agent from scratch:
 
    ```shell
    npm run build
-   ```
-
-   If you run into problems building the agent due to node/npm/node-gyp having issues locating the Visual Studio build tools, you may need to try the following:
-
-   Replace `2022` here with `2019`, depending on which version of VS you are using:
-
-   ```shell
-   npm config set msvs_version 2022
-   ```
-
-   ```shell
-   cd "C\Program Files\nodejs\node_modules\npm\node_modules\@npmcli\run-script"
-   npm install node-gyp@latest
    ```
 
 2. From a terminal, where you have cloned the `codestream` repository, cd to `vs` and execute the following command to rebuild shared/webview from scratch:
@@ -82,6 +68,22 @@ The `CodeStream.VisualStudio.CodeLens` project runs out of process from the main
 
 1. This project will run under the guise of a `ServiceHub` executable, and figuring out exactly which one is difficult. The easiest path (right now) is to add a `Debugger.Launch();` into the codebase for local development until we can instrument a better solution.
 1. The `ServiceHub` / `CodeLens` project will write its own log file to `%HOME%\AppData\Local\Temp\servicehub\logs` with `CodeLens` in the filename. Very useful for debugging.
+
+All of the C# code is formatted with [CSharpier (an OSS, opinionated code formatter)](https://csharpier.com/), and is triggered using a pre-commit git hook. To ensure this works correctly, you must -
+
+From a terminal, where you have cloned the `codestream` repository, cd to `vs/src` execute the following command:
+
+```shell
+dotnet tool install
+```
+
+You can also follow the instructions on the [CSharpier website to install an extension into your IDE](https://csharpier.com/docs/Editors) and set up CSharpier to automatically format each file on save (recommended).
+
+At any time, you can re-format any code you've made changes to by opening a terminal to where you cloned the `codestream` repository, cd to `vs/src` and execute the following command:
+
+```shell
+dotnet csharpier .
+```
 
 ### CodeStream LSP Agent
 

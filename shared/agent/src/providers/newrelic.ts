@@ -82,6 +82,7 @@ import {
 	GetServiceLevelTelemetryResponse,
 	GoldenMetricUnitMappings,
 	isNRErrorResponse,
+	LanguageAndVersionValidation,
 	MethodGoldenMetrics,
 	MethodLevelGoldenMetricQueryResult,
 	MetricTimesliceNameMapping,
@@ -103,6 +104,7 @@ import {
 	UpdateNewRelicOrgIdRequest,
 	UpdateNewRelicOrgIdResponse,
 	DidChangeCodelensesNotificationType,
+	AgentValidateLanguageExtensionRequestType,
 } from "@codestream/protocols/agent";
 import {
 	CSBitbucketProviderInfo,
@@ -153,6 +155,7 @@ import { ThirdPartyIssueProviderBase } from "./thirdPartyIssueProviderBase";
 import { ClmManager } from "./newrelic/clm/clmManager";
 import * as Dom from "graphql-request/dist/types.dom";
 import { makeHtmlLoggable } from "@codestream/utils/system/string";
+import semver from "semver";
 
 const ignoredErrors = [GraphqlNrqlTimeoutError];
 
@@ -183,6 +186,16 @@ function isHttpErrorResponse(ex: unknown): ex is HttpErrorResponse {
 }
 
 const ENTITY_CACHE_KEY = "entityCache";
+
+export const REQUIRED_AGENT_VERSIONS = {
+	go: "3.24.0",
+	java: "7.11.0",
+	".net": "10.2.0",
+	"node.js": "10.5.0",
+	php: "10.6.0 ",
+	python: "7.10.0.175",
+	ruby: "8.10.0 ",
+};
 
 export interface INewRelicProvider {
 	getProductUrl: () => string;
@@ -219,6 +232,7 @@ export class NewRelicProvider
 	private _newRelicUserId: number | undefined = undefined;
 	private _accountIds: number[] | undefined = undefined;
 	private _memoizedBuildRepoRemoteVariants: any;
+
 	private _clmSpanDataExistsCache = new Cache<ClmSpanData>({
 		defaultTtl: 120 * 1000,
 	});
@@ -950,34 +964,38 @@ export class NewRelicProvider
 						}
 					}
 				}
-				// const hasCodeLevelMetricSpanData = await this.checkHasCodeLevelMetricSpanData(
-				// 	hasRepoAssociation === true,
-				// 	uniqueEntities
-				// );
+				let mappedUniqueEntities = await Promise.all(
+					uniqueEntities.map(async entity => {
+						const languageAndVersionValidation = await this.languageAndVersionValidation(
+							entity,
+							request?.isVsCode
+						);
+
+						return {
+							accountId: entity.account?.id,
+							accountName: entity.account?.name || "Account",
+							entityGuid: entity.guid,
+							entityName: entity.name,
+							tags: entity.tags,
+							domain: entity.domain,
+							alertSeverity: entity?.alertSeverity,
+							url: `${this.productUrl}/redirect/entity/${entity.guid}`,
+							distributedTracingEnabled: this.hasStandardOrInfiniteTracing(entity),
+							languageAndVersionValidation: languageAndVersionValidation,
+						} as EntityAccount;
+					})
+				);
+				mappedUniqueEntities = mappedUniqueEntities.filter(Boolean);
+				mappedUniqueEntities.sort((a, b) =>
+					`${a?.accountName}-${a?.entityName}`.localeCompare(`${b?.accountName}-${b?.entityName}`)
+				);
 				response.repos?.push({
-					repoId: repo.id!,
+					repoId: repo.id,
 					repoName: folderName,
 					repoRemote: remote,
 					hasRepoAssociation,
 					hasCodeLevelMetricSpanData: true,
-					entityAccounts: uniqueEntities
-						.map(entity => {
-							return {
-								accountId: entity.account?.id,
-								accountName: entity.account?.name || "Account",
-								entityGuid: entity.guid,
-								entityName: entity.name,
-								tags: entity.tags,
-								domain: entity.domain,
-								alertSeverity: entity?.alertSeverity,
-								url: `${this.productUrl}/redirect/entity/${entity.guid}`,
-								distributedTracingEnabled: this.hasStandardOrInfiniteTracing(entity),
-							} as EntityAccount;
-						})
-						.filter(Boolean)
-						.sort((a, b) =>
-							`${a.accountName}-${a.entityName}`.localeCompare(`${b.accountName}-${b.entityName}`)
-						),
+					entityAccounts: mappedUniqueEntities,
 				});
 				ContextLogger.log(`getObservabilityRepos hasRepoAssociation=${hasRepoAssociation}`, {
 					repoId: repo.id,
@@ -1006,6 +1024,63 @@ export class NewRelicProvider
 
 		// Values can be either 'standard' for head-based sampling or 'infinite' for tail-based sampling.
 		return tracingValue === "standard" || tracingValue === "infinite";
+	}
+
+	private async languageAndVersionValidation(
+		entity?: Entity,
+		isVsCode?: boolean
+	): Promise<LanguageAndVersionValidation> {
+		const tags = entity?.tags || [];
+		const agentVersion = tags.find(tag => tag.key === "agentVersion");
+		const language = tags.find(tag => tag.key === "language");
+
+		if (!agentVersion || !language) {
+			return {};
+		}
+
+		const version = agentVersion?.values[0];
+		const languageValue = language?.values[0].toLowerCase();
+		let extensionValidationResponse;
+		if (isVsCode) {
+			extensionValidationResponse = await SessionContainer.instance().session.agent.sendRequest(
+				AgentValidateLanguageExtensionRequestType,
+				{
+					language: languageValue,
+				}
+			);
+		}
+
+		if (
+			languageValue === "go" ||
+			languageValue === "java" ||
+			languageValue === ".net" ||
+			languageValue === "node.js" ||
+			languageValue === "php" ||
+			languageValue === "python" ||
+			languageValue === "ruby"
+		) {
+			if (
+				version &&
+				semver.lt(
+					semver.coerce(version) || version,
+					semver.coerce(REQUIRED_AGENT_VERSIONS[languageValue]) ||
+						REQUIRED_AGENT_VERSIONS[languageValue]
+				)
+			) {
+				return {
+					language: language.values[0],
+					languageExtensionValidation: extensionValidationResponse?.languageValidationString
+						? extensionValidationResponse?.languageValidationString
+						: "VALID",
+					required: REQUIRED_AGENT_VERSIONS[languageValue],
+				};
+			}
+		}
+		return {
+			languageExtensionValidation: extensionValidationResponse?.languageValidationString
+				? extensionValidationResponse?.languageValidationString
+				: "VALID",
+		};
 	}
 
 	/**
@@ -1248,6 +1323,7 @@ export class NewRelicProvider
 						return { error: repositoryEntitiesResponse };
 					}
 					let gotoEnd = false;
+					const builtFromApplications: (RelatedEntity & { urlValue?: string })[] = [];
 					if (repositoryEntitiesResponse?.entities?.length) {
 						const entityFilter = request.filters?.find(_ => _.repoId === repo.id!);
 						for (const entity of repositoryEntitiesResponse.entities) {
@@ -1257,68 +1333,73 @@ export class NewRelicProvider
 								});
 								continue;
 							}
-							const relatedEntities = await this.findRelatedEntityByRepositoryGuid(entity.guid);
-
-							const builtFromApplications =
-								relatedEntities.actor.entity.relatedEntities.results.filter(
+							const relatedEntitiesResponse = await this.findRelatedEntityByRepositoryGuid(
+								entity.guid
+							);
+							const relatedEntities =
+								relatedEntitiesResponse.actor.entity.relatedEntities.results.filter(
 									r =>
 										r.type === "BUILT_FROM" &&
 										(entityFilter?.entityGuid
 											? r.source?.entity.guid === entityFilter.entityGuid
 											: true)
 								);
-
 							const urlValue = entity.tags?.find(_ => _.key === "url")?.values[0];
-							for (const application of builtFromApplications) {
+
+							for (const app of relatedEntities) {
 								if (
-									!application.source.entity.guid ||
-									!application.source.entity.account?.id ||
-									application.source.entity.domain !== "APM"
+									!builtFromApplications.find(_ => app.source.entity.guid === _.source.entity.guid)
 								) {
-									continue;
+									builtFromApplications.push({ ...app, urlValue });
 								}
+							}
+						}
 
-								const errorTraces = await this.findFingerprintedErrorTraces(
-									application.source.entity.account.id,
-									application.source.entity.guid,
-									application.source.entity.entityType,
-									request.timeWindow
-								);
-								for (const errorTrace of errorTraces) {
-									try {
-										const response = await this.getErrorGroupFromNameMessageEntity(
-											errorTrace.errorClass,
-											errorTrace.message,
-											errorTrace.entityGuid
-										);
+						for (const application of builtFromApplications) {
+							if (
+								!application.source.entity.guid ||
+								!application.source.entity.account?.id ||
+								application.source.entity.domain !== "APM"
+							) {
+								continue;
+							}
 
-										if (response && response.actor.errorsInbox.errorGroup) {
-											observabilityErrors.push({
-												entityId: errorTrace.entityGuid,
-												appName: errorTrace.appName,
-												errorClass: errorTrace.errorClass,
-												message: errorTrace.message,
-												remote: urlValue!,
-												errorGroupGuid: response.actor.errorsInbox.errorGroup.id,
-												occurrenceId: errorTrace.occurrenceId,
-												count: errorTrace.count,
-												lastOccurrence: errorTrace.lastOccurrence,
-												errorGroupUrl: response.actor.errorsInbox.errorGroup.url,
-											});
-											if (observabilityErrors.length > 4) {
-												gotoEnd = true;
-												break;
-											}
-										}
-									} catch (ex) {
-										ContextLogger.warn("internal error getErrorGroupGuid", {
-											ex: ex,
+							const errorTraces = await this.findFingerprintedErrorTraces(
+								application.source.entity.account.id,
+								application.source.entity.guid,
+								application.source.entity.entityType,
+								request.timeWindow
+							);
+							for (const errorTrace of errorTraces) {
+								try {
+									const response = await this.getErrorGroupFromNameMessageEntity(
+										errorTrace.errorClass,
+										errorTrace.message,
+										errorTrace.entityGuid
+									);
+
+									if (response && response.actor.errorsInbox.errorGroup) {
+										observabilityErrors.push({
+											entityId: errorTrace.entityGuid,
+											appName: errorTrace.appName,
+											errorClass: errorTrace.errorClass,
+											message: errorTrace.message,
+											remote: application.urlValue!,
+											errorGroupGuid: response.actor.errorsInbox.errorGroup.id,
+											occurrenceId: errorTrace.occurrenceId,
+											count: errorTrace.count,
+											lastOccurrence: errorTrace.lastOccurrence,
+											errorGroupUrl: response.actor.errorsInbox.errorGroup.url,
 										});
+										if (observabilityErrors.length > 4) {
+											gotoEnd = true;
+											break;
+										}
 									}
-								}
-
-								if (gotoEnd) {
-									break;
+								} catch (ex) {
+									ContextLogger.warn("internal error getErrorGroupGuid", {
+										ex: ex,
+									});
 								}
 							}
 

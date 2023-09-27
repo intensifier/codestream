@@ -30,6 +30,9 @@ namespace CodeStream.VisualStudio.Vsix.x64
         public const string guidWebViewPackageShortcutCmdSetString = "a72bbf5d-23d2-4a8a-939e-12c4651dd341";
         public static Guid guidWebViewPackageShortcutCmdSet = new Guid(guidWebViewPackageShortcutCmdSetString);
 
+        public const string NewRelicLogoGuidString = "70d5e386-b774-4566-96a7-233c0cb02142";
+        public static Guid NewRelicLogoGuid = new Guid(NewRelicLogoGuidString);
+
         public const string guidImagesString = "f2c8ef6d-3257-4e0a-8ae0-ef6298dd22c5";
         public static Guid guidImages = new Guid(guidImagesString);
 
@@ -65,6 +68,7 @@ namespace CodeStream.VisualStudio.Vsix.x64
         public const int AddCodemarkIssueCommandId = 0x0401;
         public const int CodeStreamShortcutCommands = 0x1023;
         public const int logo = 0x0001;
+        public const int empty1 = 0x0001;
         public const int auth = 0x0002;
         public const int user = 0x0003;
         public const int empty4 = 0x0004;

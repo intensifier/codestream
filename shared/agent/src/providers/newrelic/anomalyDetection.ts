@@ -43,8 +43,7 @@ export class AnomalyDetector {
 	private _releaseBased = false;
 
 	async execute(): Promise<GetObservabilityAnomaliesResponse> {
-		const benchmarkMetrics = await this.getBenchmarkSampleSizesMetric();
-		const languageSupport = this.getLanguageSupport(benchmarkMetrics);
+		const languageSupport = await this.getLanguageSupport();
 		if (!languageSupport) {
 			return {
 				responseTime: [],
@@ -54,6 +53,7 @@ export class AnomalyDetector {
 			};
 		}
 
+		const benchmarkMetrics = await this.getBenchmarkSampleSizesMetric(languageSupport);
 		const spanFilter = this.getSpanFilter(languageSupport);
 		const benchmarkSpans = await this.getBenchmarkSampleSizesSpans(spanFilter);
 		// Used to determine metric validity
@@ -233,10 +233,10 @@ export class AnomalyDetector {
 		return this.runNrql<SpanWithCodeAttrs>(query);
 	}
 
-	private async getBenchmarkSampleSizesMetric() {
+	private async getBenchmarkSampleSizesMetric(languageSupport: LanguageSupport) {
 		const benchmarkSampleSizesMetric = await this.getSampleSizeMetric(
 			this._benchmarkSampleSizeTimeFrame,
-			"metricTimesliceName IS NOT NULL"
+			this.getMetricFilter(languageSupport)
 		);
 		return benchmarkSampleSizesMetric;
 	}
@@ -658,23 +658,32 @@ export class AnomalyDetector {
 		}
 	}
 
-	private getLanguageSupport(benchmarkMetrics: NameValue[]): LanguageSupport | undefined {
-		for (const metric of benchmarkMetrics) {
-			if (metric.name.indexOf("Java/") === 0) {
-				return new JavaLanguageSupport();
-			}
-			if (metric.name.indexOf("Nodejs/") === 0) {
-				return new JavaScriptLanguageSupport();
-			}
-			if (metric.name.indexOf("Ruby/") === 0 || metric.name.indexOf("RubyVM/") === 0) {
-				return new RubyLanguageSupport();
-			}
-			if (metric.name.indexOf("DotNet/") === 0) {
-				return new CSharpLanguageSupport();
-			}
-			if (metric.name.indexOf("Python/") === 0) {
-				return new PythonLanguageSupport();
-			}
+	private async getLanguageSupport(): Promise<LanguageSupport | undefined> {
+		const entity = await this.getEntityAccount();
+		const tags = entity?.tags || [];
+		const languageTag = tags.find(tag => tag.key === "language");
+		const languageValue = languageTag?.values[0].toLowerCase();
+
+		if (languageValue === "java") {
+			return new JavaLanguageSupport();
+		}
+		if (languageValue === "nodejs") {
+			return new JavaScriptLanguageSupport();
+		}
+		if (languageValue === "ruby") {
+			return new RubyLanguageSupport();
+		}
+		if (languageValue === "dotnet") {
+			return new CSharpLanguageSupport();
+		}
+		if (languageValue === "python") {
+			return new PythonLanguageSupport();
+		}
+		if (languageValue === "go") {
+			return new GoLanguageSupport();
+		}
+		if (languageValue === "php") {
+			return new PhpLanguageSupport();
 		}
 
 		return undefined;
@@ -1005,6 +1014,122 @@ class PythonLanguageSupport implements LanguageSupport {
 		const errorPrefixRe = /^Errors\/WebTransaction\/Function\//;
 		const functionRe = /^Function\//;
 		return name.replace(errorPrefixRe, "").replace(functionRe, "");
+	}
+}
+class GoLanguageSupport implements LanguageSupport {
+	get language() {
+		return "go";
+	}
+
+	get metricNrqlPrefixes() {
+		return ["WebTransaction/Go"];
+	}
+
+	get spanNrqlPrefixes() {
+		return ["WebTransaction/Go"];
+	}
+
+	filterMetrics(metrics: NameValue[], benchmarkSpans: SpanWithCodeAttrs[]): NameValue[] {
+		const errorPrefixRe = /^Errors\//;
+		return metrics.filter(m => {
+			const name = m.name.replace(errorPrefixRe, "");
+			return benchmarkSpans.find(s => s.name === name && s.codeFunction);
+		});
+	}
+
+	codeAttrsFromName(name: string): CodeAttributes {
+		const errorPrefixRe = /^Errors\//;
+		const normalizedName = name.replace(errorPrefixRe, "");
+		return {
+			codeNamespace: "",
+			codeFunction: normalizedName,
+		};
+	}
+
+	codeAttrs(name: string, benchmarkSpans: SpanWithCodeAttrs[]): CodeAttributes {
+		const errorPrefixRe = /^Errors\/WebTransaction\//;
+		name = name.replace(errorPrefixRe, "");
+		const span = benchmarkSpans.find(_ => _.name === name);
+		if (span && span.codeFunction) {
+			return {
+				codeFilepath: span.codeFilepath,
+				codeNamespace: span.codeNamespace,
+				codeFunction: span.codeFunction,
+			};
+		}
+		return this.codeAttrsFromName(name);
+	}
+
+	displayName(codeAttrs: CodeAttributes, name: string) {
+		const errorPrefixRe = /^Errors\/WebTransaction\/Function\//;
+		const functionRe = /^Function\//;
+		return name.replace(errorPrefixRe, "").replace(functionRe, "");
+	}
+}
+
+class PhpLanguageSupport implements LanguageSupport {
+	get language() {
+		return "php";
+	}
+
+	get metricNrqlPrefixes() {
+		return ["WebTransaction", "OtherTransaction"];
+	}
+
+	get spanNrqlPrefixes() {
+		return ["Custom"];
+	}
+
+	filterMetrics(metrics: NameValue[], benchmarkSpans: SpanWithCodeAttrs[]): NameValue[] {
+		const errorPrefixRe = /^Errors\//;
+		const webTransactionPrefixRe = /^WebTransaction\/Action\//;
+		const otherTransactionPrefixRe = /^OtherTransaction\/Action\//;
+		const customPrefix = "Custom/";
+		return metrics.filter(m => {
+			const spanName = m.name
+				.replace(errorPrefixRe, "")
+				.replace(webTransactionPrefixRe, customPrefix)
+				.replace(otherTransactionPrefixRe, customPrefix)
+				.replace("->", "::");
+
+			return benchmarkSpans.find(s => s.name === spanName && s.codeFunction);
+		});
+	}
+
+	codeAttrsFromName(name: string): CodeAttributes {
+		const errorPrefixRe = /^Errors\//;
+		const normalizedName = name.replace(errorPrefixRe, "");
+		return {
+			codeNamespace: "",
+			codeFunction: normalizedName,
+		};
+	}
+
+	codeAttrs(name: string, benchmarkSpans: SpanWithCodeAttrs[]): CodeAttributes {
+		const errorPrefixRe = /^Errors\/WebTransaction\//;
+		name = name.replace(errorPrefixRe, "");
+		const webTransactionPrefixRe = /^WebTransaction\/Action\//;
+		const otherTransactionPrefixRe = /^OtherTransaction\/Action\//;
+		const customPrefix = "Custom/";
+		const spanName = name
+			.replace(webTransactionPrefixRe, customPrefix)
+			.replace(otherTransactionPrefixRe, customPrefix)
+			.replace("->", "::");
+		const span = benchmarkSpans.find(_ => _.name === spanName);
+		if (span && span.codeFunction) {
+			return {
+				codeFilepath: span.codeFilepath,
+				codeNamespace: span.codeNamespace,
+				codeFunction: span.codeFunction,
+			};
+		}
+		return this.codeAttrsFromName(name);
+	}
+
+	displayName(codeAttrs: CodeAttributes, name: string) {
+		const webTransactionPrefixRe = /^WebTransaction\/Action\//;
+		const otherTransactionPrefixRe = /^OtherTransaction\/Action\//;
+		return name.replace(webTransactionPrefixRe, "").replace(otherTransactionPrefixRe, "");
 	}
 }
 

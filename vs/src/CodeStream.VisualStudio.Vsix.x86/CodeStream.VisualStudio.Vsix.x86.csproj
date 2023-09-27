@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="15.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup>
     <TargetVsixContainerName>codestream-vs.vsix</TargetVsixContainerName>
@@ -97,11 +97,6 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
-    <Content Include="..\resources\assets\codestream.png">
-      <Link>resources\assets\codestream.png</Link>
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-      <IncludeInVSIX>true</IncludeInVSIX>
-    </Content>
     <Content Include="..\resources\assets\dark\add.svg">
       <Link>resources\assets\dark\add.svg</Link>
     </Content>
@@ -251,6 +246,16 @@
     </Content>
     <Content Include="..\resources\assets\light\review.svg">
       <Link>resources\assets\light\review.svg</Link>
+    </Content>
+    <Content Include="..\resources\assets\new-relic-logo-small.png">
+      <Link>resources\assets\new-relic-logo-small.png</Link>
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <IncludeInVSIX>true</IncludeInVSIX>
+    </Content>
+    <Content Include="..\resources\assets\new-relic-logo.png">
+      <Link>resources\assets\new-relic-logo.png</Link>
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <IncludeInVSIX>true</IncludeInVSIX>
     </Content>
     <Content Include="..\resources\webview\index.js">
       <Link>webview\index.js</Link>

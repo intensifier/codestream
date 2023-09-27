@@ -1,10 +1,10 @@
 # New Relic CodeStream
 
-Shift left by making code performance, code quality and code discussion part of the earliest stages of the development process. 
+Shift left by making code performance part of the earliest stages of the development process. 
 
 - Get performance data for individual methods in the code, including notifications about poorly performing methods.
 - Get actionable information, such as errors, vulnerabilities and non-compliant SLOs, for the services built from your code.
-- Discuss any block of code, with options for sharing to Slack or Teams, or creating a ticket on Jira, Trello and many other issue trackers.
+- Investigate errors more quickly by stepping through the stack trace and collaborating with teammates.
 
 ### Integrations
 
@@ -26,7 +26,7 @@ See performance data, at the method level, right in your editor. Always-on view 
 
 Discover errors happening in the code you’re responsible for. Quickly step through the stack trace, with CodeStream automatically taking you to the correct file and line number, then bring relevant teammates into the discussion so that you can resolve the issue as quickly as possible.
 
-![Investigate Errors](https://raw.githubusercontent.com/TeamCodeStream/codestream/develop/images/animated/Observability-VSC.gif)
+![Investigate Errors](https://raw.githubusercontent.com/TeamCodeStream/CodeStream/develop/images/marketplace-vsc-error.png)
 
 # Application Performance Monitoring (APM)
 
@@ -34,17 +34,10 @@ Get an in-IDE view of how the services built from your code are performing, in a
 
 ![Application Performance Monitoring](https://raw.githubusercontent.com/TeamCodeStream/CodeStream/develop/images/marketplace-vsc-slt.png)
 
-# Simplified Code Discussion
+# Don't have New Relic? 
 
-Rather than copying & pasting, just select code in your editor and start a discussion that teammates can participate in from their IDE, their email client or Slack/Teams. CodeStream automatically builds a knowledge base for your team by capturing these discussions that currently get lost in Slack threads and email chains, and saving them alongside the code that they refer to. The whole team, including future members of the team, gets the benefit of working from an annotated codebase.
-
-![Code Discussion](https://raw.githubusercontent.com/TeamCodeStream/CodeStream/develop/images/marketplace-vsc-discuss.gif)
+Become a hands-on observability practitioner by [creating a free account](https://newrelic.com/signup?utm_source=codestream&utm_medium=referral&utm_campaign=global-ever-green-ide-marketplace). Your free account includes 100 GB/month of free data ingestion, one free full-platform user, and unlimited free basic users. Learn how engineering teams are using New Relic free tier to monitor their stack.
 
 # Help & Feedback
 
-Check out the [user guide](https://docs.newrelic.com/docs/codestream/) for more information on getting started with CodeStream. Please follow [@teamcodestream](http://twitter.com/teamcodestream) for product updates and to share feedback and questions. You can also email us at codestream@newrelic.com.
-
-<p align="center">
-  <br />
-  <a title="Learn more about CodeStream" href="https://codestream.com?utm_source=vscmarket&utm_medium=banner&utm_campaign=codestream"><img src="https://alt-images.codestream.com/codestream_logo_vscmarketplace.png" alt="CodeStream Logo" /></a>
-</p>
+Check out the [user guide](https://docs.newrelic.com/docs/codestream/) for more information on getting started with New Relic CodeStream. Please follow [@newrelic](http://twitter.com/newrelic) for product updates and to share feedback and questions. You can also email us at codestream@newrelic.com.

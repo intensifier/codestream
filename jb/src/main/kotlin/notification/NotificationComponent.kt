@@ -31,7 +31,7 @@ import kotlinx.coroutines.launch
 const val CODESTREAM_NOTIFICATION_GROUP_ID = "CodeStream"
 const val CODESTREAM_PRIORITY_NOTIFICATION_GROUP_ID = "CodeStream priority"
 
-private val icon = IconLoader.getIcon("/images/codestream-unread.svg", NotificationComponent::class.java)
+private val icon = IconLoader.getIcon("/images/codestream.svg", NotificationComponent::class.java)
 private val notificationGroup =
     NotificationGroup(
         CODESTREAM_NOTIFICATION_GROUP_ID,

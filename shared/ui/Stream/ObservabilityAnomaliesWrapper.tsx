@@ -1,4 +1,7 @@
-import { GetObservabilityAnomaliesResponse } from "@codestream/protocols/agent";
+import {
+	GetObservabilityAnomaliesResponse,
+	LanguageAndVersionValidation,
+} from "@codestream/protocols/agent";
 import React, { useState } from "react";
 import { Row } from "./CrossPostIssueControls/IssuesPane";
 import Icon from "./Icon";
@@ -21,14 +24,16 @@ import {
 	MissingRubyExtension,
 	RubyPluginLanguageServer,
 } from "./MethodLevelTelemetry/MissingExtension";
+import { WarningBoxRoot } from "./WarningBox";
+
 interface Props {
 	observabilityAnomalies: GetObservabilityAnomaliesResponse;
 	observabilityRepo: any;
-	// observabilityAssignments: any;
 	entityGuid: string;
 	noAccess?: string;
 	calculatingAnomalies?: boolean;
 	distributedTracingEnabled?: boolean;
+	languageAndVersionValidation?: LanguageAndVersionValidation;
 }
 
 export const ObservabilityAnomaliesWrapper = React.memo((props: Props) => {
@@ -56,8 +61,8 @@ export const ObservabilityAnomaliesWrapper = React.memo((props: Props) => {
 			: `${totalAnomalyArray?.length} Anomalies`;
 
 	let missingExtension;
-	if (!_isEmpty(derivedState.currentMethodLevelTelemetry?.error?.type)) {
-		switch (derivedState.currentMethodLevelTelemetry?.error?.type) {
+	if (!_isEmpty(props.languageAndVersionValidation?.languageExtensionValidation)) {
+		switch (props.languageAndVersionValidation?.languageExtensionValidation) {
 			case "NO_RUBY_VSCODE_EXTENSION":
 				missingExtension = <MissingRubyExtension sidebarView />;
 				break;
@@ -81,6 +86,31 @@ export const ObservabilityAnomaliesWrapper = React.memo((props: Props) => {
 				break;
 		}
 	}
+
+	const showAgentWarning =
+		!_isEmpty(props.languageAndVersionValidation?.language) &&
+		!_isEmpty(props.languageAndVersionValidation?.required);
+	const showDistributedTracingWarning = !showAgentWarning && !props.distributedTracingEnabled;
+	const showExtensionWarning =
+		!showDistributedTracingWarning &&
+		!_isEmpty(props.languageAndVersionValidation?.languageExtensionValidation) &&
+		props.languageAndVersionValidation?.languageExtensionValidation !== "VALID";
+
+	// useEffect(() => {
+	// 	if (!_isEmpty(props.languageAndVersionValidation)) {
+	// 		HostApi.instance.track("CLM Blocked", {
+	// 			cause: "Unsupported Agent",
+	// 		});
+	// 	}
+	// }, [props.languageAndVersionValidation]);
+
+	// useEffect(() => {
+	// 	if (!props.distributedTracingEnabled) {
+	// 		HostApi.instance.track("CLM Blocked", {
+	// 			cause: "DT Not Enabled",
+	// 		});
+	// 	}
+	// }, [props.distributedTracingEnabled]);
 
 	return (
 		<>
@@ -133,35 +163,68 @@ export const ObservabilityAnomaliesWrapper = React.memo((props: Props) => {
 				</>
 			)}
 
-			{/* Currently surpressing the DT warning, subject to change */}
-			{/* {expanded && !props.distributedTracingEnabled && !props.calculatingAnomalies && (
+			{/* Agent Version Warning */}
+			{expanded && !props.calculatingAnomalies && showAgentWarning && (
+				<>
+					{props.languageAndVersionValidation?.language &&
+						props.languageAndVersionValidation?.required && (
+							<Row
+								style={{
+									padding: "0px 0px 0px 0px",
+								}}
+								className={"pr-row"}
+							>
+								<span style={{ marginLeft: "2px", whiteSpace: "normal" }}>
+									<WarningBoxRoot style={{ margin: "0px 1px 0px 0px" }}>
+										<Icon name="alert" className="alert" />
+										<div className="message">
+											<div>
+												Requires {props.languageAndVersionValidation?.language} agent version{" "}
+												{props.languageAndVersionValidation?.required} or higher.
+											</div>
+										</div>
+									</WarningBoxRoot>
+								</span>
+							</Row>
+						)}
+				</>
+			)}
+
+			{/* Distrubuted Tracing Warning */}
+			{expanded && !props.calculatingAnomalies && showDistributedTracingWarning && (
 				<Row
 					style={{
-						padding: "2px 10px 2px 40px",
+						padding: "0px 0px 0px 0px",
 					}}
 					className={"pr-row"}
 				>
 					<span style={{ marginLeft: "2px", whiteSpace: "normal" }}>
-						Enable{" "}
-						<Link href="https://docs.newrelic.com/docs/distributed-tracing/concepts/quick-start/">
-							distributed tracing
-						</Link>{" "}
-						for this service to see code-level metrics.
+						<WarningBoxRoot style={{ margin: "0px 1px 0px 0px" }}>
+							<Icon name="alert" className="alert" />
+							<div className="message">
+								<div>
+									Enable{" "}
+									<Link href="https://docs.newrelic.com/docs/distributed-tracing/concepts/quick-start/">
+										distributed tracing
+									</Link>{" "}
+									for this service to see code-level metrics.
+								</div>
+							</div>
+						</WarningBoxRoot>
 					</span>
-				</Row> 
-			)}*/}
+				</Row>
+			)}
 
-			{expanded && missingExtension && !props.calculatingAnomalies && (
-				<>
-					<Row
-						style={{
-							padding: "2px 10px 2px 40px",
-						}}
-						className={"pr-row"}
-					>
-						<span style={{ marginLeft: "2px", whiteSpace: "normal" }}>{missingExtension}</span>
-					</Row>
-				</>
+			{/* Extension Warning */}
+			{expanded && !props.calculatingAnomalies && showExtensionWarning && (
+				<Row
+					style={{
+						padding: "0px 0px 0px 0px",
+					}}
+					className={"pr-row"}
+				>
+					<span style={{ marginLeft: "2px", whiteSpace: "normal" }}>{missingExtension}</span>
+				</Row>
 			)}
 
 			{expanded &&
@@ -199,33 +262,36 @@ export const ObservabilityAnomaliesWrapper = React.memo((props: Props) => {
 							</div>
 						)}
 
-						{!props.calculatingAnomalies && (
-							<>
-								<ObservabilityAnomaliesGroup
-									observabilityAnomalies={props.observabilityAnomalies.errorRate}
-									observabilityRepo={props.observabilityRepo}
-									entityGuid={props.entityGuid}
-									title="Error Rate Increase"
-									detectionMethod={props.observabilityAnomalies.detectionMethod}
-								/>
-								<ObservabilityAnomaliesGroup
-									observabilityAnomalies={props.observabilityAnomalies.responseTime}
-									observabilityRepo={props.observabilityRepo}
-									entityGuid={props.entityGuid}
-									title="Average Duration Increase"
-									detectionMethod={props.observabilityAnomalies.detectionMethod}
-								/>
-								<ObservabilityAnomaliesGroup
-									observabilityAnomalies={props.observabilityAnomalies.allOtherAnomalies || []}
-									observabilityRepo={props.observabilityRepo}
-									entityGuid={props.entityGuid}
-									title="All other methods"
-									noAnomaly={true}
-									collapseDefault={true}
-									detectionMethod={props.observabilityAnomalies.detectionMethod}
-								/>
-							</>
-						)}
+						{!props.calculatingAnomalies &&
+							!showAgentWarning &&
+							!showDistributedTracingWarning &&
+							!showExtensionWarning && (
+								<>
+									<ObservabilityAnomaliesGroup
+										observabilityAnomalies={props.observabilityAnomalies.errorRate}
+										observabilityRepo={props.observabilityRepo}
+										entityGuid={props.entityGuid}
+										title="Error Rate Increase"
+										detectionMethod={props.observabilityAnomalies.detectionMethod}
+									/>
+									<ObservabilityAnomaliesGroup
+										observabilityAnomalies={props.observabilityAnomalies.responseTime}
+										observabilityRepo={props.observabilityRepo}
+										entityGuid={props.entityGuid}
+										title="Average Duration Increase"
+										detectionMethod={props.observabilityAnomalies.detectionMethod}
+									/>
+									<ObservabilityAnomaliesGroup
+										observabilityAnomalies={props.observabilityAnomalies.allOtherAnomalies || []}
+										observabilityRepo={props.observabilityRepo}
+										entityGuid={props.entityGuid}
+										title="All other methods"
+										noAnomaly={true}
+										collapseDefault={true}
+										detectionMethod={props.observabilityAnomalies.detectionMethod}
+									/>
+								</>
+							)}
 					</>
 				))}
 		</>

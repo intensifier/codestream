@@ -76,10 +76,15 @@ export class FossaProvider extends ThirdPartyCodeAnalyzerProviderBase<CSFossaPro
 		page: number,
 		sort?: string
 	): string {
+		if (!sort) {
+			sort = "package_asc";
+		}
+		const count = 1000;
 		return `/issues?${qs.stringify({
 			category,
 			page,
 			sort,
+			count,
 		})}&scope[id]=${encodeURIComponent(projectId)}&scope[type]=${type}`;
 	}
 
@@ -125,7 +130,7 @@ export class FossaProvider extends ThirdPartyCodeAnalyzerProviderBase<CSFossaPro
 				cacheKey: this._fossaProjectCacheKey,
 			});
 		} else {
-			const projsResponse = await this.get<GetFossaProjectsResponse>("/projects");
+			const projsResponse = await this.get<GetFossaProjectsResponse>("/projects?page=1&count=1000");
 			if (projsResponse.body) {
 				this._fossaProjectCache.put(this._fossaProjectCacheKey, projsResponse.body);
 				projects = projsResponse.body.projects;

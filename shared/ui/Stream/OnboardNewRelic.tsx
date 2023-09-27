@@ -327,11 +327,11 @@ export const OnboardNewRelic = React.memo(function OnboardNewRelic() {
 								<h1>
 									<NewRelicLogo />
 									<br />
-									Welcome to New Relic
+									Instrument your app
 								</h1>
 								<p className="explainer">
-									New Relic helps engineers create more perfect software. Instrument, analyze,
-									troubleshoot, and optimize your entire software stack.
+									New Relic's APM agent helps developers make data-driven decisions. Improve
+									system performance, and your customers' experience.
 								</p>
 								<CenterRow>
 									<Button variant="new-relic" size="xl" onClick={() => setStep(1)}>

@@ -1,5 +1,28 @@
 # Change Log
 
+## [14.30.0] - 2023-09-27
+
+### Added
+
+- Adds anomaly detection for code-level metrics for PHP and Go
+- Adds checks to the Code-Level Metrics section to ensure proper version of the APM agent, enablement of distributed tracing, and the presence of the appropriate language extension
+
+### Changed
+
+- Update UI to replace OBSERVABILITY heading with repo name
+- Update CodeStream logo to use New Relic emblem
+
+### Fixed
+
+- Fixes an issue with namespace parsing due to changes in the C# extension for VS Code
+- Fixes an issue where errors were duplicated in the Errors section when the service was associated with multiple repos
+
+## [14.29.1] - 2023-09-13
+
+### Fixed
+
+- Addresses [#1746](https://github.com/TeamCodeStream/codestream/issues/1746) &mdash; CodeStream panel fails to load in VS Code Insiders
+
 ## [14.29.0] - 2023-09-12
 
 ### Changed

@@ -1,5 +1,21 @@
 # Change Log
 
+## [14.30.0] - 2023-09-27
+
+### Added
+
+- Adds anomaly detection for code-level metrics for PHP and Go
+- Adds checks to the Code-Level Metrics section to ensure proper version of the APM agent and the enablement of distributed tracing
+
+### Changed
+
+- Update UI to replace OBSERVABILITY heading with repo name
+- Update CodeStream logo to use New Relic emblem
+
+### Fixed
+
+- Fixes an issue where errors were duplicated in the Errors section when the service was associated with multiple repos
+
 ## [14.29.1] - 2023-09-12
 
 ### Fixed

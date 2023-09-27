@@ -104,7 +104,7 @@
         <action id="CodeStream.TestUrlHandler" class="com.codestream.actions.TestUrlHandler"
                 text="CodeStream: Test URL handler"/>
 
-        <group id="com.codestream.Actions" popup="true" text="CodeStream" icon="/images/codestream-color.svg"
+        <group id="com.codestream.Actions" popup="true" text="CodeStream" icon="/images/codestream.svg"
                class="com.codestream.actions.CodeStreamActionGroup">
             <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="EditorPopupMenu2"/>
             <action id="CodeStream.AddComment" class="com.codestream.actions.AddComment" text="Add _Comment"

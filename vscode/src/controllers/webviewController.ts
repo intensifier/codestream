@@ -160,10 +160,7 @@ export class WebviewController implements Disposable {
 
 	private readonly _notifyActiveEditorChangedDebounced: (e: TextEditor | undefined) => void;
 
-	constructor(
-		public readonly session: CodeStreamSession,
-		private _webview?: WebviewLike
-	) {
+	constructor(public readonly session: CodeStreamSession, private _webview?: WebviewLike) {
 		this._disposable = Disposable.from(
 			this.session.onDidChangeSessionStatus(this.onSessionStatusChanged, this),
 			window.onDidChangeActiveTextEditor(this.onActiveEditorChanged, this),
@@ -887,7 +884,7 @@ export class WebviewController implements Disposable {
 		codeFunction: string,
 		language: string
 	) {
-		if (language === "csharp") {
+		if (language === "csharp" || language === "go") {
 			const symbols = await commands.executeCommand<SymbolInformation[]>(
 				BuiltInCommands.ExecuteWorkspaceSymbolprovider,
 				`${codeNamespace}.${codeFunction}`
@@ -911,6 +908,26 @@ export class WebviewController implements Disposable {
 			const symbols: SymbolInformation[] = await commands.executeCommand(
 				"vscode.executeWorkspaceSymbolProvider",
 				codeNamespace + "#" + codeFunction
+			);
+			if (symbols?.length) {
+				const symbol = symbols[0];
+
+				void (await Editor.revealRange(
+					symbol.location.uri,
+					Editor.fromSerializableRange(symbol.location.range),
+					this._lastEditor,
+					{
+						preserveFocus: false,
+						atTop: false
+					}
+				));
+			}
+		}
+
+		if (language === "php") {
+			const symbols: SymbolInformation[] = await commands.executeCommand(
+				"vscode.executeWorkspaceSymbolProvider",
+				codeNamespace + "::" + codeFunction
 			);
 			if (symbols?.length) {
 				const symbol = symbols[0];

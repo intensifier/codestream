@@ -67,7 +67,7 @@
 		<Buttons>
 			<Button guid="guidWebViewPackageCmdSet" id="WebViewToggleCommandId" priority="0x0101" type="Button">
 				<Parent guid="guidWebViewPackageCmdSet" id="ToolbarGroup100" />
-				<Icon guid="guidImages" id="logo" />
+				<Icon guid="NewRelicLogoGuid" id="logo" />
 				<CommandFlag>DontCache</CommandFlag>
 				<CommandFlag>IconAndText</CommandFlag>
 				<CommandFlag>TextChanges</CommandFlag>
@@ -144,7 +144,7 @@
 			</Button>
 
 			<Button guid="guidWebViewPackageShortcutCmdSet" id="AddCodemarkCommentCommandId" type="Button">
-				<Icon guid="guidImages" id="logo" />
+				<Icon guid="guidImagesCommands" id="comment" />
 				<CommandFlag>DynamicVisibility</CommandFlag>
 				<CommandFlag>DefaultInvisible</CommandFlag>
 				<Strings>
@@ -153,8 +153,8 @@
 					<LocCanonicalName>CodeStream.AddCommentShortcut</LocCanonicalName>
 				</Strings>
 			</Button>
-
 			<Button guid="guidWebViewPackageShortcutCmdSet" id="AddCodemarkIssueCommandId" type="Button">
+				<Icon guid="guidImagesCommands" id="issue" />
 				<CommandFlag>DynamicVisibility</CommandFlag>
 				<CommandFlag>DefaultInvisible</CommandFlag>
 				<Strings>
@@ -165,7 +165,7 @@
 			</Button>
 
 			<Button guid="guidVSPackageCommandTopMenuCmdSet" id="CodeStreamTopLevelMenuToggleCommand" type="Button">
-				<Icon guid="guidImages" id="logo" />
+				<Icon guid="NewRelicLogoGuid" id="logo" />
 				<CommandFlag>DontCache</CommandFlag>
 				<CommandFlag>IconAndText</CommandFlag>
 				<CommandFlag>TextChanges</CommandFlag>
@@ -188,7 +188,8 @@
 		</Buttons>
 
 		<Bitmaps>
-			<Bitmap guid="guidImages" href="..\resources\Sprites.png" usedList="logo, auth, user, empty4, empty5, empty6" />
+			<Bitmap guid="NewRelicLogoGuid" href="..\resources\assets\new-relic-logo-small.png" usedList="logo"/>
+			<Bitmap guid="guidImages" href="..\resources\Sprites.png" usedList="empty1, auth, user, empty4, empty5, empty6" />
 			<Bitmap guid="guidImagesCommands" href="..\resources\CommandsSprites.png" usedList="comment, issue" />
 		</Bitmaps>
 	</Commands>
@@ -301,14 +302,19 @@
 			<IDSymbol name="AddCodemarkIssueCommandId" value="0x0401" />
 		</GuidSymbol>
 
-		<GuidSymbol name="guidImages" value="{f2c8ef6d-3257-4e0a-8ae0-ef6298dd22c5}" >
+		<GuidSymbol name="NewRelicLogoGuid" value="{70D5E386-B774-4566-96A7-233C0CB02142}" >
 			<IDSymbol name="logo" value="1" />
+		</GuidSymbol>
+
+		<GuidSymbol name="guidImages" value="{f2c8ef6d-3257-4e0a-8ae0-ef6298dd22c5}" >
+			<IDSymbol name="empty1" value="1" />
 			<IDSymbol name="auth" value="2" />
 			<IDSymbol name="user" value="3" />
 			<IDSymbol name="empty4" value="4" />
 			<IDSymbol name="empty5" value="5" />
 			<IDSymbol name="empty6" value="6" />
 		</GuidSymbol>
+
 		<GuidSymbol name="guidImagesCommands" value="{C438D577-2A1C-4CEE-8B33-E056C2281595}" >
 			<IDSymbol name="comment" value="1" />
 			<IDSymbol name="issue" value="2" />

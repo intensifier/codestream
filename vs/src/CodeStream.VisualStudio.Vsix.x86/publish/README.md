@@ -1,10 +1,10 @@
 # New Relic CodeStream
 
-Shift left by making code performance, code quality and code discussion part of the earliest stages of the development process. 
+Shift left by making code performance part of the earliest stages of the development process. 
 
 - Get performance data for individual methods in the code, including notifications about poorly performing methods.
 - Get actionable information, such as errors, vulnerabilities and non-compliant SLOs, for the services built from your code.
-- Discuss any block of code, with options for sharing to Slack or Teams, or creating a ticket on Jira, Trello and many other issue trackers.
+- Investigate errors more quickly by stepping through the stack trace and collaborating with teammates.
 
 ### Integrations
 
@@ -35,17 +35,10 @@ Get an in-IDE view of how the services built from your code are performing, in a
 
 ![Application Performance Monitoring](https://raw.githubusercontent.com/TeamCodeStream/CodeStream/develop/images/marketplace-vsc-slt.png)
 
-# Simplified Code Discussion
+# Don't have New Relic? 
 
-Rather than copying & pasting, CodeStream enables in-editor commenting on any code in your repository, with optional sharing to Slack, MS Teams or via email, with automatic at-mentioning of code authors via git blame.
-
-![CodeStream](https://raw.githubusercontent.com/TeamCodeStream/CodeStream/master/images/animated/DiscussCode-VS.gif)
+Become a hands-on observability practitioner by [creating a free account](https://newrelic.com/signup?utm_source=codestream&utm_medium=referral&utm_campaign=global-ever-green-ide-marketplace). Your free account includes 100 GB/month of free data ingestion, one free full-platform user, and unlimited free basic users. Learn how engineering teams are using New Relic free tier to monitor their stack.
 
 # Help & Feedback
 
-Check out the [user guide](https://docs.newrelic.com/docs/codestream/) for more information on getting started with CodeStream. Please follow [@teamcodestream](http://twitter.com/teamcodestream) for product updates and to share feedback and questions. You can also email us at codestream@newrelic.com.
-
-<p align="center">
-  <br />
-  <a title="Learn more about CodeStream" href="https://codestream.com?utm_source=vsmarket&utm_medium=banner&utm_campaign=codestream"><img src="https://alt-images.codestream.com/codestream_logo_vsmarketplace.png" alt="CodeStream Logo" /></a>
-</p>
+Check out the [user guide](https://docs.newrelic.com/docs/codestream/) for more information on getting started with New Relic CodeStream. Please follow [@newrelic](http://twitter.com/newrelic) for product updates and to share feedback and questions. You can also email us at codestream@newrelic.com.

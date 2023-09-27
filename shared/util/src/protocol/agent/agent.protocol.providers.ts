@@ -1415,9 +1415,9 @@ export interface Comparison extends Named {
 }
 
 export interface CodeAttributes {
-	codeFilepath?: string,
-	codeNamespace: string,
-	codeFunction: string
+	codeFilepath?: string;
+	codeNamespace: string;
+	codeFunction: string;
 }
 
 export interface SpanWithCodeAttrs extends NameValue, CodeAttributes {}
@@ -1457,10 +1457,12 @@ export const GetObservabilityResponseTimesRequestType = new RequestType<
 export interface GetObservabilityReposRequest {
 	filters?: { repoId: string; entityGuid?: string }[];
 	force?: boolean;
+	isVsCode?: boolean;
 }
 
 export interface EntityAccount {
 	distributedTracingEnabled?: boolean;
+	languageAndVersionValidation?: LanguageAndVersionValidation;
 	alertSeverity?: string;
 	accountId: number;
 	accountName: string;
@@ -1472,6 +1474,12 @@ export interface EntityAccount {
 		key: string;
 		values: string[];
 	}[];
+}
+
+export interface LanguageAndVersionValidation {
+	language?: string;
+	required?: string;
+	languageExtensionValidation?: string;
 }
 
 export interface GetObservabilityReposResponse {
@@ -2291,7 +2299,7 @@ export interface DidDetectObservabilityAnomaliesNotification {
 	errorRate: ObservabilityAnomaly[];
 }
 
-export const DidDetectObservabilityAnomaliesNotificationType = new NotificationType<DidDetectObservabilityAnomaliesNotification, void>(
-	"codestream/didDetectObservabilityAnomalies"
-);
-
+export const DidDetectObservabilityAnomaliesNotificationType = new NotificationType<
+	DidDetectObservabilityAnomaliesNotification,
+	void
+>("codestream/didDetectObservabilityAnomalies");
