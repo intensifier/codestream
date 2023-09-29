@@ -12,7 +12,6 @@ export * from "./host.protocol";
 export * from "./host.protocol.editor";
 export * from "./host.protocol.notifications";
 export * from "./host.protocol.review";
-export * from "./host.protocol.vsls";
 export * from "./webview.protocol.notifications";
 export * from "./webview.protocol.common";
 
@@ -161,6 +160,12 @@ export interface ViewMethodLevelTelemetryNotification {
 	methodName: string;
 	newRelicAccountId?: number;
 	newRelicEntityGuid?: string;
+	languageId: string;
+	error: ViewMethodLevelTelemetryError;
+}
+
+export interface ViewMethodLevelTelemetryError {
+	type?: string;
 }
 
 export const ViewMethodLevelTelemetryNotificationType = new NotificationType<
