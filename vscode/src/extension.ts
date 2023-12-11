@@ -10,8 +10,6 @@ import {
 	env,
 	ExtensionContext,
 	extensions,
-	MessageItem,
-	Uri,
 	version as vscodeVersion,
 	window,
 	workspace
@@ -266,29 +264,26 @@ async function showStartupUpgradeMessage(version: string, previousVersion: strin
 	if (skipVersions.some(v => Versions.compare(compareTo, v) === 0)) return;
 
 	// only show for new releases that are in the X.0 format
-	if (major > prevMajor && minor === "0") {
-		const actions: MessageItem[] = [{ title: "What's New" } /* , { title: "Release Notes" } */];
+	// blog going away...
 
-		const result = await window.showInformationMessage(
-			`CodeStream has been updated to v${version} — check out what's new!`,
-			...actions
-		);
+	// if (major > prevMajor && minor === "0") {
+	// 	const actions: MessageItem[] = [{ title: "What's New" } /* , { title: "Release Notes" } */];
 
-		if (result != null) {
-			if (result === actions[0]) {
-				await env.openExternal(
-					Uri.parse(
-						`https://www.codestream.com/blog/codestream-v${major}-${minor}?utm_source=ext_vsc&utm_medium=popup&utm_campaign=v${major}-${minor}`
-					)
-				);
-			}
-			// else if (result === actions[1]) {
-			// 	await env.openExternal(
-			// 		Uri.parse("https://marketplace.visualstudio.com/items/CodeStream.codestream/changelog")
-			// 	);
-			// }
-		}
-	}
+	// 	const result = await window.showInformationMessage(
+	// 		`CodeStream has been updated to v${version} — check out what's new!`,
+	// 		...actions
+	// 	);
+
+	// 	if (result != null) {
+	// 		if (result === actions[0]) {
+	// 			await env.openExternal(
+	// 				Uri.parse(
+	// 					`https://www.codestream.com/blog/codestream-v${major}-${minor}?utm_source=ext_vsc&utm_medium=popup&utm_campaign=v${major}-${minor}`
+	// 				)
+	// 			);
+	// 		}
+	// 	}
+	// }
 }
 
 export function getHttpsProxyAgent(options: {
