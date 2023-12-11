@@ -6,14 +6,15 @@ import {
 	JoinCompanyResponse,
 } from "@codestream/protocols/agent";
 import { CSCompany, CSEligibleJoinCompany, CSUser } from "@codestream/protocols/api";
-import { CodeStreamState } from "@codestream/webview/store";
-import { updateConfigs } from "@codestream/webview/store/configs/slice";
-import { changeRegistrationEmail, setEnvironment } from "@codestream/webview/store/session/thunks";
-import { HostApi } from "@codestream/webview/webview-api";
 import { isUndefined as _isUndefined } from "lodash-es";
 import React, { useCallback, useState } from "react";
 import { FormattedMessage } from "react-intl";
 import styled from "styled-components";
+
+import { CodeStreamState } from "@codestream/webview/store";
+import { updateConfigs } from "@codestream/webview/store/configs/slice";
+import { changeRegistrationEmail, setEnvironment } from "@codestream/webview/store/session/thunks";
+import { HostApi } from "@codestream/webview/webview-api";
 import { logError } from "../logger";
 import { goToLogin } from "../store/context/actions";
 import Button from "../Stream/Button";
@@ -71,7 +72,7 @@ export function CompanyCreation(props: {
 	companies?: CSCompany[];
 	eligibleJoinCompanies?: CSEligibleJoinCompany[];
 	accountIsConnected?: boolean;
-	nrSignupTestUi?: boolean;
+	forceCreateCompany?: boolean;
 }) {
 	const dispatch = useAppDispatch();
 	const derivedState = useAppSelector((state: CodeStreamState) => {
@@ -83,7 +84,7 @@ export function CompanyCreation(props: {
 	});
 	const providerName = props.provider
 		? ProviderNames[props.provider.toLowerCase()] || props.provider
-		: "CodeStream";
+		: "Email";
 
 	const onClickTryAnother = useCallback(async (event: React.FormEvent) => {
 		event.preventDefault();
@@ -128,7 +129,7 @@ export function CompanyCreation(props: {
 		let companiesToJoin: EnhancedCSCompany[] | undefined = undefined;
 		let organizationsByDomain = [] as EnhancedCSCompany[];
 		let organizationsByInvite = [] as EnhancedCSCompany[];
-		if (props.eligibleJoinCompanies || props.companies) {
+		if (!props.forceCreateCompany && (props.eligibleJoinCompanies || props.companies)) {
 			setIsLoading(true);
 			let obj = {};
 			if (props.eligibleJoinCompanies) {
@@ -190,7 +191,7 @@ export function CompanyCreation(props: {
 			setIsCreatingOrg(true);
 			setInitialLoad(false);
 			try {
-				const { team } = await HostApi.instance.send(CreateCompanyRequestType, {
+				const { team, accessToken } = await HostApi.instance.send(CreateCompanyRequestType, {
 					name: organizationSettings.companyName!,
 				});
 				HostApi.instance.track("New Organization Created", {
@@ -199,10 +200,10 @@ export function CompanyCreation(props: {
 				});
 
 				dispatch(
-					completeSignup(props.email!, props.token!, team.id, {
+					completeSignup(props.email!, accessToken || props.token!, team.id, {
 						createdTeam: true,
 						provider: props.provider,
-					}),
+					})
 				);
 			} catch (error) {
 				const errorMessage = typeof error === "string" ? error : error.message;
@@ -221,7 +222,7 @@ export function CompanyCreation(props: {
 			if (organization.host) {
 				// now switch environments (i.e., host, region, etc) to join this organization
 				console.log(
-					`Joining company ${organization.name} requires switching host to ${organization.host.name} at ${organization.host.publicApiUrl}`,
+					`Joining company ${organization.name} requires switching host to ${organization.host.name} at ${organization.host.publicApiUrl}`
 				);
 				dispatch(setEnvironment(organization.host.shortName, organization.host.publicApiUrl));
 			}
@@ -242,7 +243,7 @@ export function CompanyCreation(props: {
 			}
 			const result = (await HostApi.instance.send(
 				JoinCompanyRequestType,
-				request,
+				request
 			)) as JoinCompanyResponse;
 
 			const availabilityType = organization?.byInvite ? "Invite" : organization._type;
@@ -267,8 +268,8 @@ export function CompanyCreation(props: {
 									serverUrl: organization.host.publicApiUrl,
 							  }
 							: undefined,
-					},
-				),
+					}
+				)
 			);
 		} catch (error) {
 			const errorMessage = typeof error === "string" ? error : error.message;
@@ -324,17 +325,22 @@ export function CompanyCreation(props: {
 							)}
 							{!isCreatingOrg && !initialLoad && (
 								<>
+									{/* 
 									{!isNewRelicStaffOnProductionEnvironment() && (
-										<>
-											<JoinHeader>
-												<FormattedMessage
-													id="signUp.joinOrganization"
-													defaultMessage="Join your teammates on CodeStream"
-												/>
-											</JoinHeader>
-										</>
+									*/}
+									<>
+										<JoinHeader>
+											<FormattedMessage
+												id="signUp.joinOrganization"
+												defaultMessage="Join your teammates on CodeStream"
+											/>
+										</JoinHeader>
+									</>
+									{/* 
 									)}
+									/*}
 
+									{/* 
 									{isNewRelicStaffOnProductionEnvironment() && (
 										<>
 											<JoinHeader>Relics, are you using the correct environment?</JoinHeader>
@@ -356,6 +362,7 @@ export function CompanyCreation(props: {
 											</NrUserButtonWrapper>
 										</>
 									)}
+									*/}
 
 									{isLoading && (
 										<InlineLoadingWrapper>

@@ -39,6 +39,12 @@ import { bootstrapStreams } from "./streams/actions";
 import { bootstrapTeams } from "./teams/actions";
 import { updateUnreads } from "./unreads/actions";
 import { bootstrapUsers } from "./users/actions";
+import {
+	clearForceRegion,
+	clearPendingProtocolHandlerUrl,
+	handlePendingProtocolHandlerUrl,
+} from "../store/context/actions";
+import { logout } from "@codestream/webview/store/session/thunks";
 
 export const reset = () => action("RESET");
 
@@ -73,6 +79,11 @@ export const bootstrap = (data?: SignedInBootstrapData) => async (dispatch, getS
 		data = { ...bootstrapData, ...bootstrapCore, editorContext };
 	}
 
+	if (!data.preferences.hasDoneNRLogin) {
+		await dispatch(logout());
+		return;
+	}
+
 	if (
 		data.configs.serverUrl &&
 		data.companies &&
@@ -104,6 +115,19 @@ export const bootstrap = (data?: SignedInBootstrapData) => async (dispatch, getS
 	dispatch(preferencesActions.setPreferences(data.preferences));
 
 	dispatch(bootstrapEssentials(data));
+
+	const { context } = getState();
+
+	// If a user is signed out and opens an from nr1 (open in ide) and they are logged out,
+	// we need to open error after logging in
+	if (context.pendingProtocolHandlerUrl) {
+		await dispatch(handlePendingProtocolHandlerUrl(context.pendingProtocolHandlerUrl));
+		// Need to clear these two values from context.  They are set from open-in-ide url params
+		// pendingProtocolHandlerUrl so we dont reopen error erronously
+		// forceRegion as to not set region erroneously
+		dispatch(clearPendingProtocolHandlerUrl());
+		dispatch(clearForceRegion());
+	}
 };
 
 const bootstrapEssentials = (data: BootstrapInHostResponse) => dispatch => {

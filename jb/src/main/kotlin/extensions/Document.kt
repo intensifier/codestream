@@ -29,8 +29,10 @@ val Document.uri: String?
     }
 
 val Document.gitSha : String?
-    get() {
-        return (this.file as? VcsVirtualFile)?.fileRevision?.revisionNumber?.toString()
+    get() = when (val file = this.file) {
+        is VcsVirtualFile -> file.fileRevision?.revisionNumber?.toString()
+        is ContentRevisionVirtualFile -> file.contentRevision.revisionNumber.toString()
+        else -> null
     }
 
 val Document.textDocumentIdentifier: TextDocumentIdentifier?

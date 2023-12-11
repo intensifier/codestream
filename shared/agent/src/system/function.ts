@@ -30,7 +30,7 @@
  */
 import { setInterval } from "timers";
 
-import { debounce as _debounce, memoize as _memoize } from "lodash-es";
+import { debounce as _debounce, memoize as _memoize } from "lodash";
 import { CancellationToken } from "vscode-jsonrpc";
 
 export interface IDeferrable {
@@ -99,7 +99,7 @@ export namespace Functions {
 	): Promise<T> {
 		return new Promise((resolve, reject) => {
 			let fulfilled = false;
-			let timer: NodeJS.Timer | undefined;
+			let timer: NodeJS.Timeout | undefined;
 			if (typeof timeoutOrToken === "number") {
 				timer = setTimeout(() => {
 					if (typeof options.onDidCancel === "function") {
@@ -337,7 +337,7 @@ export namespace Functions {
 		onProgress: () => boolean
 	): Promise<T> {
 		return new Promise((resolve, reject) => {
-			let timer: NodeJS.Timer | undefined;
+			let timer: NodeJS.Timeout | undefined;
 			timer = setInterval(() => {
 				if (onProgress()) {
 					if (timer !== undefined) {

@@ -1,10 +1,11 @@
 "use strict";
 import { NotificationType, TextDocumentIdentifier } from "vscode-languageserver-protocol";
-import { CodeStreamEnvironmentInfo, Document, GetMyPullRequestsResponse } from "./agent.protocol";
+import { CodeStreamEnvironmentInfo, GetMyPullRequestsResponse } from "./agent.protocol";
 import { LoginSuccessResponse, TokenLoginRequest } from "./agent.protocol.auth";
 import { CodemarkPlus } from "./agent.protocol.codemarks";
 import { ThirdPartyProviders } from "./agent.protocol.providers";
 import {
+	CSAccessTokenType,
 	CSApiCapabilities,
 	CSCodeError,
 	CSCompany,
@@ -57,7 +58,6 @@ export enum ChangeDataType {
 	CodeErrors = "codeErrors",
 	Commits = "commits",
 	Companies = "companies",
-	Documents = "documents",
 	MarkerLocations = "markerLocations",
 	Markers = "markers",
 	Posts = "posts",
@@ -101,16 +101,16 @@ export interface CSAsyncError {
 	errorMessage: string;
 	extra: {
 		[key: string]: string;
-	}
+	};
 }
 
 export interface CSAsyncGrokError extends CSAsyncError {
 	extra: {
-		codeErrorId: string,
-		topmostPostId: string,
-		postId?: string,
-		streamId?: string,
-	}
+		codeErrorId: string;
+		topmostPostId: string;
+		postId?: string;
+		streamId?: string;
+	};
 }
 
 export interface CSGrokStream {
@@ -118,14 +118,14 @@ export interface CSGrokStream {
 	content?: {
 		content: string;
 		role: string;
-	},
+	};
 	extra: {
 		topmostPostId: string;
 		codeErrorId: string;
 		postId: string;
 		streamId: string;
 		done?: boolean;
-	}
+	};
 }
 
 export interface PostsChangedNotification {
@@ -217,16 +217,6 @@ export interface ApiCapabilitiesChangedNotification {
 	data: CSApiCapabilities;
 }
 
-export interface DocumentData {
-	reason: "saved" | "changed" | "removed";
-	document: Document;
-}
-
-export interface DocumentsChangedNotification {
-	type: ChangeDataType.Documents;
-	data: DocumentData;
-}
-
 export interface CommitsChangedData {
 	type: string;
 	path: string;
@@ -266,7 +256,6 @@ export type DidChangeDataNotification =
 	| UsersChangedNotification
 	| ProvidersChangedNotification
 	| ApiCapabilitiesChangedNotification
-	| DocumentsChangedNotification
 	| CommitsChangedNotification
 	| WorkspaceChangedNotification
 	| GrokExceptionChangedNotification
@@ -396,6 +385,20 @@ export const DidChangeServerUrlNotificationType = new NotificationType<
 	DidChangeServerUrlNotification,
 	void
 >("codestream/didChangeServerUrl");
+
+export interface DidRefreshAccessTokenNotification {
+	url: string;
+	email: string;
+	teamId: string;
+	token: string;
+	refreshToken?: string;
+	tokenType?: CSAccessTokenType;
+}
+
+export const DidRefreshAccessTokenNotificationType = new NotificationType<
+	DidRefreshAccessTokenNotification,
+	void
+>("codestream/didRefreshAccessToken");
 
 export const AgentInitializedNotificationType = new NotificationType<void, void>(
 	"codestream/agentInitialized"

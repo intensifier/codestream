@@ -99,7 +99,6 @@ export interface CodeErrorData {
 	tag?: string;
 	/** caches when the last user session started  */
 	sessionStart?: number;
-	pendingRequiresConnection?: boolean;
 	pendingErrorGroupGuid?: string;
 	pendingEntityId?: string;
 	occurrenceId?: string;
@@ -224,19 +223,6 @@ export interface IpcHost {
 	postMessage<R>(message: WebviewIpcMessage): Promise<R>;
 	onmessage: any;
 }
-
-declare function acquireCodestreamHost(): IpcHost;
-
-let host: IpcHost;
-export const findHost = (): IpcHost => {
-	if (host) return host;
-	try {
-		host = acquireCodestreamHost();
-	} catch (e) {
-		throw new Error("Host needs to provide global `acquireCodestreamHost` function");
-	}
-	return host;
-};
 
 export enum IpcRoutes {
 	Agent = "codestream",

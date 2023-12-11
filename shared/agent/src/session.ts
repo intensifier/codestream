@@ -32,6 +32,8 @@ import {
 	ConnectionStatus,
 	DeclineInviteRequest,
 	DeclineInviteRequestType,
+	LogoutCompanyRequest,
+	LogoutCompanyRequestType,
 	DidChangeApiVersionCompatibilityNotificationType,
 	DidChangeConnectionStatusNotification,
 	DidChangeConnectionStatusNotificationType,
@@ -70,15 +72,16 @@ import {
 	ThirdPartyProviders,
 	TokenLoginRequest,
 	TokenLoginRequestType,
-	UIStateRequestType,
 	VerifyConnectivityRequestType,
 	VerifyConnectivityResponse,
 	PollForMaintenanceModeRequestType,
 	PollForMaintenanceModeResponse,
 	RefreshMaintenancePollNotificationType,
 	VersionCompatibility,
+	DidRefreshAccessTokenNotificationType,
 } from "@codestream/protocols/agent";
 import {
+	CSAccessTokenType,
 	CSApiCapabilities,
 	CSCodemark,
 	CSCompany,
@@ -97,7 +100,7 @@ import {
 	LoginResult,
 } from "@codestream/protocols/api";
 
-import HttpsProxyAgent from "https-proxy-agent";
+import { HttpsProxyAgent } from "https-proxy-agent";
 import { CodeStreamAgent } from "./agent";
 import { AgentError, ServerError } from "./agentError";
 import {
@@ -115,9 +118,15 @@ import {
 	VersionMiddlewareManager,
 } from "./api/middleware/versionMiddleware";
 import { Container, SessionContainer } from "./container";
-import { DocumentEventHandler } from "./documentEventHandler";
 import { Logger } from "./logger";
-import { log, memoize, registerDecoratedHandlers, registerProviders, Strings } from "./system";
+import {
+	Functions,
+	log,
+	memoize,
+	registerDecoratedHandlers,
+	registerProviders,
+	Strings,
+} from "./system";
 import { testGroups } from "./testGroups";
 import { ProxyAgent, setGlobalDispatcher } from "undici";
 
@@ -260,30 +269,18 @@ export class CodeStreamSession {
 		return this._onDidChangeSessionStatus.event;
 	}
 
-	get proxyAgent(): HttpsAgent | HttpsProxyAgent | undefined {
+	get proxyAgent(): HttpsAgent | HttpsProxyAgent<string> | undefined {
 		return this._httpsAgent;
 	}
 
-	private readonly _httpsAgent: HttpsAgent | HttpsProxyAgent | undefined;
+	private readonly _httpsAgent: HttpsAgent | HttpsProxyAgent<string> | undefined;
 	private readonly _httpAgent: HttpAgent | undefined; // used if api server is http
 	private readonly _readyPromise: Promise<void>;
-	// in-memory store of what UI the user is current looking at
-	private uiState: string | undefined;
-	private _documentEventHandler: DocumentEventHandler | undefined;
 
 	private _activeServerAlerts: string[] = [];
-	private _broadcasterRecoveryTimer: NodeJS.Timer | undefined;
-	private _echoTimer: NodeJS.Timer | undefined;
+	private _broadcasterRecoveryTimer: NodeJS.Timeout | undefined;
+	private _echoTimer: NodeJS.Timeout | undefined;
 	private _echoDidTimeout: boolean = false;
-
-	// HACK in certain scenarios the agent may want to use more performance-intensive
-	// operations when handling document change and saves. This is true for when
-	// a user is looking at the review screen, where we need to be able to live-update
-	// the view based on documents changing & saving, as well as git operations removing
-	// and/or squashing commits.
-	get useEnhancedDocumentChangeHandler(): boolean {
-		return this.uiState === "new-review" || this.uiState === "people";
-	}
 
 	constructor(
 		public readonly agent: CodeStreamAgent,
@@ -313,10 +310,9 @@ export class CodeStreamSession {
 				Logger.log(
 					`Proxy support is in override with url=${redactedUrl}, strictSSL=${_options.proxy.strictSSL}`
 				);
-				this._httpsAgent = new HttpsProxyAgent({
-					...url.parse(_options.proxy.url),
+				this._httpsAgent = new HttpsProxyAgent(_options.proxy.url, {
 					rejectUnauthorized: _options.proxy.strictSSL,
-				} as any);
+				});
 				// Set proxy for fetchCore (undici and future native fetch)
 				const dispatcher = new ProxyAgent({ uri: new URL(_options.proxy.url).toString() });
 				setGlobalDispatcher(dispatcher);
@@ -336,10 +332,7 @@ export class CodeStreamSession {
 				} catch {}
 
 				if (proxyUri) {
-					this._httpsAgent = new HttpsProxyAgent({
-						...proxyUri,
-						rejectUnauthorized: this.rejectUnauthorized,
-					} as any);
+					this._httpsAgent = new HttpsProxyAgent(proxyUrl, { rejectUnauthorized: strictSSL });
 				}
 			} else {
 				Logger.log("Proxy support is on, but no proxy url was found");
@@ -382,9 +375,7 @@ export class CodeStreamSession {
 					this._didEncounterMaintenanceMode();
 				}
 
-				let isMaintenanceMode = context.response?.headers.get("X-CS-API-Maintenance-Mode")
-					? true
-					: false;
+				const isMaintenanceMode = !!context.response?.headers.get("X-CS-API-Maintenance-Mode");
 				this._refreshMaintenanceModePoll(isMaintenanceMode);
 
 				const alerts = context.response?.headers.get("X-CS-API-Alerts");
@@ -435,14 +426,6 @@ export class CodeStreamSession {
 
 		registerDecoratedHandlers(this.agent);
 
-		this.agent.registerHandler(UIStateRequestType, e => {
-			if (e && e.context && e.context.panelStack && e.context.panelStack[0]) {
-				this.uiState = e.context.panelStack[0];
-			} else {
-				this.uiState = undefined;
-			}
-		});
-
 		this.agent.registerHandler(VerifyConnectivityRequestType, () => this.verifyConnectivity());
 		this.agent.registerHandler(GetAccessTokenRequestType, e => {
 			return { accessToken: this._codestreamAccessToken! };
@@ -458,6 +441,7 @@ export class CodeStreamSession {
 		this.agent.registerHandler(GetInviteInfoRequestType, e => this.getInviteInfo(e));
 		this.agent.registerHandler(JoinCompanyRequestType, e => this.joinCompany(e));
 		this.agent.registerHandler(DeclineInviteRequestType, e => this.declineInvite(e));
+		this.agent.registerHandler(LogoutCompanyRequestType, e => this.logoutCompany(e));
 		this.agent.registerHandler(ApiRequestType, (e, cancellationToken: CancellationToken) =>
 			this.api.fetch(e.url, e.init, e.token)
 		);
@@ -537,6 +521,19 @@ export class CodeStreamSession {
 		this.verifyConnectivity();
 	}
 
+	onAccessTokenChanged(token: string, refreshToken?: string, tokenType?: CSAccessTokenType) {
+		Logger.log("Session access token was changed, notifying extension...");
+		this._codestreamAccessToken = token;
+		this.agent.sendNotification(DidRefreshAccessTokenNotificationType, {
+			url: this._options.serverUrl,
+			email: this._email!,
+			teamId: this._teamId!,
+			token: token,
+			refreshToken,
+			tokenType,
+		});
+	}
+
 	private _didEncounterMaintenanceMode() {
 		this.agent.sendNotification(DidEncounterMaintenanceModeNotificationType, {
 			teamId: this._teamId,
@@ -549,12 +546,16 @@ export class CodeStreamSession {
 		});
 	}
 
-	private _refreshMaintenanceModePoll(isMaintenanceMode: boolean) {
-		this.agent.sendNotification(RefreshMaintenancePollNotificationType, {
-			isMaintenanceMode,
-			pollRefresh: true,
-		});
-	}
+	private _refreshMaintenanceModePoll = Functions.debounceMemoized(
+		(isMaintenanceMode: boolean) => {
+			this.agent.sendNotification(RefreshMaintenancePollNotificationType, {
+				isMaintenanceMode,
+				pollRefresh: true,
+			});
+		},
+		2000,
+		{ leading: true }
+	);
 
 	private async onRTMessageReceived(e: RTMessage) {
 		// if we are in broadcaster failure mode, and we received an RT message, we'll immediately
@@ -966,6 +967,10 @@ export class CodeStreamSession {
 		};
 		Logger.log("Got environment from connectivity response:", this._environmentInfo);
 		this.agent.sendNotification(DidSetEnvironmentNotificationType, this._environmentInfo);
+		if (response.capabilities.serviceGatewayAuth) {
+			Logger.log("Service Gateway auth is enabled");
+			this._api.setUsingServiceGatewayAuth();
+		}
 		return response;
 	}
 
@@ -1039,6 +1044,11 @@ export class CodeStreamSession {
 		// } else {
 		return this._api!.declineInvite(request);
 		// }
+	}
+
+	@log({ singleLine: true })
+	async logoutCompany(request: LogoutCompanyRequest) {
+		return this._api!.logoutCompany(request);
 	}
 
 	@log({ singleLine: true })
@@ -1178,7 +1188,14 @@ export class CodeStreamSession {
 		}
 
 		const token = response.token;
+		if (response.accessTokenInfo?.refreshToken) {
+			token.refreshToken = response.accessTokenInfo.refreshToken;
+		}
+		if (response.accessTokenInfo?.tokenType) {
+			token.tokenType = response.accessTokenInfo.tokenType;
+		}
 		this._codestreamAccessToken = token.value;
+		this.api.setAccessToken(token.value, response.accessTokenInfo);
 		this._teamId = (this._options as any).teamId = token.teamId;
 		this._codestreamUserId = response.user.id;
 		this._userId = response.user.id;
@@ -1243,11 +1260,6 @@ export class CodeStreamSession {
 
 		Logger.log(cc, `Subscribing to real-time events...`);
 		await this.api.subscribe();
-
-		this._documentEventHandler = new DocumentEventHandler(
-			this,
-			SessionContainer.instance().session.agent.documents
-		);
 
 		SessionContainer.instance().git.onRepositoryChanged(data => {
 			SessionContainer.instance().session.agent.sendNotification(DidChangeDataNotificationType, {
@@ -1428,6 +1440,7 @@ export class CodeStreamSession {
 				companies: response.companies,
 				accountIsConnected: response.accountIsConnected,
 				isWebmail: response.isWebmail,
+				forceCreateCompany: response.forceCreateCompany,
 			};
 			if (response.setEnvironment) {
 				Logger.log(
@@ -1585,43 +1598,47 @@ export class CodeStreamSession {
 			$email: user.email,
 			name: user.fullName,
 			"Team ID": this._teamId,
-			"Join Method": user.joinMethod,
-			"Last Invite Type": user.lastInviteType,
+			//"Join Method": user.joinMethod,
+			//"Last Invite Type": user.lastInviteType,
 			"Plugin Version": this.versionInfo.extension.versionFormatted,
 			Endpoint: this.versionInfo.ide.name,
 			"Endpoint Detail": this.versionInfo.ide.detail,
 			"IDE Version": this.versionInfo.ide.version,
-			Deployment: this.isOnPrem ? "OnPrem" : "Cloud",
+			//Deployment: this.isOnPrem ? "OnPrem" : "Cloud",
 			Country: user.countryCode,
+			"NR User ID": user.nrUserId,
+			"NR Tier": user.nrUserInfo && user.nrUserInfo.userTier,
 		};
 
 		if (team != null && companies != null) {
 			const company = companies.find(c => c.id === team.companyId);
 			props["Company ID"] = team.companyId;
 			props["Team Created Date"] = new Date(team.createdAt!).toISOString();
-			props["Team Name"] = team.name;
+			//props["Team Name"] = team.name;
 			if (company) {
 				props["Team Size"] = company.memberCount || team.memberIds.length;
-				props["Plan"] = company.plan;
+				//props["Plan"] = company.plan;
 				props["Reporting Group"] = company.reportingGroup;
 				props["Company Name"] = company.name;
-				props["company"] = {
-					id: company.id,
-					name: company.name,
-					plan: company.plan,
-					created_at: new Date(company.createdAt!).toISOString(),
-				};
-				if (company.trialStartDate && company.trialEndDate) {
-					props["company"]["trialStart_at"] = new Date(company.trialStartDate).toISOString();
-					props["company"]["trialEnd_at"] = new Date(company.trialEndDate).toISOString();
-				}
+				//props["company"] = {
+				//	id: company.id,
+				//	name: company.name,
+				//	plan: company.plan,
+				//	created_at: new Date(company.createdAt!).toISOString(),
+				//};
+				//if (company.trialStartDate && company.trialEndDate) {
+				//	props["company"]["trialStart_at"] = new Date(company.trialStartDate).toISOString();
+				//	props["company"]["trialEnd_at"] = new Date(company.trialEndDate).toISOString();
+				//}
 
 				if (company.testGroups) {
 					props["AB Test"] = Object.keys(company.testGroups).map(
 						key => `${key}|${company.testGroups![key]}`
 					);
 				}
-				props["NR Connected Org"] = !!company.isNRConnected;
+				//props["CodeStream Only"] = !!company.codestreamOnly;
+				//props["Org Origination"] = company.orgOrigination || "";
+				props["NR Organization ID"] = company.linkedNROrgId || "";
 			}
 		}
 
@@ -1629,27 +1646,13 @@ export class CodeStreamSession {
 			props.$created = new Date(user.registeredAt).toISOString();
 		}
 
-		if (user.lastPostCreatedAt) {
-			props["Date of Last Post"] = new Date(user.lastPostCreatedAt).toISOString();
-		}
+		//if (user.lastPostCreatedAt) {
+		//	props["Date of Last Post"] = new Date(user.lastPostCreatedAt).toISOString();
+		//}
 
 		props["First Session"] =
 			!!user.firstSessionStartedAt &&
 			user.firstSessionStartedAt <= Date.now() + FIRST_SESSION_TIMEOUT;
-
-		if (user.providerInfo) {
-			const data =
-				(team && user.providerInfo[team.id]?.newrelic?.data) || user.providerInfo.newrelic?.data;
-			if (data) {
-				if (data.userId) {
-					props["NR User ID"] = data.userId;
-					props["NR Connected Org"] = true;
-				}
-				if (data?.orgIds && data.orgIds?.length) {
-					props["NR Organization ID"] = data?.orgIds[0];
-				}
-			}
-		}
 
 		let userId = this._codestreamUserId || user.id;
 
@@ -1679,7 +1682,6 @@ export class CodeStreamSession {
 		return this.addSuperProps({
 			"NR User ID": userId,
 			"NR Organization ID": orgId,
-			"NR Connected Org": true,
 		});
 	}
 
@@ -1854,10 +1856,5 @@ export class CodeStreamSession {
 			return { files: [] };
 		}
 	}
-
-	dispose() {
-		if (this._documentEventHandler) {
-			this._documentEventHandler.dispose();
-		}
-	}
+	dispose() {}
 }

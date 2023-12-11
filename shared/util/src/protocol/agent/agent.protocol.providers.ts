@@ -1320,6 +1320,26 @@ export const UpdateNewRelicOrgIdRequestType = new RequestType<
 	void
 >("codestream/newrelic/orgid/update");
 
+export interface GetNewRelicUsersRequest {
+	search?: string;
+	nextCursor?: string;
+}
+
+export interface GetNewRelicUsersResponse {
+	users: {
+		email: string;
+		name: string;
+	}[];
+	nextCursor?: string;
+}
+
+export const GetNewRelicUsersRequestType = new RequestType<
+	GetNewRelicUsersRequest,
+	GetNewRelicUsersResponse,
+	void,
+	void
+>("codestream/newrelic/users");
+
 export interface GetObservabilityErrorsRequest {
 	filters: { repoId: string; entityGuid?: string }[];
 	timeWindow?: string;
@@ -1381,9 +1401,11 @@ export interface GetObservabilityAnomaliesRequest {
 	notifyNewAnomalies?: boolean;
 }
 
-export interface ObservabilityAnomaly extends CodeAttributes {
+export interface ObservabilityAnomaly {
 	language: string;
 	name: string;
+	type: "duration" | "errorRate";
+	codeAttrs?: CodeAttributes;
 	oldValue: number;
 	newValue: number;
 	ratio: number;
@@ -1429,7 +1451,6 @@ export interface GetObservabilityAnomaliesResponse {
 	error?: string;
 	isSupported?: boolean;
 	didNotifyNewAnomalies: boolean;
-	allOtherAnomalies?: ObservabilityAnomaly[];
 }
 
 export const GetObservabilityAnomaliesRequestType = new RequestType<
@@ -1438,6 +1459,31 @@ export const GetObservabilityAnomaliesRequestType = new RequestType<
 	void,
 	void
 >("codestream/newrelic/anomalies");
+
+export interface GetClmRequest {
+	entityGuid: string;
+}
+
+export interface GetClmResponse {
+	codeLevelMetrics: CodeLevelMetrics[];
+	isSupported: boolean;
+	error?: string;
+}
+
+export interface CodeLevelMetrics {
+	name: string;
+	scope?: string;
+	codeAttrs?: CodeAttributes;
+	duration?: number;
+	errorRate?: number;
+}
+
+export const GetClmRequestType = new RequestType<
+	GetClmRequest,
+	GetClmResponse,
+	void,
+	void
+>("codestream/newrelic/clm");
 
 export interface GetObservabilityResponseTimesRequest {
 	fileUri: string;
@@ -1458,6 +1504,7 @@ export interface GetObservabilityReposRequest {
 	filters?: { repoId: string; entityGuid?: string }[];
 	force?: boolean;
 	isVsCode?: boolean;
+	isMultiRegion?: boolean;
 }
 
 export interface EntityAccount {
@@ -1502,7 +1549,7 @@ export interface GetObservabilityEntitiesRequest {
 
 export interface GetObservabilityEntitiesResponse {
 	totalResults: number;
-	entities: { guid: string; name: string }[];
+	entities: { guid: string; name: string; account: string; entityType: EntityType }[];
 	nextCursor?: string;
 }
 
@@ -1641,8 +1688,12 @@ export interface GetServiceLevelTelemetryRequest {
 	metricTimesliceNameMapping?: MetricTimesliceNameMapping;
 	/** related service needs less data, skips redundant call */
 	skipRepoFetch?: boolean;
-	fetchRecentAlertViolations?: boolean;
+	fetchRecentIssues?: boolean;
 	force?: boolean;
+}
+
+export interface UpdateAzureFullNameRequest {
+	fullName: string;
 }
 
 export interface GetServiceLevelObjectivesRequest {
@@ -1663,7 +1714,7 @@ export interface FileLevelTelemetryMetric {
 	metricTimesliceName: string;
 	namespace?: string;
 	className?: string;
-	functionName: string;
+	functionName?: string;
 	anomaly?: ObservabilityAnomaly;
 }
 
@@ -1723,6 +1774,10 @@ export interface GetMethodLevelTelemetryResponse {
 	newRelicEntityName: string;
 }
 
+export interface UpdateAzureFullNameResponse {
+	fullName: string;
+}
+
 export interface GetServiceLevelTelemetryResponse {
 	newRelicEntityGuid: string;
 	newRelicUrl?: string;
@@ -1730,13 +1785,18 @@ export interface GetServiceLevelTelemetryResponse {
 	newRelicAlertSeverity?: string;
 	newRelicEntityAccounts: EntityAccount[];
 	newRelicEntityName?: string;
-	recentAlertViolations?: GetAlertViolationsResponse | NRErrorResponse;
+	recentIssues?: GetIssuesResponse | NRErrorResponse;
 }
 
 export interface GetAlertViolationsResponse {
 	name?: string;
 	guid?: string;
+	permalink?: string;
 	recentAlertViolations?: RecentAlertViolation[];
+}
+
+export interface GetIssuesResponse {
+	recentIssues?: RecentIssue[];
 }
 
 export interface Deployment {
@@ -1780,6 +1840,13 @@ export const GetServiceLevelTelemetryRequestType = new RequestType<
 	void,
 	void
 >("codestream/newrelic/serviceLevelTelemetry");
+
+export const UpdateAzureFullNameRequestType = new RequestType<
+	UpdateAzureFullNameRequest,
+	UpdateAzureFullNameResponse,
+	void,
+	void
+>("codestream/newrelic/azureFullName");
 
 export const GetServiceLevelObjectivesRequestType = new RequestType<
 	GetServiceLevelObjectivesRequest,
@@ -1938,6 +2005,7 @@ export interface EntitySearchResponse {
 			};
 		};
 	};
+	region?: string;
 }
 
 export interface BuiltFromResult {
@@ -2043,6 +2111,7 @@ export interface MethodLevelGoldenMetricQueryResult {
 	metricQueries: {
 		metricQuery: string;
 		spanQuery?: string;
+		scopesQuery: string;
 		title: string;
 		name: string;
 	}[];
@@ -2052,7 +2121,58 @@ export interface GetAlertViolationsQueryResult {
 	actor: {
 		entity: {
 			name: string;
+			permalink: string;
 			recentAlertViolations: RecentAlertViolation[];
+		};
+	};
+}
+
+export interface GetIssuesQueryResult {
+	actor?: {
+		account?: {
+			aiIssues?: {
+				issues?: {
+					issues?: {
+						title?: string;
+						eventType?: string;
+						mergeReason?: string;
+						url?: string;
+						conditionName?: string[];
+						unAcknowledgedBy?: string | null;
+						totalIncidents?: number;
+						entityNames?: string[];
+						parentMergeId?: any;
+						entityTypes?: string[];
+						acknowledgedAt?: number;
+						correlationRuleDescriptions?: any;
+						unAcknowledgedAt?: number;
+						entityGuids?: [];
+						conditionProduct?: string[];
+						closedAt?: number;
+						updatedAt?: number;
+						accountIds?: string[];
+						closedBy?: string | null;
+						mutingState?: string;
+						createdAt?: number;
+						activatedAt?: number;
+						origins?: string[];
+						isCorrelated?: boolean;
+						isIdle?: boolean;
+						issueId?: string;
+						conditionFamilyId?: number[];
+						description?: string[];
+						correlationRuleNames?: any;
+						acknowledgedBy?: any;
+						policyIds?: string[];
+						priority?: string;
+						sources?: string[];
+						policyName?: string[];
+						correlationRuleIds?: any;
+						state?: string;
+						incidentIds?: string[];
+					}[];
+				};
+			};
 		};
 	};
 }
@@ -2066,6 +2186,16 @@ export interface RecentAlertViolation {
 	openedAt: string;
 	violationId: string;
 	violationUrl: string;
+}
+
+export interface RecentIssue {
+	title?: string;
+	url?: string;
+	closedAt?: number;
+	updatedAt?: number;
+	createdAt: number;
+	priority?: string;
+	issueId?: string;
 }
 
 export interface EntityGoldenMetricsQueries {
@@ -2169,6 +2299,10 @@ export interface MethodGoldenMetrics {
 		errorRate?: number;
 		responseTimeMs?: number;
 		/* end new  */
+	}[];
+	scopes?: {
+		name: string;
+		value: number;
 	}[];
 	timeWindow: number;
 	extrapolated?: boolean;

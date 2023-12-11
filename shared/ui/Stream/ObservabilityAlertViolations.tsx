@@ -1,38 +1,74 @@
-import { forEach as _forEach, isEmpty as _isEmpty } from "lodash-es";
-import React, { useEffect, useState } from "react";
-import { ALERT_SEVERITY_COLORS } from "./CodeError/index";
-import styled from "styled-components";
+import React from "react";
 import { Row } from "./CrossPostIssueControls/IssuesPane";
 import { HostApi } from "@codestream/webview/webview-api";
 import { OpenUrlRequestType } from "@codestream/protocols/webview";
-import { RecentAlertViolation } from "@codestream/protocols/agent";
+import { RecentIssue } from "@codestream/protocols/agent";
 import Tooltip from "./Tooltip";
 
 interface Props {
-	alertViolations?: RecentAlertViolation[];
+	issues?: RecentIssue[];
 	customPadding?: string;
+	entityGuid?: string;
 }
 
 export const ObservabilityAlertViolations = React.memo((props: Props) => {
-	const { alertViolations, customPadding } = props;
+	const { issues, customPadding } = props;
 
-	const EntityHealth = styled.div<{ backgroundColor: string }>`
-		background-color: ${props => (props.backgroundColor ? props.backgroundColor : "white")};
-		width: 10px;
-		height: 10px;
-		display: inline-block;
-		margin-right: 4px;
-		margin-top: 4px;
-	`;
+	const severityBackgroundColorMap = {
+		Critical: "#fee5e5",
+		High: "#f7dfca",
+		Medium: "#fdf2c4",
+		Low: "#e7e9e9",
+	};
+
+	const severityColorMap = {
+		Critical: "#b00f0a",
+		High: "#a14e02",
+		Medium: "#8e6806",
+		Low: "#535e65",
+	};
+
+	function criticalityToRiskSeverity(riskSeverity) {
+		switch (riskSeverity) {
+			case "CRITICAL":
+				return "Critical";
+			case "HIGH":
+				return "High";
+			case "MODERATE":
+				return "Medium";
+			case "MEDIUM":
+				return "Medium";
+			default:
+				return "Low";
+		}
+	}
+
+	function Severity(props: { severity }) {
+		return (
+			<div className="icons">
+				<span
+					style={{
+						color: severityColorMap[props.severity],
+						borderRadius: "3px",
+						backgroundColor: severityBackgroundColorMap[props.severity],
+						padding: "1px 2px 1px 2px",
+					}}
+				>
+					{props.severity}
+				</span>
+			</div>
+		);
+	}
 
 	const handleRowClick = (e, violationUrl) => {
 		e.preventDefault();
+		HostApi.instance.track("Issue Clicked", { "Entity GUID": props.entityGuid });
 		HostApi.instance.send(OpenUrlRequestType, { url: violationUrl });
 	};
 
 	return (
 		<>
-			{alertViolations?.map(_ => {
+			{issues?.map(_ => {
 				return (
 					<Row
 						style={{
@@ -40,13 +76,15 @@ export const ObservabilityAlertViolations = React.memo((props: Props) => {
 						}}
 						className={"pr-row"}
 						onClick={e => {
-							handleRowClick(e, _.violationUrl);
+							handleRowClick(e, _.url);
 						}}
 					>
-						<EntityHealth backgroundColor={ALERT_SEVERITY_COLORS[_.alertSeverity]} />
-						<Tooltip placement="topRight" title={_.label} delay={1}>
-							<div style={{ minWidth: "0", padding: "0" }}>{_.label}</div>
+						<div></div>{" "}
+						{/* this extra div is for the inherited flexbox properties; we need the 3 */}
+						<Tooltip placement="topRight" title={_.title!} delay={1}>
+							<div style={{ minWidth: "0", padding: "5" }}>{_.title!}</div>
 						</Tooltip>
+						<Severity severity={criticalityToRiskSeverity(_.priority!)} />
 					</Row>
 				);
 			})}

@@ -1,7 +1,6 @@
 "use strict";
 import fs from "fs";
 import { sep } from "path";
-
 import {
 	BuiltFromResult,
 	RelatedRepoWithRemotes,
@@ -27,8 +26,6 @@ import {
 	ErrorGroupResponse,
 	ErrorGroupsResponse,
 	ErrorGroupStateType,
-	GetAlertViolationsQueryResult,
-	GetAlertViolationsResponse,
 	GetDeploymentsRequest,
 	GetDeploymentsRequestType,
 	GetDeploymentsResponse,
@@ -56,6 +53,9 @@ import {
 	GetObservabilityAnomaliesRequest,
 	GetObservabilityAnomaliesRequestType,
 	GetObservabilityAnomaliesResponse,
+	GetNewRelicUsersRequest,
+	GetNewRelicUsersRequestType,
+	GetNewRelicUsersResponse,
 	GetObservabilityEntitiesRequest,
 	GetObservabilityEntitiesRequestType,
 	GetObservabilityEntitiesResponse,
@@ -80,6 +80,9 @@ import {
 	GetServiceLevelTelemetryRequest,
 	GetServiceLevelTelemetryRequestType,
 	GetServiceLevelTelemetryResponse,
+	UpdateAzureFullNameRequest,
+	UpdateAzureFullNameRequestType,
+	UpdateAzureFullNameResponse,
 	GoldenMetricUnitMappings,
 	isNRErrorResponse,
 	LanguageAndVersionValidation,
@@ -105,6 +108,11 @@ import {
 	UpdateNewRelicOrgIdResponse,
 	DidChangeCodelensesNotificationType,
 	AgentValidateLanguageExtensionRequestType,
+	GetIssuesResponse,
+	GetIssuesQueryResult,
+	GetClmRequest,
+	GetClmRequestType,
+	GetClmResponse,
 } from "@codestream/protocols/agent";
 import {
 	CSBitbucketProviderInfo,
@@ -120,8 +128,8 @@ import {
 	memoize,
 	uniq as _uniq,
 	uniqBy as _uniqBy,
-} from "lodash-es";
-import Cache from "timed-cache";
+} from "lodash";
+import Cache from "@codestream/utils/system/timedCache";
 import { ResponseError } from "vscode-jsonrpc/lib/messages";
 import { URI } from "vscode-uri";
 
@@ -156,13 +164,14 @@ import { ClmManager } from "./newrelic/clm/clmManager";
 import * as Dom from "graphql-request/dist/types.dom";
 import { makeHtmlLoggable } from "@codestream/utils/system/string";
 import semver from "semver";
+import { getMethodLevelTelemetryMockResponse } from "./newrelic/anomalyDetectionMockResults";
+import { ClmManagerNew } from "./newrelic/clm/clmManagerNew";
 
 const ignoredErrors = [GraphqlNrqlTimeoutError];
 
 export function escapeNrql(nrql: string) {
 	return nrql.replace(/\\/g, "\\\\\\\\").replace(/\n/g, " ");
 }
-
 export interface HttpErrorResponse {
 	response: {
 		status: number;
@@ -196,6 +205,9 @@ export const REQUIRED_AGENT_VERSIONS = {
 	python: "7.10.0.175",
 	ruby: "8.10.0 ",
 };
+
+const PRODUCTION_US_GRAPHQL_URL = "https://api.newrelic.com/graphql";
+const PRODUCTION_EU_GRAPHQL_URL = "https://api-eu.newrelic.com/graphql";
 
 export interface INewRelicProvider {
 	getProductUrl: () => string;
@@ -232,7 +244,7 @@ export class NewRelicProvider
 	private _newRelicUserId: number | undefined = undefined;
 	private _accountIds: number[] | undefined = undefined;
 	private _memoizedBuildRepoRemoteVariants: any;
-
+	private _clientUrlNeedsUpdate: boolean = false;
 	private _clmSpanDataExistsCache = new Cache<ClmSpanData>({
 		defaultTtl: 120 * 1000,
 	});
@@ -267,10 +279,25 @@ export class NewRelicProvider
 	}
 
 	get headers() {
-		return {
-			"Api-Key": this.accessToken!,
+		const headers: { [key: string]: string } = {
 			"Content-Type": "application/json",
+			"newrelic-requesting-services": "CodeStream",
 		};
+
+		const token = this.accessToken;
+		if (token) {
+			if (this._providerInfo?.bearerToken) {
+				if (this._providerInfo?.tokenType === "access") {
+					headers["x-access-token"] = token;
+				} else {
+					headers["x-id-token"] = token;
+				}
+				//headers["Authorization"] = `Bearer ${token}`;
+			} else {
+				headers["Api-Key"] = token;
+			}
+		}
+		return headers;
 	}
 
 	get apiUrl() {
@@ -307,7 +334,11 @@ export class NewRelicProvider
 	}
 
 	get graphQlBaseUrl() {
-		return `${this.baseUrl}/graphql`;
+		if (this._providerInfo?.bearerToken) {
+			return `${this.coreUrl}/graphql`;
+		} else {
+			return `${this.baseUrl}/graphql`;
+		}
 	}
 
 	private clearAllCaches() {
@@ -351,17 +382,31 @@ export class NewRelicProvider
 		return super.onDisconnected(request);
 	}
 
-	protected async client(): Promise<GraphQLClient> {
-		const client =
-			this._client || (this._client = this.createClient(this.graphQlBaseUrl, this.accessToken));
+	protected async client(useOtherRegion?: boolean): Promise<GraphQLClient> {
+		let client;
+		// if (useOtherRegion && this.session.isProductionCloud) {
+		if (useOtherRegion) {
+			let newGraphQlBaseUrl = this.graphQlBaseUrl;
+			if (newGraphQlBaseUrl === PRODUCTION_US_GRAPHQL_URL) {
+				client = this._client = this.createClient(PRODUCTION_EU_GRAPHQL_URL, this.accessToken);
+			} else if (newGraphQlBaseUrl === PRODUCTION_EU_GRAPHQL_URL) {
+				client = this._client = this.createClient(PRODUCTION_US_GRAPHQL_URL, this.accessToken);
+			} else {
+				client =
+					this._client || (this._client = this.createClient(this.graphQlBaseUrl, this.accessToken));
+			}
+			this._clientUrlNeedsUpdate = true;
+		} else {
+			if (this._clientUrlNeedsUpdate) {
+				client = this._client = this.createClient(this.graphQlBaseUrl, this.accessToken);
+				this._clientUrlNeedsUpdate = false;
+			} else {
+				client =
+					this._client || (this._client = this.createClient(this.graphQlBaseUrl, this.accessToken));
+			}
+		}
 
-		client.setHeaders({
-			"Api-Key": this.accessToken!,
-			"Content-Type": "application/json",
-			"NewRelic-Requesting-Services": "CodeStream",
-			"X-Query-Source-Capability-Id": "CODESTREAM",
-			"X-Query-Source-Component-Id": "codestream.ide",
-		});
+		client.setHeaders(this.headers);
 		ContextLogger.setData({
 			nrUrl: this.graphQlBaseUrl,
 			versionInfo: {
@@ -389,17 +434,7 @@ export class NewRelicProvider
 			fetch: customFetch,
 		};
 		const client = new GraphQLClient(graphQlBaseUrl, options);
-
-		// set accessToken on a per-usage basis... possible for accessToken
-		// to be revoked from the source (github.com) and a stale accessToken
-		// could be cached in the _client instance.
-		client.setHeaders({
-			"Api-Key": accessToken!,
-			"Content-Type": "application/json",
-			"NewRelic-Requesting-Services": "CodeStream",
-			"X-Query-Source-Capability-Id": "CODESTREAM",
-			"X-Query-Source-Component-Id": "codestream.ide",
-		});
+		client.setHeaders(this.headers);
 
 		return client;
 	}
@@ -426,6 +461,7 @@ export class NewRelicProvider
 
 	@log()
 	async configure(config: ProviderConfigurationData, verify?: boolean): Promise<boolean> {
+		// FIXME: this whole method of configuring New Relic by key should go away with Unified Identity
 		if (verify) {
 			if (!(await super.configure(config, true))) return false;
 		}
@@ -458,6 +494,45 @@ export class NewRelicProvider
 		return {
 			orgId,
 		};
+	}
+
+	private async clientRequestWrap<T>(query: string, variables: any, useOtherRegion?: boolean) {
+		let resp;
+		const client = await this.client(useOtherRegion);
+		let triedRefresh = false;
+		while (!resp) {
+			try {
+				resp = client.request<T>(query, variables);
+			} catch (ex) {
+				if (
+					this.session.api.usingServiceGatewayAuth &&
+					!triedRefresh &&
+					this._providerInfo &&
+					this._providerInfo.refreshToken
+				) {
+					Logger.log("NerdGraph call failed, attempting to refresh NR access token...");
+					let tokenInfo;
+					try {
+						tokenInfo = await this.session.api.refreshNewRelicToken(
+							this._providerInfo.refreshToken
+						);
+						Logger.log("NR access token successfully refreshed, trying request again...");
+						//client.setHeader("Authorization", `Bearer ${tokenInfo.accessToken}`);
+						if (tokenInfo.tokenType === "access") {
+							client.setHeader("x-access-token", tokenInfo.accessToken);
+						} else {
+							client.setHeader("x-id-token", tokenInfo.accessToken);
+						}
+						triedRefresh = true;
+						resp = undefined;
+					} catch (refreshEx) {
+						Logger.warn("Exception thrown refreshing New Relic access token", refreshEx);
+						// rethrow the original exception, more meaningful than the exception on refresh
+					}
+				}
+			}
+		}
+		return resp;
 	}
 
 	private async validateApiKey(client: GraphQLClient): Promise<{
@@ -509,13 +584,14 @@ export class NewRelicProvider
 	async mutate<T>(query: string, variables: any = undefined) {
 		await this.ensureConnected();
 
-		return (await this.client()).request<T>(query, variables);
+		return this.clientRequestWrap<T>(query, variables); //(await this.client()).request<T>(query, variables);
 	}
 
 	async query<T = any>(
 		query: string,
 		variables: any = undefined,
-		tryCount: number = 3
+		tryCount: number = 3,
+		isMultiRegion: boolean = false
 	): Promise<T> {
 		await this.ensureConnected();
 
@@ -525,13 +601,31 @@ export class NewRelicProvider
 		}
 
 		let response: any;
+		let responseOther: any;
 		let ex: Error | undefined;
 		const fn = async () => {
 			try {
-				const potentialResponse = await (await this.client()).request<T>(query, variables);
+				let potentialResponse, potentialOtherResponse;
+				if (isMultiRegion) {
+					const currentRegionPromise = await this.clientRequestWrap<T>(query, variables, false); //(await this.client(false)).request<T>(query, variables);
+					const otherRegionPromise = await this.clientRequestWrap<T>(query, variables, true); //(await this.client(true)).request<T>(query, variables);
+					[potentialResponse, potentialOtherResponse] = await Promise.all([
+						currentRegionPromise,
+						otherRegionPromise,
+					]);
+				} else {
+					potentialResponse = await this.clientRequestWrap<T>(query, variables, false); // await (await this.client(false)).request<T>(query, variables);
+				}
 				// GraphQL returns happy HTTP 200 response for api level errors
-				this.checkGraphqlErrors(potentialResponse);
-				response = potentialResponse;
+				if (potentialOtherResponse) {
+					this.checkGraphqlErrors(potentialResponse);
+					this.checkGraphqlErrors(potentialOtherResponse);
+					response = potentialResponse;
+					responseOther = potentialOtherResponse;
+				} else {
+					this.checkGraphqlErrors(potentialResponse);
+					response = potentialResponse;
+				}
 				return true;
 			} catch (potentialEx) {
 				if (isHttpErrorResponse(potentialEx)) {
@@ -552,6 +646,33 @@ export class NewRelicProvider
 			}
 		};
 		await Functions.withExponentialRetryBackoff(fn, tryCount, 1000);
+
+		// If multiRegion, and we are doing an entitySearch query, add region values
+		if (responseOther) {
+			let responseRegion, responseRegionOther;
+			if (this.graphQlBaseUrl === PRODUCTION_US_GRAPHQL_URL) {
+				responseRegion = "US";
+				responseRegionOther = "EU";
+			} else {
+				responseRegion = "EU";
+				responseRegionOther = "US";
+			}
+			for (let i = 0; i < response.actor.entitySearch.results.entities.length; i++) {
+				response.actor.entitySearch.results.entities[i].region = responseRegion;
+			}
+			for (let i = 0; i < responseOther.actor.entitySearch.results.entities.length; i++) {
+				responseOther.actor.entitySearch.results.entities[i].region = responseRegionOther;
+			}
+
+			const combinedArray = [
+				...responseOther.actor.entitySearch.results.entities,
+				...response.actor.entitySearch.results.entities,
+			].filter((obj, index, self) => self.findIndex(o => o.guid === obj.guid) === index);
+
+			if (!_isEmpty(combinedArray)) {
+				response.actor.entitySearch.results.entities = combinedArray;
+			}
+		}
 
 		if (!response && ex) {
 			if (ex instanceof GraphqlNrqlError) {
@@ -682,6 +803,7 @@ export class NewRelicProvider
 					  entities {
 						guid
 						name
+						entityType
 						account {
 							name
 						  }
@@ -695,10 +817,12 @@ export class NewRelicProvider
 				cursor: request.nextCursor ?? null,
 			});
 			const entities = response.actor.entitySearch.results.entities.map(
-				(_: { guid: string; name: string; account: { name: string } }) => {
+				(_: { guid: string; name: string; account: { name: string }; entityType: EntityType }) => {
 					return {
 						guid: _.guid,
-						name: `${_.name} (${_.account.name})`,
+						name: _.name,
+						account: _.account.name,
+						entityType: _.entityType,
 					};
 				}
 			);
@@ -827,7 +951,7 @@ export class NewRelicProvider
 	async getObservabilityRepos(
 		request: GetObservabilityReposRequest
 	): Promise<GetObservabilityReposResponse> {
-		const { force = false } = request;
+		const { force = false, isMultiRegion } = request;
 		const cacheKey = JSON.stringify(request);
 		if (!force) {
 			const cached = this._observabilityReposCache.get(cacheKey);
@@ -875,7 +999,8 @@ export class NewRelicProvider
 				// find REPOSITORY entities tied to a remote
 				const repositoryEntitiesResponse = await this.findRepositoryEntitiesByRepoRemotes(
 					remotes,
-					force
+					force,
+					isMultiRegion
 				);
 
 				if (isNRErrorResponse(repositoryEntitiesResponse)) {
@@ -1573,6 +1698,43 @@ export class NewRelicProvider
 		return response;
 	}
 
+	private _clmTimedCache = new Cache<GetClmResponse>({
+		defaultTtl: 120 * 1000,
+	});
+
+	@lspHandler(GetClmRequestType)
+	@log({
+		timed: true,
+	})
+	async getClm(request: GetClmRequest): Promise<GetClmResponse> {
+		const cached = this._clmTimedCache.get(request);
+		if (cached) {
+			return cached;
+		}
+
+		let lastEx;
+		const fn = async () => {
+			try {
+				const clmExperiment = new ClmManagerNew(request, this);
+				const result = await clmExperiment.execute();
+				this._clmTimedCache.put(request, result);
+				return true;
+			} catch (ex) {
+				Logger.warn(ex.message);
+				lastEx = ex.message;
+				return false;
+			}
+		};
+		await Functions.withExponentialRetryBackoff(fn, 5, 1000);
+		const response = this._clmTimedCache.get(request) || {
+			codeLevelMetrics: [],
+			isSupported: false,
+			error: lastEx,
+		};
+
+		return response;
+	}
+
 	@log()
 	async getPixieToken(accountId: number) {
 		try {
@@ -1623,6 +1785,41 @@ export class NewRelicProvider
 			return response.actor;
 		} catch (e) {
 			ContextLogger.error(e, "getAccounts");
+			throw e;
+		}
+	}
+
+	@lspHandler(GetNewRelicUsersRequestType)
+	@log()
+	async getUsers(request: GetNewRelicUsersRequest): Promise<GetNewRelicUsersResponse> {
+		try {
+			const query = request.search ? `search: "${request.search}"` : "";
+			const cursor = request.nextCursor || "null";
+			const response = await this.query<{
+				actor: {
+					users: {
+						userSearch: {
+							users: { email: string; name: string }[];
+							nextCursor?: string;
+						};
+					};
+				};
+			}>(`{
+				actor {
+					users {
+						userSearch(query: {scope: {${query}}}, cursor: ${cursor}) {
+							users {
+								email
+								name
+							}
+							nextCursor
+						}
+					}
+				}
+			}`);
+			return response.actor.users.userSearch;
+		} catch (e) {
+			ContextLogger.error(e, "getUsers");
 			throw e;
 		}
 	}
@@ -1971,6 +2168,27 @@ export class NewRelicProvider
 			ContextLogger.error(ex);
 			return undefined;
 		}
+	}
+
+	@lspHandler(UpdateAzureFullNameRequestType)
+	@log()
+	async setFullName(
+		request: UpdateAzureFullNameRequest
+	): Promise<UpdateAzureFullNameResponse | undefined> {
+		try {
+			const userId = (await this.getUserId()) || undefined;
+
+			const response = await this.setFullNameMutation({
+				userId,
+				newFullName: request.fullName!,
+			});
+
+			return { fullName: response?.userManagementUpdateUser?.user?.name };
+		} catch (ex) {
+			ContextLogger.error(ex);
+		}
+
+		return undefined;
 	}
 
 	@log()
@@ -2367,6 +2585,11 @@ export class NewRelicProvider
 	async getMethodLevelTelemetry(
 		request: GetMethodLevelTelemetryRequest
 	): Promise<GetMethodLevelTelemetryResponse | undefined> {
+		const mockResponse = getMethodLevelTelemetryMockResponse(request);
+		if (mockResponse) {
+			return mockResponse;
+		}
+
 		let observabilityRepo: ObservabilityRepo | undefined;
 		let entity: EntityAccount | undefined;
 		let entityAccounts: EntityAccount[] = [];
@@ -2462,15 +2685,17 @@ export class NewRelicProvider
 			});
 			throw new ResponseError(ERROR_SLT_MISSING_ENTITY, "Missing entity");
 		}
+		let recentIssuesResponse;
 
-		let recentAlertViolations: GetAlertViolationsResponse | undefined | NRErrorResponse;
-		if (request.fetchRecentAlertViolations) {
-			recentAlertViolations = await this.getRecentAlertViolations(request.newRelicEntityGuid);
-		}
+		if (request.fetchRecentIssues) {
+			const accountId = NewRelicProvider.parseId(request.newRelicEntityGuid)?.accountId;
 
-		const validEntityGuid: string = entity?.entityGuid ?? request.newRelicEntityGuid;
+			if (accountId) {
+				recentIssuesResponse = await this.getIssues(accountId!, request.newRelicEntityGuid);
+			}
 
-		try {
+			const validEntityGuid: string = entity?.entityGuid ?? request.newRelicEntityGuid;
+
 			const entityGoldenMetrics = await this.getEntityLevelGoldenMetrics(validEntityGuid);
 
 			const response = {
@@ -2480,88 +2705,86 @@ export class NewRelicProvider
 				newRelicEntityName: entity?.entityName,
 				newRelicEntityGuid: validEntityGuid,
 				newRelicUrl: `${this.productUrl}/redirect/entity/${validEntityGuid}`,
-				recentAlertViolations: recentAlertViolations,
+				recentIssues: recentIssuesResponse,
 			};
 			return response;
-		} catch (ex) {
-			Logger.error(ex, "getServiceLevelTelemetry", {
-				request,
-			});
 		}
-
 		return undefined;
 	}
 
-	async getRecentAlertViolations(
+	async getIssues(
+		accountId: number,
 		entityGuid: string
-	): Promise<GetAlertViolationsResponse | NRErrorResponse> {
+	): Promise<GetIssuesResponse | NRErrorResponse | undefined> {
 		try {
-			const response = await this.query<GetAlertViolationsQueryResult>(
-				`query getRecentAlertViolations($entityGuid: EntityGuid!) {
+			const response = await this.query<GetIssuesQueryResult>(
+				`query getRecentIssues($id: id!, $entityGuids: [EntityGuid!]) {
 					actor {
-					  entity(guid: $entityGuid) {
-						name
-						guid
-						recentAlertViolations(count: 50) {
-						  agentUrl
-						  alertSeverity
-						  closedAt
-						  label
-						  level
-						  openedAt
-						  violationId
-						  violationUrl
+						account(id: $id) {
+						  aiIssues {
+							issues(filter: {entityGuids: $entityGuids, states: ACTIVATED}) {
+							  issues {
+								title
+								deepLinkUrl
+								closedAt
+								updatedAt
+								createdAt
+								priority
+								issueId
+							  }
+							}
+						  }
 						}
 					  }
-					}
 				  }				  
 				`,
 				{
-					entityGuid: entityGuid,
+					id: accountId,
+					entityGuids: entityGuid,
 				}
 			);
 
-			if (response?.actor?.entity) {
-				const entity = response?.actor?.entity;
-				const recentAlertViolationsArray = entity?.recentAlertViolations.filter(
-					_ => _.closedAt === null
+			if (response?.actor?.account?.aiIssues?.issues?.issues?.length) {
+				const issueArray = response.actor.account.aiIssues.issues.issues;
+				const recentIssuesArray = issueArray.filter(
+					_ => _.closedAt === null || _.closedAt === undefined
 				);
 
-				const ALERT_SEVERITY_SORTING_ORDER: string[] = [
-					"",
-					"CRITICAL",
-					"NOT_ALERTING",
-					"NOT_CONFIGURED",
-					"WARNING",
-					"UNKNOWN",
-				];
+				const ALERT_SEVERITY_SORTING_ORDER: string[] = ["", "CRITICAL", "HIGH", "MEDIUM", "LOW"];
 
 				// get unique labels
-				const recentAlertViolationsArrayUnique = _uniqBy(recentAlertViolationsArray, "label");
+				recentIssuesArray.forEach(issue => {
+					const firstTitle = issue.title![0]; //this gives me the first title
+					issue.title = firstTitle;
+					issue.url = this.issueUrl(accountId, issue.issueId!);
+				});
+
+				const recentIssuesArrayUnique = _uniqBy(recentIssuesArray, "title");
 
 				// sort based on openedAt time
-				recentAlertViolationsArrayUnique.sort((a, b) =>
-					a.openedAt > b.openedAt ? 1 : b.openedAt > a.openedAt ? -1 : 0
+				recentIssuesArrayUnique!.sort((a, b) =>
+					a.createdAt! > b.createdAt! ? 1 : b.createdAt! > a.createdAt! ? -1 : 0
 				);
 
 				// sort based on alert serverity defined in ALERT_SEVERITY_SORTING_ORDER
-				const recentAlertViolationsArraySorted = this.mapOrder(
-					recentAlertViolationsArray,
+				const recentIssuesArraySorted = this.mapOrder(
+					recentIssuesArrayUnique,
 					ALERT_SEVERITY_SORTING_ORDER,
-					"alertSeverity"
+					"priority"
 				);
 
 				// take top 2
-				const topTwoRecentAlertViolations = recentAlertViolationsArraySorted.slice(0, 2);
+				const topTwoRecentIssues = recentIssuesArraySorted.slice(0, 2);
 
-				entity.recentAlertViolations = topTwoRecentAlertViolations;
+				const recentIssues = topTwoRecentIssues;
 
-				return entity;
+				return { recentIssues };
 			}
-			return {};
+
+			return undefined;
 		} catch (ex) {
-			ContextLogger.warn("getRecentAlertViolations failure", {
-				entityGuid,
+			ContextLogger.warn("getIssues failure", {
+				accountId: accountId,
 				error: ex,
 			});
 			const accessTokenError = ex as {
@@ -2658,6 +2881,10 @@ export class NewRelicProvider
                                WHERE entity.guid IN ('${entityGuid}')
                                  AND name = '${metricTimesliceNameMapping["errorRate"]}'
                                  AND \`error.group.guid\` IS NOT NULL FACET name TIMESERIES`,
+					scopesQuery: `SELECT rate(count(apm.service.transaction.error.count), 1 minute) AS value
+												FROM Metric
+                  			WHERE \`entity.guid\` = '${entityGuid}'
+                    		AND metricTimesliceName = '${metricTimesliceNameMapping["errorRate"]}' FACET scope as name`,
 					title: "Errors (per minute)",
 					name: "errorsPerMinute",
 				},
@@ -2671,6 +2898,10 @@ export class NewRelicProvider
                                FROM Span
                                WHERE entity.guid IN ('${entityGuid}')
                                  AND name = '${metricTimesliceNameMapping["duration"]}' FACET name TIMESERIES`,
+					scopesQuery: `SELECT average(newrelic.timeslice.value) * 1000 AS value
+												FROM Metric
+                  			WHERE entity.guid IN ('${entityGuid}')
+                    		AND metricTimesliceName = '${metricTimesliceNameMapping["duration"]}' FACET scope as name`,
 					title: "Average duration (ms)",
 					name: "responseTimeMs",
 				},
@@ -2684,6 +2915,10 @@ export class NewRelicProvider
                                FROM Span
                                WHERE entity.guid IN ('${entityGuid}')
                                  AND name = '${metricTimesliceNameMapping["sampleSize"]}' FACET name TIMESERIES`,
+					scopesQuery: `SELECT rate(count(newrelic.timeslice.value), 1 minute) AS value
+												FROM Metric
+                  			WHERE entity.guid IN ('${entityGuid}')
+                    		AND metricTimesliceName = '${metricTimesliceNameMapping["sampleSize"]}' FACET scope as name`,
 					title: "Samples (per minute)",
 					name: "samplesPerMinute",
 				},
@@ -2753,10 +2988,43 @@ export class NewRelicProvider
 			})
 		);
 
+		const scopes = await Promise.all(
+			queries.metricQueries.map(_ => {
+				let _query = _.scopesQuery;
+				_query = _query?.replace(/\n/g, "");
+
+				if (since) {
+					_query = `${_query} SINCE ${since}`;
+				}
+
+				const q = `query getMetric($accountId: Int!) {
+					actor {
+					  account(id: $accountId) {
+							nrql(query: "${escapeNrql(_query || "")}", timeout: 60) {
+								results
+								metadata {
+									timeWindow {
+										end
+									}
+								}
+							}
+					  }
+					}
+				}`;
+				return this.query(q, {
+					accountId: parsedId.accountId,
+				}).catch(ex => {
+					Logger.warn(ex);
+				});
+			})
+		);
+
 		const response = queries.metricQueries.map((_, i) => {
 			const nrql = results[i].actor.account.nrql;
+			const scopesNrql = scopes[i].actor.account.nrql;
 			return {
 				..._,
+				scopes: scopesNrql.results,
 				result: nrql.results.map((r: any) => {
 					const ms = r.endTimeSeconds * 1000;
 					const date = new Date(ms);
@@ -3538,7 +3806,8 @@ export class NewRelicProvider
 	 */
 	protected async findRepositoryEntitiesByRepoRemotes(
 		remotes: string[],
-		force = false
+		force = false,
+		isMultiRegion = false
 	): Promise<RepoEntitiesByRemotesResponse | NRErrorResponse> {
 		const cacheKey = JSON.stringify(remotes);
 		if (!force) {
@@ -3578,7 +3847,12 @@ export class NewRelicProvider
 	}
   }
   `;
-			const queryResponse = await this.query<EntitySearchResponse>(query);
+			const queryResponse = await this.query<EntitySearchResponse>(
+				query,
+				undefined,
+				3,
+				isMultiRegion
+			);
 			const response = {
 				entities: queryResponse.actor.entitySearch.results.entities,
 				remotes: remoteVariants,
@@ -4101,6 +4375,23 @@ export class NewRelicProvider
 		);
 	}
 
+	private setFullNameMutation(request: { userId: number | undefined; newFullName: string }) {
+		return this.query(
+			`mutation userManagementUpdateUser($name: String!, $id: ID!) {
+				userManagementUpdateUser(updateUserOptions: {name: $name, id: $id}) {
+				  user {
+					name
+				  }
+				}
+			  }			  
+		  	`,
+			{
+				name: request.newFullName,
+				id: request.userId,
+			}
+		);
+	}
+
 	private setAssigneeByUserId(request: { errorGroupGuid: string; userId: string }) {
 		return this.query(
 			`mutation errorsInboxAssignErrorGroup($userId: Int!, $errorGroupGuid: ID!) {
@@ -4167,7 +4458,22 @@ export class NewRelicProvider
 	private productEntityRedirectUrl(entityGuid: string) {
 		return `${this.productUrl}/redirect/entity/${entityGuid}`;
 	}
+	private issueUrl(accountId: number, issueId: string) {
+		let bUrl = "";
 
+		if (this.productUrl.includes("staging")) {
+			// Staging: https://radar-api.staging-service.newrelic.com
+			bUrl = "https://radar-api.staging-service.newrelic.com";
+		} else if (this.productUrl.includes("eu")) {
+			// EU: https://radar-api.service.eu.newrelic.com
+			bUrl = "https://radar-api.service.eu.newrelic.com";
+		} else {
+			// Prod: https://radar-api.service.newrelic.com
+			bUrl = "https://radar-api.service.newrelic.com";
+		}
+
+		return `${bUrl}/accounts/${accountId}/issues/${issueId}?notifierType=codestream`;
+	}
 	private findRelatedReposFromServiceEntity(
 		relatedEntities: RelatedEntity[]
 	): BuiltFromResult[] | undefined {

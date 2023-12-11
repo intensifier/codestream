@@ -89,13 +89,11 @@
     <Compile Include="Models\EditorSelectionTests.cs" />
     <Compile Include="Models\WebviewIpcMessageTest.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="Services\CredentialsServiceTests.cs" />
     <Compile Include="Services\DotNetBrowserServiceTests.cs" />
     <Compile Include="Services\MessageInterceptorServiceTests\DoesMessageContainTempFiles.cs" />
     <Compile Include="Services\MessageInterceptorServiceTests\GetUriTokens.cs" />
     <Compile Include="Services\MessageInterceptorServiceTests\InterceptAndModify.cs" />
     <Compile Include="Services\SettingsServiceTests.cs" />
-    <Compile Include="Fakes\FakeCredentialsService.cs" />
     <Compile Include="UI\Adornments\HighlightAdornmentManagerTests.cs" />
     <Compile Include="UI\TextViewCreationListenerTests.cs" />
     <Compile Include="UI\TextViewExtensionsTests.cs" />

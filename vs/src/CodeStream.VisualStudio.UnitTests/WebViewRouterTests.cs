@@ -5,6 +5,7 @@ using Moq;
 using Newtonsoft.Json.Linq;
 using System.Threading.Tasks;
 using CodeStream.VisualStudio.Shared;
+using CodeStream.VisualStudio.Shared.Authentication;
 using CodeStream.VisualStudio.Shared.Extensions;
 using CodeStream.VisualStudio.Shared.Models;
 using CodeStream.VisualStudio.Shared.Services;
@@ -30,7 +31,7 @@ namespace CodeStream.VisualStudio.UnitTests
 			var mockEditorService = new Mock<IEditorService>();
 			var mockAuthenticationServiceFactory = new Mock<IAuthenticationServiceFactory>();
 			var mockComponentModel = new Mock<IComponentModel>();
-			var mockCredentialsService = new Mock<ICredentialsService>();
+			var mockCredentialManager = new Mock<ICredentialManager>();
 			var mockSymbolService = new Mock<ISymbolService>();
 
 			var mockComponentModelObject = mockComponentModel.Object;
@@ -43,7 +44,7 @@ namespace CodeStream.VisualStudio.UnitTests
 			var mockIdeServiceObject = mockIdeService.Object;
 			var mockEditorServiceObject = mockEditorService.Object;
 			var mockAuthenticationServiceFactoryObject = mockAuthenticationServiceFactory.Object;
-			var mockCredentialsServiceObject = mockCredentialsService.Object;
+			var mockCredentialManagerObject = mockCredentialManager.Object;
 			var mockSymbolServiceObject = mockSymbolService.Object;
 
 			var ideServiceMock = new Mock<IIdeService>();
@@ -67,7 +68,7 @@ namespace CodeStream.VisualStudio.UnitTests
 				mockEditorServiceObject,
 				mockAuthenticationServiceFactoryObject,
 				messageInterceptor,
-				mockCredentialsServiceObject,
+				mockCredentialManagerObject,
 				mockSymbolServiceObject
 			);
 

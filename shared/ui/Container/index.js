@@ -80,7 +80,7 @@ const Root = connect(mapStateToProps)(props => {
 			<RoadBlock title="Pardon the Interruption">
 				<p>
 					CodeStream is undergoing an update. Check{" "}
-					<Link href="https://twitter.com/teamcodestream">@teamcodestream</Link> for status updates.
+					<Link href="https://twitter.com/newrelic">@newrelic</Link> for status updates.
 				</p>
 			</RoadBlock>
 		);

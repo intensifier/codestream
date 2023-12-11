@@ -54,6 +54,8 @@ import {
 	CreatePostRequestType,
 	CreateRepoRequestType,
 	DeletePostRequestType,
+	DidRefreshAccessTokenNotification,
+	DidRefreshAccessTokenNotificationType,
 	DidChangeApiVersionCompatibilityNotification,
 	DidChangeApiVersionCompatibilityNotificationType,
 	DidChangeCodelensesNotificationType,
@@ -1088,22 +1090,28 @@ export class CodeStreamAgentConnection implements Disposable {
 
 	@log()
 	private async onVersionCompatibilityChanged(e: DidChangeVersionCompatibilityNotification) {
-		await Container.webview.onVersionChanged(e);
+		await Container.sidebar.onVersionChanged(e);
 	}
 
 	@log()
 	private async onApiVersionCompatibilityChanged(e: DidChangeApiVersionCompatibilityNotification) {
-		await Container.webview.onApiVersionChanged(e);
+		await Container.sidebar.onApiVersionChanged(e);
 	}
 
 	@log()
 	private async onServerUrlChanged(e: DidChangeServerUrlNotification) {
-		await Container.webview.onServerUrlChanged(e);
+		await Container.sidebar.onServerUrlChanged(e);
+	}
+
+	@log()
+	private async onAccessTokenRefreshed(e: DidRefreshAccessTokenNotification) {
+		Logger.log("New Relic access token has been refreshed, updating...");
+		await Container.session.onAccessTokenRefreshed(e);
 	}
 
 	@log()
 	private async onProcessBufferNotificationChanged(e: DidChangeProcessBufferNotification) {
-		await Container.webview.onProcessBufferChanged(e);
+		await Container.sidebar.onProcessBufferChanged(e);
 	}
 
 	@started
@@ -1311,6 +1319,10 @@ export class CodeStreamAgentConnection implements Disposable {
 		this._client.onNotification(
 			DidChangeServerUrlNotificationType,
 			this.onServerUrlChanged.bind(this)
+		);
+		this._client.onNotification(
+			DidRefreshAccessTokenNotificationType,
+			this.onAccessTokenRefreshed.bind(this)
 		);
 		this._client.onNotification(AgentInitializedNotificationType, () => {
 			this._onAgentInitialized.fire();

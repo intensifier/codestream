@@ -25,6 +25,7 @@ interface Props extends DispatchProp {
 export const ProviderAuth = (connect(undefined) as any)((props: Props) => {
 	const [isWaiting, setIsWaiting] = useState(true);
 	const [tryAgainDisabled, setTryAgainDisabled] = useState(true);
+	const [alreadyConfirmed, setAlreadyConfirmed] = useState(false);
 	const intl = useIntl();
 	const dispatch = useAppDispatch();
 
@@ -45,9 +46,12 @@ export const ProviderAuth = (connect(undefined) as any)((props: Props) => {
 		if (!tryAgainDisabled) {
 			return;
 		}
-		const id = setTimeout(function () {
-			stopTryAgainWaiting();
-		}, inMillis(5, "sec"));
+		const id = setTimeout(
+			function () {
+				stopTryAgainWaiting();
+			},
+			inMillis(5, "sec")
+		);
 
 		return () => clearTimeout(id);
 	}, [tryAgainDisabled]);
@@ -60,7 +64,8 @@ export const ProviderAuth = (connect(undefined) as any)((props: Props) => {
 	const onClickTryAgain = (event: React.SyntheticEvent) => {
 		event.preventDefault();
 		setTryAgainDisabled(true);
-		if (props.provider === "github" && props.useIDEAuth) {
+		if (false /*props.provider === "github" && props.useIDEAuth*/) {
+			// per Unified Identity, IDE sign-in is deprecated
 			props.dispatch(
 				startIDESignin(
 					props.provider,
@@ -118,6 +123,9 @@ export const ProviderAuth = (connect(undefined) as any)((props: Props) => {
 			if (error !== LoginResult.TokenNotFound) {
 				setIsWaiting(false);
 			}
+			if (error === LoginResult.AlreadyConfirmed) {
+				setAlreadyConfirmed(true);
+			}
 		}
 	}, [props.type]);
 
@@ -167,16 +175,14 @@ export const ProviderAuth = (connect(undefined) as any)((props: Props) => {
 									/>{" "}
 									<LoadingEllipsis />
 								</strong>
+							) : alreadyConfirmed ? (
+								<strong>Already signed up, please sign in.</strong>
 							) : { ideAuthFailure } ? (
 								<strong>
 									<FormattedMessage
 										id="providerAuth.accountNoFound"
-										defaultMessage="Account not found. Please "
+										defaultMessage="Account not found."
 									/>
-									<Link onClick={onClickGoToSignup}>
-										<FormattedMessage id="providerAuth.signUp" defaultMessage="sign up" />
-									</Link>
-									.
 								</strong>
 							) : (
 								<strong>

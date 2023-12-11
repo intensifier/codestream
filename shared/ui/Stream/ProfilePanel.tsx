@@ -16,7 +16,6 @@ import { UserStatus } from "../src/components/UserStatus";
 import { UpdateUserRequestType, DeleteUserRequestType } from "@codestream/protocols/agent";
 import Menu from "./Menu";
 import { confirmPopup } from "./Confirm";
-import { Button } from "../src/components/Button";
 import { Dialog } from "../src/components/Dialog";
 import { isCurrentUserInternal } from "../store/users/reducer";
 
@@ -94,10 +93,11 @@ const RowIcon = ({ name, title, onClick }) => {
 export const ProfilePanel = () => {
 	const dispatch = useAppDispatch();
 	const derivedState = useAppSelector((state: CodeStreamState) => {
-		const { session, users, teams, context } = state;
+		const { session, users, teams, context, companies } = state;
 		const person = users[context.profileUserId!];
 		const me = users[session.userId!];
 		const team = teams[context.currentTeamId];
+		const company = companies[team.companyId];
 
 		return {
 			isInternalUser: isCurrentUserInternal(state),
@@ -194,7 +194,6 @@ export const ProfilePanel = () => {
 	const title = (
 		<Row style={{ margin: 0 }}>
 			<Value>{person.fullName}</Value>
-			{isMe && <RowIcon name="pencil" title="Edit Name" onClick={editFullName} />}
 		</Row>
 	);
 
@@ -232,7 +231,6 @@ export const ProfilePanel = () => {
 							value={person.email}
 							style={{ position: "absolute", left: "-9999px" }}
 						/>
-						{isMe && <RowIcon name="pencil" title="Edit Email" onClick={editEmail} />}
 					</Row>
 					<Row>
 						<MetaLabel>Timezone</MetaLabel>
@@ -297,13 +295,6 @@ export const ProfilePanel = () => {
 							<MetaLabel>Currently Working On</MetaLabel>
 							<StyledUserStatus user={person} />
 						</Row>
-					)}
-					{isMe && (
-						<div style={{ marginTop: "75px" }}>
-							<Button variant="destructive" onClick={cancelAccount}>
-								Delete your account
-							</Button>
-						</div>
 					)}
 				</div>
 			</Root>

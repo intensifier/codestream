@@ -11,6 +11,7 @@ import {
 	GetShaDiffsRangesResponse,
 	ThirdPartyProviderBoard,
 	ThirdPartyProviderConfig,
+	ThirdPartyProviderUser,
 } from "@codestream/protocols/agent";
 import {
 	CodemarkType,
@@ -38,7 +39,6 @@ import {
 } from "@codestream/protocols/webview";
 import { WebviewPanels } from "@codestream/protocols/api";
 import { Checkbox } from "../src/components/Checkbox";
-import { LabeledSwitch } from "../src/components/controls/LabeledSwitch";
 import { CSText } from "../src/components/CSText";
 import { PanelHeader } from "../src/components/PanelHeader";
 import { CodeStreamState } from "../store";
@@ -76,7 +76,13 @@ import {
 	safe,
 } from "../utils";
 import { HostApi } from "../webview-api";
-import { markItemRead, openModal, openPanel, setUserPreference } from "./actions";
+import {
+	createPostAndCodemark,
+	markItemRead,
+	openModal,
+	openPanel,
+	setUserPreference,
+} from "./actions";
 import { SetUserPreferenceRequest } from "./actions.types";
 import { getDocumentFromMarker } from "./api-functions";
 import Button from "./Button";
@@ -99,9 +105,9 @@ import Tooltip from "./Tooltip";
 import { isEmpty as _isEmpty } from "lodash-es";
 
 export interface ICrossPostIssueContext {
-	setSelectedAssignees(any: any): void;
-	setValues(values: any): void;
-	selectedAssignees: any[];
+	setSelectedAssignees(any: { value: string | ThirdPartyProviderUser; label: string }[]): void;
+	setValues(values: Partial<CrossPostIssueValues>): void;
+	selectedAssignees: { value: string | ThirdPartyProviderUser; label: string }[];
 	assigneesInputTarget?: HTMLElement;
 	codeBlock?: GetRangeScmInfoResponse;
 }
@@ -114,9 +120,12 @@ export const CrossPostIssueContext = React.createContext<ICrossPostIssueContext>
 interface Props extends ConnectedProps {
 	streamId: string;
 	collapseForm?: Function;
-	onSubmit: (attributes: NewCodemarkAttributes, event?: React.SyntheticEvent) => any;
-	onClickClose(e?: SyntheticEvent): any;
-	openCodemarkForm?(type: string): any;
+	onSubmit: (
+		attributes: NewCodemarkAttributes,
+		event?: React.SyntheticEvent
+	) => Promise<void> | ReturnType<typeof createPostAndCodemark>;
+	onClickClose(e?: SyntheticEvent): void;
+	openCodemarkForm?(type: string): void;
 	slackInfo?: {};
 	codeBlock?: GetRangeScmInfoResponse;
 	commentType?: string;
@@ -135,6 +144,7 @@ interface Props extends ConnectedProps {
 	openModal: Function;
 	getPullRequestConversationsFromProvider: Function;
 	setCurrentPullRequestNeedsRefresh: Function;
+	setCurrentStream: typeof setCurrentStream;
 	setUserPreference: (request: SetUserPreferenceRequest) => void;
 	markItemRead(
 		...args: Parameters<typeof markItemRead>
@@ -164,7 +174,7 @@ interface ConnectedProps {
 	textEditorGitSha?: string;
 	textEditorSelection?: EditorSelection;
 	teamProvider: "codestream" | "slack" | "msteams" | string;
-	teamTagsArray: any;
+	teamTagsArray: ReturnType<typeof getTeamTagsArray>;
 	codemarkState: CodemarksState;
 	multipleMarkersEnabled: boolean;
 	shouldShare: boolean;
@@ -176,7 +186,20 @@ interface ConnectedProps {
 	activePanel?: WebviewPanels;
 	inviteUsersOnTheFly: boolean;
 	currentPullRequestId?: string;
-	textEditorUriContext: any;
+	textEditorUriContext?: {
+		repoId?: string;
+		path: string;
+		leftSha?: string;
+		rightSha?: string;
+		headBranch?: string;
+		baseBranch?: string;
+		context?: {
+			pullRequest: {
+				providerId: string;
+				id: string;
+			};
+		};
+	};
 	textEditorUriHasPullRequestContext: boolean;
 	repos: ReposState;
 	prLabel: LabelHash;
@@ -192,7 +215,9 @@ interface State {
 	type: string;
 	codeBlocks: GetRangeScmInfoResponse[];
 	scmError: string;
-	assignees: { value: any; label: string }[] | { value: any; label: string };
+	assignees:
+		| { value: string | ThirdPartyProviderUser; label: string }[]
+		| { value: string | ThirdPartyProviderUser; label: string };
 	assigneesRequired: boolean;
 	assigneesDisabled: boolean;
 	singleAssignee: boolean;
@@ -203,13 +228,13 @@ interface State {
 	isReviewLoading: boolean;
 	crossPostMessage: boolean;
 	crossPostIssueValues: Partial<CrossPostIssueValues>;
-	assignableUsers: { value: any; label: string }[];
+	assignableUsers: { value: string | ThirdPartyProviderUser; label: string }[];
 	channelMenuOpen: boolean;
-	channelMenuTarget: any;
+	channelMenuTarget: EventTarget;
 	labelMenuOpen: boolean;
-	labelMenuTarget: any;
+	labelMenuTarget: EventTarget;
 	locationMenuOpen: number | "header" | "closed";
-	locationMenuTarget: any;
+	locationMenuTarget: EventTarget;
 	sharingDisabled?: boolean;
 	selectedChannelName?: string;
 	selectedChannelId?: string;
@@ -222,11 +247,11 @@ interface State {
 	showAllChannels?: boolean;
 	linkURI?: string;
 	copied: boolean;
-	selectedTags?: any;
+	selectedTags: { [key: string]: boolean };
 	deleteMarkerLocations: {
 		[index: number]: boolean;
 	};
-	relatedCodemarkIds?: any;
+	relatedCodemarkIds: { [id: string]: CodemarkPlus | undefined };
 	attachments: AttachmentField[];
 	addingLocation?: boolean;
 	editingLocation: number;
@@ -280,7 +305,7 @@ class CodemarkForm extends React.Component<Props, State> {
 			assigneesDisabled: false,
 			assigneesRequired: false,
 			singleAssignee: false,
-			selectedChannelName: (props.channel as any).name,
+			selectedChannelName: (props.channel as { name?: string }).name,
 			selectedChannelId: props.channel.id,
 			assignableUsers: this.getAssignableCSUsers(),
 			isPermalinkPublic: false,
@@ -311,25 +336,27 @@ class CodemarkForm extends React.Component<Props, State> {
 					...defaultState,
 			  } as State);
 
-		let assignees: any;
+		const codemarkAssignees = props.editingCodemark?.assignees || [];
+
+		let assignees: { value: string | ThirdPartyProviderUser; label: string }[] = [];
 		if (props.isEditing) {
 			const externalAssignees = this.props.editingCodemark!.externalAssignees || [];
 			assignees = externalAssignees
 				.map(a => ({
-					value: a.displayName,
+					value: a.displayName as string | ThirdPartyProviderUser,
 					label: a.displayName,
 				}))
 				.concat(
 					mapFilter(this.props.editingCodemark!.assignees || [], a =>
-						state.assignableUsers.find((au: any) => au.value === a)
+						state.assignableUsers.find(au => au.value === a)
 					)
 				);
-		} else if (state.assignees === undefined) {
-			assignees = undefined;
-		} else if (Array.isArray(state.assignees)) {
-			assignees = state.assignees.map(a => state.assignableUsers.find((au: any) => au.value === a));
-		} else {
-			assignees = state.assignableUsers.find((au: any) => au.value === state.assignees);
+		} else if (codemarkAssignees === undefined) {
+			assignees = [];
+		} else if (Array.isArray(codemarkAssignees)) {
+			assignees = mapFilter(codemarkAssignees, a =>
+				state.assignableUsers.find(au => au.value === a)
+			);
 		}
 		this.state = {
 			...state,
@@ -380,10 +407,10 @@ class CodemarkForm extends React.Component<Props, State> {
 
 		if (textEditorUriHasPullRequestContext) {
 			const changedPrLines = await HostApi.instance.send(GetShaDiffsRangesRequestType, {
-				repoId: textEditorUriContext.repoId,
-				filePath: textEditorUriContext.path,
-				baseSha: textEditorUriContext.leftSha,
-				headSha: textEditorUriContext.rightSha,
+				repoId: textEditorUriContext!.repoId || "",
+				filePath: textEditorUriContext!.path,
+				baseSha: textEditorUriContext!.leftSha || "",
+				headSha: textEditorUriContext!.rightSha || "",
 			});
 
 			this.setState({ changedPrLines });
@@ -588,10 +615,10 @@ class CodemarkForm extends React.Component<Props, State> {
 
 					let prRange;
 					switch (codeBlock.scm.branch) {
-						case textEditorUriContext.headBranch:
+						case textEditorUriContext?.headBranch:
 							prRange = changedPrLine.headLinesChanged;
 							break;
-						case textEditorUriContext.baseBranch:
+						case textEditorUriContext?.baseBranch:
 							prRange = changedPrLine.baseLinesChanged;
 							break;
 						default:
@@ -818,25 +845,24 @@ class CodemarkForm extends React.Component<Props, State> {
 			type === CodemarkType.Issue && this.props.issueProvider != undefined;
 
 		let csAssignees: string[] = [];
+		const assignees = Array.isArray(this.state.assignees)
+			? this.state.assignees
+			: [this.state.assignees];
 		if (crossPostIssueEnabled) {
-			const assignees = Array.isArray(this.state.assignees)
-				? this.state.assignees
-				: [this.state.assignees];
-
 			csAssignees = mapFilter(assignees, a => {
-				const user = a.value;
+				const user = a.value as ThirdPartyProviderUser;
 				const codestreamUser = this.props.teamMembers.find(
 					t => Boolean(user.email) && t.email === user.email
 				);
 				if (codestreamUser) return codestreamUser.id;
 				return undefined;
 			});
-			crossPostIssueValues.assignees = assignees.map(a => a.value);
+			crossPostIssueValues.assignees = assignees.map(a => a.value as ThirdPartyProviderUser);
 			crossPostIssueValues.issueProvider = this.props.issueProvider;
 		} else
 			csAssignees = this.props.isEditing
-				? this.props.editingCodemark!.assignees
-				: (this.state.assignees as any[]).map(a => a.value);
+				? (this.props.editingCodemark!.assignees as string[])
+				: assignees.map(a => a.value as string);
 
 		if (this.props.currentPullRequestId && this.state.isProviderReview) {
 			this.setState({ isReviewLoading: true });
@@ -932,7 +958,7 @@ class CodemarkForm extends React.Component<Props, State> {
 					this.showConfirmationForCodemarkLocation(type, codeBlocks.length);
 			} else {
 				await this.props.onSubmit({ ...baseAttributes, streamId: selectedChannelId! }, event);
-				(this.props as any).dispatch(setCurrentStream(selectedChannelId));
+				this.props.setCurrentStream(selectedChannelId);
 			}
 		} catch (error) {
 			console.error(error);
@@ -1112,7 +1138,8 @@ class CodemarkForm extends React.Component<Props, State> {
 			this.setState({ showAllChannels: true });
 			return;
 		} else if (stream && stream.id) {
-			const channelName = (stream.type === StreamType.Direct ? "@" : "#") + (stream as any).name;
+			const channelName =
+				(stream.type === StreamType.Direct ? "@" : "#") + (stream as { name?: string }).name;
 			this.setState({ selectedChannelName: channelName, selectedChannelId: stream.id });
 		}
 		this.setState({ channelMenuOpen: false });
@@ -1419,10 +1446,6 @@ class CodemarkForm extends React.Component<Props, State> {
 		if (relatedCodemarkIds[codemark.id]) delete relatedCodemarkIds[codemark.id];
 		else {
 			relatedCodemarkIds[codemark.id] = codemark;
-			HostApi.instance.track("Related Codemark Added", {
-				"Codemark ID": this.props.editingCodemark ? this.props.editingCodemark.id : undefined,
-				"Sibling Status": this.props.isEditing ? "Existing Codemark" : "New Codemark",
-			});
 		}
 		this.setState({ relatedCodemarkIds });
 	};
@@ -1524,13 +1547,13 @@ class CodemarkForm extends React.Component<Props, State> {
 			const scm = codeBlock.scm;
 			let file = scm && scm.file ? paths.basename(scm.file) : "";
 
-			let range: any = codeBlock.range;
+			let range: Range | undefined = codeBlock.range;
 			if (editingCodemark) {
 				if (editingCodemark.markers && editingCodemark.markers.length > 0) {
 					const marker = editingCodemark.markers[0];
 					if (marker.locationWhenCreated) {
 						// TODO: location is likely invalid
-						range = arrayToRange(marker.locationWhenCreated as any);
+						range = arrayToRange(marker.locationWhenCreated.slice(0, 4) as number[]);
 					} else {
 						range = undefined;
 					}
@@ -1710,9 +1733,9 @@ class CodemarkForm extends React.Component<Props, State> {
 		const blockInjected = text.includes(`[#${index + 1}]`);
 		if (isPreviewing && blockInjected && !force) return null;
 
-		let range: any = undefined;
+		let range: Range | undefined = undefined;
 		if (marker.locationWhenCreated) {
-			range = arrayToRange(marker.locationWhenCreated as any);
+			range = arrayToRange(marker.locationWhenCreated);
 		} else {
 			range = arrayToRange(marker.referenceLocations[0].location);
 		}
@@ -1827,9 +1850,9 @@ class CodemarkForm extends React.Component<Props, State> {
 
 		const scm = codeBlock.scm;
 
-		let file = scm && scm.file ? paths.basename(scm.file) : "";
+		const file = scm && scm.file ? paths.basename(scm.file) : "";
 
-		let range: any = codeBlock.range;
+		const range: Range = codeBlock.range;
 		// if (editingCodemark) {
 		// 	if (editingCodemark.markers) {
 		// 		const marker = editingCodemark.markers[0];
@@ -2035,10 +2058,12 @@ class CodemarkForm extends React.Component<Props, State> {
 	private _getCrossPostIssueContext(): ICrossPostIssueContext {
 		return {
 			setSelectedAssignees: assignees => this.setState({ assignees }),
-			selectedAssignees: this.state.assignees as any,
+			selectedAssignees: Array.isArray(this.state.assignees)
+				? this.state.assignees
+				: [this.state.assignees],
 			assigneesInputTarget:
 				this._assigneesContainerRef.current ||
-				(document.querySelector("#members-controls")! as any) ||
+				(document.querySelector("#members-controls")! as HTMLElement) ||
 				document.createElement("span"),
 			setValues: values => {
 				this.setState(state => ({
@@ -2288,7 +2313,7 @@ class CodemarkForm extends React.Component<Props, State> {
 			</span>
 		);
 
-		const locationItems: any[] = [];
+		const locationItems: { label: string; action: () => void }[] = [];
 		if (this.props.multipleMarkersEnabled && this.props.commentType !== "link")
 			locationItems.push({ label: "Add Range", action: () => this.addLocation() });
 		// { label: "Change Location", action: () => this.editLocation(0) }
@@ -2449,15 +2474,6 @@ class CodemarkForm extends React.Component<Props, State> {
 						)}
 						{this.renderTextHelp()}
 						{commentType === "link" &&
-							this.state.linkURI &&
-							this.state.isPermalinkPublic && [
-								<div key="permalink-warning" className="permalink-warning">
-									<Icon name="alert" />
-									Note that this is a public URL. Anyone with the link will be able to see the
-									quoted code snippet.
-								</div>,
-							]}
-						{commentType === "link" &&
 							this.state.linkURI && [
 								<textarea
 									key="link-offscreen"
@@ -2473,25 +2489,6 @@ class CodemarkForm extends React.Component<Props, State> {
 									style={{ position: "absolute", left: "-9999px" }}
 								/>,
 							]}
-						{commentType === "link" && !this.state.linkURI && (
-							<div id="privacy-controls" className="control-group" key="1">
-								<div className="public-private-hint" key="privacy-hint">
-									{this.state.isPermalinkPublic
-										? "Anyone can view this link, including the quoted codeblock."
-										: "Only members of your team can access this link."}
-								</div>
-								<LabeledSwitch
-									key="privacy"
-									colored
-									on={this.state.isPermalinkPublic}
-									offLabel="Private"
-									onLabel="Public"
-									onChange={this.togglePermalinkPrivacy}
-									height={28}
-									width={90}
-								/>
-							</div>
-						)}
 						{commentType !== "bookmark" && commentType !== "link" && this.renderMessageInput()}
 					</div>
 					{false && (commentType === "comment" || commentType === "question") && (
@@ -2654,6 +2651,7 @@ const mapStateToProps = (state: CodeStreamState): ConnectedProps => {
 		editorContext,
 		users,
 		teams,
+		companies,
 		session,
 		preferences,
 		providers,
@@ -2662,6 +2660,7 @@ const mapStateToProps = (state: CodeStreamState): ConnectedProps => {
 		codeErrors,
 	} = state;
 	const user = users[session.userId!] as CSMe;
+
 	const channel = context.currentStreamId
 		? getStreamForId(state.streams, context.currentTeamId, context.currentStreamId) ||
 		  getStreamForTeam(state.streams, context.currentTeamId)
@@ -2684,6 +2683,7 @@ const mapStateToProps = (state: CodeStreamState): ConnectedProps => {
 	const inviteUsersOnTheFly =
 		isFeatureEnabled(state, "emailSupport") && isFeatureEnabled(state, "inviteUsersOnTheFly");
 	const textEditorUriContext = parseCodeStreamDiffUri(editorContext.textEditorUri!);
+	const company = companies[team.companyId];
 
 	return {
 		repos,
@@ -2744,6 +2744,7 @@ const ConnectedCodemarkForm = connect(mapStateToProps, {
 	upgradePendingCodeError,
 	getPullRequestConversationsFromProvider,
 	setCurrentPullRequestNeedsRefresh,
+	setCurrentStream,
 })(CodemarkForm);
 
 export { ConnectedCodemarkForm as CodemarkForm };

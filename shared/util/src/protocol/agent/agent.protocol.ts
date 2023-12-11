@@ -6,7 +6,15 @@ import { LoginResponse } from "./agent.protocol.auth";
 import { CreateCompanyRequest, CreateCompanyResponse } from "./agent.protocol.companies";
 import { Unreads } from "./agent.protocol.notifications";
 import { ThirdPartyProviders } from "./agent.protocol.providers";
-import { CSCompany, CSMePreferences, CSRepository, CSStream, CSTeam, CSUser } from "./api.protocol";
+import {
+	CSAccessTokenType,
+	CSCompany,
+	CSMePreferences,
+	CSRepository,
+	CSStream,
+	CSTeam,
+	CSUser,
+} from "./api.protocol";
 
 export * from "./agent.protocol.asana";
 export * from "./agent.protocol.auth";
@@ -42,11 +50,6 @@ export * from "./agent.protocol.textFiles";
 export * from "./agent.protocol.trello";
 export * from "./agent.protocol.users";
 export * from "./agent.protocol.youtrack";
-
-export interface Document {
-	uri: string;
-	isDirty?: boolean;
-}
 
 export interface Capabilities {
 	channelMute?: boolean;
@@ -87,6 +90,8 @@ export interface AccessToken {
 	teamId: string;
 	provider?: string;
 	providerAccess?: "strict";
+	refreshToken?: string;
+	tokenType?: CSAccessTokenType;
 }
 
 export enum CodeStreamEnvironment {
@@ -301,6 +306,12 @@ export const TelemetryRequestType = new RequestType<TelemetryRequest, void, void
 	"codestream/telemetry"
 );
 
+export interface GetAnonymousIdRequest {}
+
+export const GetAnonymousIdRequestType = new RequestType<GetAnonymousIdRequest, string, void, void>(
+	"codestream/anonymousId"
+);
+
 export interface ResolveLocalUriRequest {
 	uri: string;
 }
@@ -386,16 +397,6 @@ export const AgentFilterNamespacesRequestType = new RequestType<
 	void,
 	void
 >("codestream/namespaces/filter");
-
-export interface UIStateRequest {
-	context?: {
-		panelStack?: string[];
-	};
-}
-
-export const UIStateRequestType = new RequestType<UIStateRequest, void, void, void>(
-	"codestream/ui/state"
-);
 
 export interface SetServerUrlRequest {
 	serverUrl: string;

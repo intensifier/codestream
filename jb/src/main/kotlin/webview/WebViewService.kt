@@ -200,43 +200,20 @@ class WebViewService(val project: Project) : Disposable {
                     val jbCefBrowser = JBCefBrowser()
                     jbCefBrowserFuture.complete(jbCefBrowser)
                 }
-                JBCefWebView(jbCefBrowserFuture.await(), router, project).also {
-                    webviewTelemetry("JCEF")
-                }
+                JBCefWebView(jbCefBrowserFuture.await(), router, project)
             } else {
                 logger.info("JCEF disabled - falling back to JxBrowser")
                 val engine = application.getService(JxBrowserEngineService::class.java)
                 val browser = engine.newBrowser()
-
-                JxBrowserWebView(browser, router).also {
-                    if (JBCefApp.isSupported()) {
-                        webviewTelemetry("JxBrowser - user selection")
-                    } else {
-                        webviewTelemetry("JxBrowser - JCEF not supported")
-                    }
-                }
+                JxBrowserWebView(browser, router)
             }
         } catch (ex: Exception) {
             logger.warn("Error initializing JCEF - falling back to JxBrowser", ex)
             val engine = application.getService(JxBrowserEngineService::class.java)
-            JxBrowserWebView(engine.newBrowser(), router).also {
-                webviewTelemetry("JxBrowser - JCEF failed")
-            }
+            JxBrowserWebView(engine.newBrowser(), router)
         }
     }
 
-    private fun webviewTelemetry(webviewType: String) {
-        val params = TelemetryParams("JB Webview Created", mapOf("Webview" to webviewType))
-        if (project.sessionService?.userLoggedIn != null) {
-            project.agentService?.agent?.telemetry(params)
-        } else {
-            project.sessionService?.onUserLoggedInChanged {
-                if (it != null) {
-                    project.agentService?.agent?.telemetry(params)
-                }
-            }
-        }
-    }
 }
 
 private val File.url: String

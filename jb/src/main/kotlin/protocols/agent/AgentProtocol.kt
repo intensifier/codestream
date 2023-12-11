@@ -66,14 +66,25 @@ class LoginResponse(
     val accessToken: String
 )
 
-class LoginState(
+data class AccessToken(
+    val email: String,
+    val url: String,
+    val value: String,
+    val teamId: String,
+    val provider: String?,
+    val providerAccess: String?,
+    val refreshToken: String?,
+    val tokenType: String? // Tried enum but doesn't work with whatever serialization is on CodeStreamLanguageServer.loginToken
+)
+
+data class LoginState(
     val userId: String,
     val teamId: String,
     val email: String,
     val capabilities: JsonObject,
     val environmentInfo: EnvironmentInfo,
     val serverUrl: String,
-    val token: JsonObject?
+    val token: AccessToken?
 )
 
 class UserLoggedIn(
@@ -555,7 +566,7 @@ class ResponseTimesResult(
 data class MethodLevelTelemetrySymbolIdentifier(
     val namespace: String?,
     val className: String?,
-    val functionName: String
+    val functionName: String?
 )
 
 class ObservabilityAnomaly(
@@ -581,7 +592,7 @@ class ObservabilityAnomaly(
 open class MethodLevelTelemetryData(
     val namespace: String?,
     val className: String?,
-    val functionName: String,
+    val functionName: String?,
     val metricTimesliceName: String,
     val anomaly: ObservabilityAnomaly?
 ) {
@@ -633,6 +644,30 @@ class FileLevelTelemetryResult(
     // val newRelicEntityAccounts: EntityAccount[];
     val codeNamespace: String?,
     val relativeFilePath: String?
+)
+
+class ClmParams(
+    val entityGuid: String
+)
+
+class ClmResult(
+    val codeLevelMetrics: List<CodeLevelMetric>,
+    val isSupported: Boolean,
+    val error: String?
+)
+
+class CodeLevelMetric(
+    val name: String,
+    val scope: String?,
+    val codeAttrs: CodeAttributes?,
+    val duration: Float?,
+    val errorRate: Float?
+)
+
+class CodeAttributes(
+    val codeFilepath: String?,
+    val codeNamespace: String?,
+    val codeFunction: String
 )
 
 const val NOT_ASSOCIATED = "NOT_ASSOCIATED"

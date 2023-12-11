@@ -2,7 +2,7 @@
 // (eg. Pubnub, SocketCluster) to receive messages in real-time
 "use strict";
 import { Agent as HttpsAgent } from "https";
-import HttpsProxyAgent from "https-proxy-agent";
+import { HttpsProxyAgent } from "https-proxy-agent";
 import { Disposable, Emitter, Event } from "vscode-languageserver";
 import { ApiProvider } from "../api/apiProvider";
 import { PubnubConnection } from "./pubnubConnection";
@@ -59,7 +59,7 @@ export interface BroadcasterInitializer {
 	lastMessageReceivedAt?: number; // should persist across sessions, interruptions in service will retrieve messages since this time
 	testMode?: boolean; // whether we emit test-mode statuses, not normally used in production
 	debug?(msg: string, info?: any): void; // for debug messages
-	httpsAgent?: HttpsAgent | HttpsProxyAgent;
+	httpsAgent?: HttpsAgent | HttpsProxyAgent<string>;
 	socketCluster?: {
 		host: string;
 		port: string;
@@ -112,11 +112,11 @@ interface SubscriptionMap {
 	};
 }
 
-// the retention time is one month ... to avoid missing messages on the edge, we'll
+// the retention time is one day ... to avoid missing messages on the edge, we'll
 // not try to catch up if we are within ten minutes of that
-const ONE_MONTH = 30 * 24 * 60 * 60 * 1000;
+const ONE_DAY = 24 * 60 * 60 * 1000;
 const TEN_MINUTES = 10 * 60 * 1000;
-const THRESHOLD_FOR_CATCHUP = ONE_MONTH - TEN_MINUTES;
+const THRESHOLD_FOR_CATCHUP = ONE_DAY - TEN_MINUTES;
 const THRESHOLD_BUFFER = 12000;
 const MAX_HISTORY_FETCHES_PER_MINUTE = 10;
 const MAX_HISTORY_FETCHES_PER_HOUR = 100;
@@ -130,9 +130,9 @@ export class Broadcaster {
 	private _messageEmitter = new Emitter<{ [key: string]: any }[]>();
 	private _statusEmitter = new Emitter<BroadcasterStatus>();
 	private _queuedChannels: string[] = [];
-	private _statusTimeout: NodeJS.Timer | undefined;
+	private _statusTimeout: NodeJS.Timeout | undefined;
 	private _lastTick: number = 0;
-	private _tickInterval: NodeJS.Timer | undefined;
+	private _tickInterval: NodeJS.Timeout | undefined;
 	private _needConnectedMessage: boolean = false;
 	private _hadTrouble: boolean = false;
 	private _testMode: boolean = false;
@@ -161,7 +161,7 @@ export class Broadcaster {
 
 	constructor(
 		private readonly _api: ApiProvider,
-		private readonly _httpsAgent: HttpsAgent | HttpsProxyAgent | undefined
+		private readonly _httpsAgent: HttpsAgent | HttpsProxyAgent<string> | undefined
 	) {}
 
 	// initialize BroadcasterConnection

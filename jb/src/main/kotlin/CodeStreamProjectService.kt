@@ -32,7 +32,7 @@ import java.io.File
 import java.nio.file.Files
 import kotlin.properties.Delegates
 
-const val CODESTREAM_TOOL_WINDOW_ID = "CodeStream"
+const val CODESTREAM_TOOL_WINDOW_ID = "New Relic CodeStream"
 
 class CodeStreamProjectService(val project: Project) : Disposable {
 

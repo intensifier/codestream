@@ -2,7 +2,7 @@ import {
 	GetObservabilityAnomaliesResponse,
 	LanguageAndVersionValidation,
 } from "@codestream/protocols/agent";
-import React, { useState } from "react";
+import React, { useEffect } from "react";
 import { Row } from "./CrossPostIssueControls/IssuesPane";
 import Icon from "./Icon";
 import { Link } from "./Link";
@@ -25,6 +25,8 @@ import {
 	RubyPluginLanguageServer,
 } from "./MethodLevelTelemetry/MissingExtension";
 import { WarningBoxRoot } from "./WarningBox";
+import { HostApi } from "@codestream/webview/webview-api";
+import { setUserPreference } from "./actions";
 
 interface Props {
 	observabilityAnomalies: GetObservabilityAnomaliesResponse;
@@ -38,15 +40,18 @@ interface Props {
 
 export const ObservabilityAnomaliesWrapper = React.memo((props: Props) => {
 	const derivedState = useAppSelector((state: CodeStreamState) => {
+		const { preferences } = state;
+
+		const anomaliesDropdownIsExpanded = preferences?.anomaliesDropdownIsExpanded ?? true;
+
 		const clmSettings = state.preferences.clmSettings || {};
 		return {
+			anomaliesDropdownIsExpanded,
 			clmSettings,
 			currentMethodLevelTelemetry: (state.context.currentMethodLevelTelemetry ||
 				{}) as CurrentMethodLevelTelemetry,
 		};
 	}, shallowEqual);
-
-	const [expanded, setExpanded] = useState<boolean>(true);
 
 	const dispatch = useAppDispatch();
 
@@ -87,30 +92,71 @@ export const ObservabilityAnomaliesWrapper = React.memo((props: Props) => {
 		}
 	}
 
-	const showAgentWarning =
-		!_isEmpty(props.languageAndVersionValidation?.language) &&
-		!_isEmpty(props.languageAndVersionValidation?.required);
-	const showDistributedTracingWarning = !showAgentWarning && !props.distributedTracingEnabled;
-	const showExtensionWarning =
-		!showDistributedTracingWarning &&
-		!_isEmpty(props.languageAndVersionValidation?.languageExtensionValidation) &&
-		props.languageAndVersionValidation?.languageExtensionValidation !== "VALID";
+	// const showAgentWarning =
+	// 	!_isEmpty(props.languageAndVersionValidation?.language) &&
+	// 	!_isEmpty(props.languageAndVersionValidation?.required);
+	// const showDistributedTracingWarning = !showAgentWarning && !props.distributedTracingEnabled;
+	// const showExtensionWarning =
+	// 	!showDistributedTracingWarning &&
+	// 	!_isEmpty(props.languageAndVersionValidation?.languageExtensionValidation) &&
+	// 	props.languageAndVersionValidation?.languageExtensionValidation !== "VALID";
 
-	// useEffect(() => {
-	// 	if (!_isEmpty(props.languageAndVersionValidation)) {
-	// 		HostApi.instance.track("CLM Blocked", {
-	// 			cause: "Unsupported Agent",
-	// 		});
-	// 	}
-	// }, [props.languageAndVersionValidation]);
+	const showAgentWarning = false;
+	const showDistributedTracingWarning = false;
+	const showExtensionWarning = false;
 
-	// useEffect(() => {
-	// 	if (!props.distributedTracingEnabled) {
-	// 		HostApi.instance.track("CLM Blocked", {
-	// 			cause: "DT Not Enabled",
-	// 		});
-	// 	}
-	// }, [props.distributedTracingEnabled]);
+	useEffect(() => {
+		if (!_isEmpty(props.languageAndVersionValidation)) {
+			if (showAgentWarning) {
+				// Prevent dupe tracking call if user reloads IDE, can trigger rapid double mount
+				setTimeout(() => {
+					HostApi.instance.track("CLM Blocked", {
+						Cause: "Unsupported Agent",
+					});
+				}, 3000);
+			}
+
+			if (showExtensionWarning) {
+				// Prevent dupe tracking call if user reloads IDE, can trigger rapid double mount
+				setTimeout(() => {
+					HostApi.instance.track("CLM Blocked", {
+						Cause: "Missing Language Extension",
+					});
+				}, 3000);
+			}
+		}
+	}, [props.languageAndVersionValidation]);
+
+	useEffect(() => {
+		if (!props.distributedTracingEnabled) {
+			if (showDistributedTracingWarning) {
+				// Prevent dupe tracking call if user reloads IDE, can trigger rapid double mount
+				setTimeout(() => {
+					console.warn("distributedTracingEnabled", props.distributedTracingEnabled);
+					HostApi.instance.track("CLM Blocked", {
+						Cause: "DT Not Enabled",
+					});
+				}, 3000);
+			}
+		}
+	}, [props.distributedTracingEnabled]);
+
+	const handleRowOnClick = () => {
+		const { anomaliesDropdownIsExpanded } = derivedState;
+
+		dispatch(
+			setUserPreference({
+				prefPath: ["anomaliesDropdownIsExpanded"],
+				value: !anomaliesDropdownIsExpanded,
+			})
+		);
+	};
+
+	const anomalies = [
+		...props.observabilityAnomalies.responseTime,
+		...props.observabilityAnomalies.errorRate,
+	];
+	anomalies.sort((a, b) => b.ratio - a.ratio);
 
 	return (
 		<>
@@ -119,12 +165,12 @@ export const ObservabilityAnomaliesWrapper = React.memo((props: Props) => {
 					padding: "0px 10px 0px 30px",
 				}}
 				className={"pr-row"}
-				onClick={() => setExpanded(!expanded)}
+				onClick={() => handleRowOnClick()}
 				data-testid={`anomalies-dropdown`}
 			>
 				<span style={{ paddingTop: "3px" }}>
-					{expanded && <Icon name="chevron-down-thin" />}
-					{!expanded && <Icon name="chevron-right-thin" />}
+					{derivedState.anomaliesDropdownIsExpanded && <Icon name="chevron-down-thin" />}
+					{!derivedState.anomaliesDropdownIsExpanded && <Icon name="chevron-right-thin" />}
 				</span>
 				<div className="label">
 					<span style={{ margin: "0px 5px 0px 2px" }}>Code-Level Metrics</span>
@@ -157,84 +203,92 @@ export const ObservabilityAnomaliesWrapper = React.memo((props: Props) => {
 					</span>
 				</div>
 			</Row>
-			{expanded && props.observabilityAnomalies.error && !props.calculatingAnomalies && (
-				<>
-					<ErrorRow customPadding={"0 10px 0 50px"} title={props.observabilityAnomalies.error} />
-				</>
-			)}
+			{derivedState.anomaliesDropdownIsExpanded &&
+				props.observabilityAnomalies.error &&
+				!props.calculatingAnomalies && (
+					<>
+						<ErrorRow customPadding={"0 10px 0 50px"} title={props.observabilityAnomalies.error} />
+					</>
+				)}
 
 			{/* Agent Version Warning */}
-			{expanded && !props.calculatingAnomalies && showAgentWarning && (
-				<>
-					{props.languageAndVersionValidation?.language &&
-						props.languageAndVersionValidation?.required && (
-							<Row
-								style={{
-									padding: "0px 0px 0px 0px",
-								}}
-								className={"pr-row"}
-							>
-								<span style={{ marginLeft: "2px", whiteSpace: "normal" }}>
-									<WarningBoxRoot style={{ margin: "0px 1px 0px 0px" }}>
-										<Icon name="alert" className="alert" />
-										<div className="message">
-											<div>
-												Requires {props.languageAndVersionValidation?.language} agent version{" "}
-												{props.languageAndVersionValidation?.required} or higher.
+			{derivedState.anomaliesDropdownIsExpanded &&
+				!props.calculatingAnomalies &&
+				showAgentWarning && (
+					<>
+						{props.languageAndVersionValidation?.language &&
+							props.languageAndVersionValidation?.required && (
+								<Row
+									style={{
+										padding: "0px 0px 0px 0px",
+									}}
+									className={"pr-row"}
+								>
+									<span style={{ marginLeft: "2px", whiteSpace: "normal" }}>
+										<WarningBoxRoot style={{ margin: "0px 1px 0px 0px" }}>
+											<Icon name="alert" className="alert" />
+											<div className="message">
+												<div>
+													Requires {props.languageAndVersionValidation?.language} agent version{" "}
+													{props.languageAndVersionValidation?.required} or higher.
+												</div>
 											</div>
-										</div>
-									</WarningBoxRoot>
-								</span>
-							</Row>
-						)}
-				</>
-			)}
+										</WarningBoxRoot>
+									</span>
+								</Row>
+							)}
+					</>
+				)}
 
 			{/* Distrubuted Tracing Warning */}
-			{expanded && !props.calculatingAnomalies && showDistributedTracingWarning && (
-				<Row
-					style={{
-						padding: "0px 0px 0px 0px",
-					}}
-					className={"pr-row"}
-				>
-					<span style={{ marginLeft: "2px", whiteSpace: "normal" }}>
-						<WarningBoxRoot style={{ margin: "0px 1px 0px 0px" }}>
-							<Icon name="alert" className="alert" />
-							<div className="message">
-								<div>
-									Enable{" "}
-									<Link href="https://docs.newrelic.com/docs/distributed-tracing/concepts/quick-start/">
-										distributed tracing
-									</Link>{" "}
-									for this service to see code-level metrics.
+			{derivedState.anomaliesDropdownIsExpanded &&
+				!props.calculatingAnomalies &&
+				showDistributedTracingWarning && (
+					<Row
+						style={{
+							padding: "0px 0px 0px 0px",
+						}}
+						className={"pr-row"}
+					>
+						<span style={{ marginLeft: "2px", whiteSpace: "normal" }}>
+							<WarningBoxRoot style={{ margin: "0px 1px 0px 0px" }}>
+								<Icon name="alert" className="alert" />
+								<div className="message">
+									<div>
+										Enable{" "}
+										<Link href="https://docs.newrelic.com/docs/distributed-tracing/concepts/quick-start/">
+											distributed tracing
+										</Link>{" "}
+										for this service to see code-level metrics.
+									</div>
 								</div>
-							</div>
-						</WarningBoxRoot>
-					</span>
-				</Row>
-			)}
+							</WarningBoxRoot>
+						</span>
+					</Row>
+				)}
 
 			{/* Extension Warning */}
-			{expanded && !props.calculatingAnomalies && showExtensionWarning && (
-				<Row
-					style={{
-						padding: "0px 0px 0px 0px",
-					}}
-					className={"pr-row"}
-				>
-					<span style={{ marginLeft: "2px", whiteSpace: "normal" }}>{missingExtension}</span>
-				</Row>
-			)}
+			{derivedState.anomaliesDropdownIsExpanded &&
+				!props.calculatingAnomalies &&
+				showExtensionWarning && (
+					<Row
+						style={{
+							padding: "0px 0px 0px 0px",
+						}}
+						className={"pr-row"}
+					>
+						<span style={{ marginLeft: "2px", whiteSpace: "normal" }}>{missingExtension}</span>
+					</Row>
+				)}
 
-			{expanded &&
+			{derivedState.anomaliesDropdownIsExpanded &&
 				(props.noAccess ? (
 					<Row
 						style={{
 							padding: "2px 10px 2px 40px",
 						}}
 						className={"pr-row"}
-						onClick={() => setExpanded(!expanded)}
+						onClick={() => handleRowOnClick()}
 					>
 						<span style={{ marginLeft: "2px", whiteSpace: "normal" }}>
 							{props.noAccess === "403" ? (
@@ -268,26 +322,10 @@ export const ObservabilityAnomaliesWrapper = React.memo((props: Props) => {
 							!showExtensionWarning && (
 								<>
 									<ObservabilityAnomaliesGroup
-										observabilityAnomalies={props.observabilityAnomalies.errorRate}
+										observabilityAnomalies={anomalies}
 										observabilityRepo={props.observabilityRepo}
 										entityGuid={props.entityGuid}
-										title="Error Rate Increase"
-										detectionMethod={props.observabilityAnomalies.detectionMethod}
-									/>
-									<ObservabilityAnomaliesGroup
-										observabilityAnomalies={props.observabilityAnomalies.responseTime}
-										observabilityRepo={props.observabilityRepo}
-										entityGuid={props.entityGuid}
-										title="Average Duration Increase"
-										detectionMethod={props.observabilityAnomalies.detectionMethod}
-									/>
-									<ObservabilityAnomaliesGroup
-										observabilityAnomalies={props.observabilityAnomalies.allOtherAnomalies || []}
-										observabilityRepo={props.observabilityRepo}
-										entityGuid={props.entityGuid}
-										title="All other methods"
-										noAnomaly={true}
-										collapseDefault={true}
+										title="Anomalies"
 										detectionMethod={props.observabilityAnomalies.detectionMethod}
 									/>
 								</>

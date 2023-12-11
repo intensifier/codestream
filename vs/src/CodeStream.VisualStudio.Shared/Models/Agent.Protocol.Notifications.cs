@@ -5,6 +5,37 @@ using CodeStream.VisualStudio.Core;
 
 namespace CodeStream.VisualStudio.Shared.Models
 {
+	public class DidRefreshAccessTokenNotificationType
+		: NotificationType<DidRefreshAccessTokenNotification>
+	{
+		public DidRefreshAccessTokenNotificationType(DidRefreshAccessTokenNotification @params) =>
+			Params = @params;
+
+		public const string MethodName = "codestream/didRefreshAccessToken";
+		public override string Method => MethodName;
+	}
+
+	public class DidRefreshAccessTokenNotification
+	{
+		[JsonProperty("url", NullValueHandling = NullValueHandling.Ignore)]
+		public string Url { get; set; }
+
+		[JsonProperty("email", NullValueHandling = NullValueHandling.Ignore)]
+		public string Email { get; set; }
+
+		[JsonProperty("teamId", NullValueHandling = NullValueHandling.Ignore)]
+		public string TeamId { get; set; }
+
+		[JsonProperty("token", NullValueHandling = NullValueHandling.Ignore)]
+		public string Token { get; set; }
+
+		[JsonProperty("tokenType", NullValueHandling = NullValueHandling.Ignore)]
+		public string TokenType { get; set; }
+
+		[JsonProperty("refreshToken", NullValueHandling = NullValueHandling.Ignore)]
+		public string RefreshToken { get; set; }
+	}
+
 	public class DidChangeConnectionStatusNotification
 	{
 		public bool? Reset { get; set; }

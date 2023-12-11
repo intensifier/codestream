@@ -1,5 +1,21 @@
 # Change Log
 
+## [15.0.0] - 2023-12-13
+
+### Changed
+
+- Identity is now unified with New Relic, and you will sign in to CodeStream using your New Relic credentials
+- Adding and removing organization members is now handled via New Relic on the web
+- Changing your email address or full name is now handled via New Relic on the web
+- The expanded/collapsed state of each top-level section of the CodeStream pane is preserved as you switch between services
+- Open incidents for a given service have been replaced by open issues, and are now displayed above the Golden Metrics
+- Anomalous methods in the Code-Level Metrics section are no longer split up between average duration and error rate anomalies
+- The "Switch Organization" menu has been renamed to "Switch Users"
+
+### Fixed
+
+- Fixes an issue where a newly opened repo wouldn't be recognized by the CodeStream pane without a reload
+
 ## [14.30.1] - 2023-09-29
 
 ### Fixed

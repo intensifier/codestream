@@ -101,9 +101,32 @@ export interface CSEligibleJoinCompany {
 	teamId?: string;
 }
 
+export interface CSPossibleAuthDomain {
+	authentication_domain_id?: string;
+	authentication_domain_name: string;
+	authentication_type: string;
+	login_url: string;
+	organization_id: string;
+	organization_name: string;
+	user_id: number;
+	useDomainName: boolean;
+}
+
+export enum CSAccessTokenType {
+	ACCESS_TOKEN = "access",
+	ID_TOKEN = "id",
+}
+
+export interface CSAccessTokenInfo {
+	refreshToken: string;
+	expiresAt: number;
+	tokenType: CSAccessTokenType;
+}
+
 export interface CSLoginResponse {
 	user: CSMe;
 	accessToken: string;
+	accessTokenInfo?: CSAccessTokenInfo;
 	pubnubKey: string;
 	pubnubToken: string;
 	broadcasterToken?: string;
@@ -126,6 +149,8 @@ export interface CSLoginResponse {
 		environment: string;
 		publicApiUrl: string;
 	};
+	signupStatus?: string;
+	forceCreateCompany?: boolean;
 }
 
 export interface CSRegisterRequest {
@@ -135,6 +160,9 @@ export interface CSRegisterRequest {
 	wantLink?: boolean;
 	inviteCode?: string;
 	machineId?: string;
+	companyName?: string;
+	joinCompanyId?: string;
+	originalEmail?: string;
 }
 
 export interface CSRegisterResponse {

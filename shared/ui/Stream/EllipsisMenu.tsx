@@ -1,27 +1,18 @@
-import {
-	DeleteCompanyRequestType,
-	UpdateTeamSettingsRequestType,
-} from "@codestream/protocols/agent";
-import { isEmpty as _isEmpty, sortBy as _sortBy } from "lodash-es";
+import { UpdateTeamSettingsRequestType } from "@codestream/protocols/agent";
+import { sortBy as _sortBy } from "lodash-es";
 import React from "react";
 import styled from "styled-components";
 import { WebviewModals, OpenUrlRequestType } from "@codestream/protocols/webview";
-import {
-	logout,
-	switchToForeignCompany,
-	switchToTeam,
-} from "@codestream/webview/store/session/thunks";
+import { logout, switchToTeamSSO } from "@codestream/webview/store/session/thunks";
 import { useAppDispatch, useAppSelector } from "@codestream/webview/utilities/hooks";
-import { WebviewPanels, SidebarPanes } from "@codestream/protocols/api";
+import { WebviewPanels, SidebarPanes, CSPossibleAuthDomain } from "@codestream/protocols/api";
 import { CodeStreamState } from "../store";
 import { isFeatureEnabled } from "../store/apiVersioning/reducer";
-import { openModal, setCurrentOrganizationInvite, setProfileUser } from "../store/context/actions";
+import { openModal, setProfileUser } from "../store/context/actions";
 import { HostApi } from "../webview-api";
 import { openPanel } from "./actions";
 import Icon from "./Icon";
-import { MarkdownText } from "./MarkdownText";
 import Menu from "./Menu";
-import { multiStageConfirmPopup } from "./MultiStageConfirm";
 import { AVAILABLE_PANES } from "./Sidebar";
 import { EMPTY_STATUS } from "./StartWork";
 
@@ -44,6 +35,8 @@ export const MailHighlightedIconWrapper = styled.div`
 	background: var(--text-color-info-muted);
 `;
 
+export const VALID_DELETE_ORG_EMAIL_DOMAINS = ["codestream.com", "newrelic.com", "testinator.com"];
+
 interface EllipsisMenuProps {
 	menuTarget: any;
 	closeMenu: any;
@@ -58,10 +51,17 @@ export function EllipsisMenu(props: EllipsisMenuProps) {
 		const team = state.teams[teamId];
 		const user = state.users[state.session.userId!];
 		const onPrem = state.configs.isOnPrem;
-		const currentCompanyId = team.companyId;
+		const companies = state.companies;
 		const { environmentHosts, environment, isProductionCloud } = state.configs;
 		const currentHost = environmentHosts?.find(host => host.shortName === environment);
 		const supportsMultiRegion = isFeatureEnabled(state, "multiRegion");
+
+		let currentCompanyId;
+		for (const key in companies) {
+			if (companies[key].hasOwnProperty("linkedNROrgId")) {
+				currentCompanyId = companies[key].linkedNROrgId;
+			}
+		}
 
 		let sidebarPanes: SidebarPanes = state.preferences.sidebarPanes || (EMPTY_HASH as SidebarPanes);
 		let sidebarPaneOrder: WebviewPanels[] = state.preferences.sidebarPaneOrder || AVAILABLE_PANES;
@@ -76,15 +76,21 @@ export function EllipsisMenu(props: EllipsisMenuProps) {
 			sidebarPaneOrder = sidebarPaneOrder.filter(_ => _ !== WebviewPanels.CodeAnalyzers);
 		}
 
+		const possibleAuthDomains = _sortBy(user?.possibleAuthDomains, "authentication_domain_name");
+		const currentOrg = possibleAuthDomains.find(
+			company => company.organization_id === currentCompanyId
+		);
+
 		return {
 			sidebarPanePreferences: sidebarPanes,
 			sidebarPaneOrder: sidebarPaneOrder,
 			userCompanies: _sortBy(Object.values(state.companies), "name"),
 			userTeams: _sortBy(
-				Object.values(state.teams).filter(t => !t.deactivated),
+				Object.values(state.teams).filter(t => t.deactivated),
 				"name"
 			),
 			currentCompanyId,
+			currentOrg,
 			currentTeamId: teamId,
 			serverUrl: state.configs.serverUrl,
 			company: state.companies[team.companyId] || {},
@@ -103,6 +109,8 @@ export function EllipsisMenu(props: EllipsisMenuProps) {
 			isProductionCloud,
 			supportsMultiRegion,
 			eligibleJoinCompanies: _sortBy(user?.eligibleJoinCompanies, "name"),
+			possibleAuthDomains,
+			nrUserId: user?.nrUserId,
 		};
 	});
 
@@ -111,98 +119,89 @@ export function EllipsisMenu(props: EllipsisMenuProps) {
 		derivedState.eligibleJoinCompanies.some(company => company.byInvite && !company.accessToken);
 
 	const trackSwitchOrg = (isCurrentCompany, company) => {
+		const { currentUserEmail } = derivedState;
+
 		HostApi.instance.track("Switched Organizations", {});
 		// slight delay so tracking call completes
 		setTimeout(() => {
-			const { eligibleJoinCompanies } = derivedState;
-			const isInvited = company.byInvite && !company.accessToken;
 			if (isCurrentCompany) return;
-			if (company.host && !isInvited) {
-				dispatch(switchToForeignCompany(company.id));
-			} else if (isInvited) {
-				dispatch(setCurrentOrganizationInvite(company.name, company.id, company.host));
-				dispatch(openModal(WebviewModals.AcceptCompanyInvite));
-			} else {
-				const eligibleCompany = eligibleJoinCompanies.find(_ => _.id === company.id);
-				if (eligibleCompany?.teamId) {
-					dispatch(
-						switchToTeam({
-							teamId: eligibleCompany.teamId,
-							accessTokenFromEligibleCompany: eligibleCompany?.accessToken,
-						})
-					);
-				} else {
-					console.error(`Could not switch to a team in company ${company.id}`);
-				}
-			}
+
+			const url = decodeURIComponent(company.login_url);
+			const params = new URLSearchParams(new URL(url).search);
+			const emailParam = params.get("email") || currentUserEmail || undefined;
+
+			dispatch(
+				switchToTeamSSO({
+					nrUserId: company.user_id,
+					email: emailParam,
+					authDomainId: company.authentication_domain_id,
+				})
+			);
 		}, 500);
 
 		return;
 	};
 
 	const buildSwitchTeamMenuItem = () => {
-		const {
-			eligibleJoinCompanies,
-			currentCompanyId,
-			currentHost,
-			hasMultipleEnvironments,
-			supportsMultiRegion,
-		} = derivedState;
+		const { currentCompanyId, possibleAuthDomains, nrUserId } = derivedState;
+
+		if (possibleAuthDomains.length < 2) {
+			return null;
+		}
+
+		// Create new object with useDomainName property for use in
+		// scenario where two matching orgs exist with differnt auth domains
+		const organizationIdMap = new Map();
+
+		possibleAuthDomains.forEach(item => {
+			if (organizationIdMap.has(item.organization_id)) {
+				organizationIdMap.get(item.organization_id).push(item);
+			} else {
+				organizationIdMap.set(item.organization_id, [item]);
+			}
+		});
+
+		organizationIdMap.forEach(items => {
+			if (items.length > 1) {
+				items.forEach(item => {
+					item.useDomainName = true;
+				});
+			}
+		});
+
+		const _possibleAuthDomains = ([] as CSPossibleAuthDomain[]).concat(
+			...Array.from(organizationIdMap.values())
+		);
 
 		const buildSubmenu = () => {
-			const items = eligibleJoinCompanies
-				.filter(company => {
-					// Skip companys eligible to join by domain
-					const domainJoining = company?.domainJoining;
-					const canJoinByDomain = !_isEmpty(domainJoining);
-					if (canJoinByDomain) return false;
-					return true;
-				})
-				.map(company => {
-					const isCurrentCompany = company.id === currentCompanyId;
-					const isInvited = company.byInvite && !company.accessToken;
-					const companyHost = company.host || currentHost;
-					const companyRegion =
-						supportsMultiRegion && hasMultipleEnvironments && companyHost?.shortName;
-
-					// @TODO: add in for UI phase 2, with "Signed Out" messaging as well
-					// const signedStatusText = isInvited ? "Invited" : "Signed In";
-					let checked: any;
-					if (isCurrentCompany) {
-						checked = true;
-					} else if (isInvited) {
-						checked = "custom";
-					} else {
-						checked = false;
-					}
-
-					return {
-						key: company.id,
-						label: (
-							<>
-								{company.name}
-								<RegionSubtext>{companyRegion && <>{companyRegion}</>}</RegionSubtext>
-							</>
-						),
-						checked: checked,
-						noHover: isCurrentCompany,
-						action: () => {
-							trackSwitchOrg(isCurrentCompany, company);
-						},
-					};
-				}) as any;
-
-			items.push(
-				{ label: "-" },
-				{
-					key: "create-company",
-					icon: <Icon name="plus" />,
-					label: "Create New Organization",
-					action: () => {
-						dispatch(openModal(WebviewModals.CreateCompany));
-					},
+			const items = _possibleAuthDomains.map(company => {
+				let isCurrentCompany = company.organization_id === currentCompanyId;
+				if (company.useDomainName) {
+					isCurrentCompany = nrUserId === company.user_id;
 				}
-			);
+
+				let subtext =
+					company?.useDomainName && company.authentication_domain_name
+						? company?.authentication_domain_name
+						: company.authentication_type
+						? company.authentication_type
+						: "";
+
+				return {
+					key: company.authentication_domain_id,
+					label: (
+						<>
+							{company.organization_name}
+							<RegionSubtext>{subtext}</RegionSubtext>
+						</>
+					),
+					checked: isCurrentCompany,
+					noHover: isCurrentCompany,
+					action: () => {
+						trackSwitchOrg(isCurrentCompany, company);
+					},
+				};
+			}) as any;
 
 			return items;
 		};
@@ -212,7 +211,7 @@ export function EllipsisMenu(props: EllipsisMenuProps) {
 				<>
 					{hasInvites ? (
 						<>
-							<span>Switch Organization</span>
+							<span>Switch Users</span>
 							<Icon
 								style={{
 									background: "var(--text-color-info-muted)",
@@ -225,7 +224,7 @@ export function EllipsisMenu(props: EllipsisMenuProps) {
 							/>
 						</>
 					) : (
-						<span>Switch Organization</span>
+						<span>Switch Users</span>
 					)}
 				</>
 			),
@@ -251,70 +250,20 @@ export function EllipsisMenu(props: EllipsisMenuProps) {
 		dispatch(logout());
 	};
 
-	const deleteOrganization = () => {
-		const { currentCompanyId } = derivedState;
-
-		multiStageConfirmPopup({
-			centered: true,
-			stages: [
-				{
-					title: "Confirm Deletion",
-					message: "All of your organization’s codemarks and feedback requests will be deleted.",
-					buttons: [
-						{ label: "Cancel", className: "control-button" },
-						{
-							label: "Delete Organization",
-							className: "delete",
-							advance: true,
-						},
-					],
-				},
-				{
-					title: "Are you sure?",
-					message:
-						"Your CodeStream organization will be permanently deleted. This cannot be undone.",
-					buttons: [
-						{ label: "Cancel", className: "control-button" },
-						{
-							label: "Delete Organization",
-							className: "delete",
-							wait: true,
-							action: async () => {
-								await HostApi.instance.send(DeleteCompanyRequestType, {
-									companyId: currentCompanyId,
-								});
-								dispatch(logout());
-							},
-						},
-					],
-				},
-			],
-		});
-	};
-
 	const buildAdminTeamMenuItem = () => {
-		const { team, currentUserId, xraySetting } = derivedState;
+		const { company, team, currentUserId, currentUserEmail } = derivedState;
 		const { adminIds } = team;
 
 		if (adminIds && adminIds.includes(currentUserId!)) {
 			const submenu = [
 				{
-					label: "Change Organization Name",
-					key: "change-company-name",
-					action: () => dispatch(openModal(WebviewModals.ChangeCompanyName)),
+					label: "Export Data",
+					key: "export-data",
+					action: () => go(WebviewPanels.Export),
+					disabled: false,
 				},
-				{ label: "-" },
-				{
-					label: "Onboarding Settings...",
-					key: "onboarding-settings",
-					action: () => dispatch(openModal(WebviewModals.TeamSetup)),
-					disabled: !derivedState.autoJoinSupported,
-				},
-				{ label: "-" },
-				{ label: "Export Data", action: () => go(WebviewPanels.Export) },
-				{ label: "-" },
-				{ label: "Delete Organization", action: deleteOrganization },
 			];
+
 			return {
 				label: "Organization Admin",
 				key: "admin",
@@ -323,25 +272,27 @@ export function EllipsisMenu(props: EllipsisMenuProps) {
 		} else return null;
 	};
 
-	const { currentUserStatus } = derivedState;
-
 	const menuItems = [] as any;
 
-	if (false && currentUserStatus.label) {
-		menuItems.push({
-			label: (
-				<>
-					{currentUserStatus.ticketProvider ? (
-						<Icon name={currentUserStatus.ticketProvider} />
-					) : (
-						<Icon name="ticket" />
-					)}
-					<MarkdownText text={currentUserStatus.label} inline={true}></MarkdownText>
-				</>
-			),
-			key: "status",
-		});
+	interface SubmenuOption {
+		label: string;
+		action?: () => void;
 	}
+	let accountSubmenu: SubmenuOption[] = [];
+
+	accountSubmenu = [
+		{
+			label: "View Profile",
+			action: () => {
+				dispatch(setProfileUser(derivedState.currentUserId));
+				popup(WebviewModals.Profile);
+			},
+		},
+		{ label: "Change Profile Photo", action: () => popup(WebviewModals.ChangeAvatar) },
+		{ label: "Change Username", action: () => popup(WebviewModals.ChangeUsername) },
+		{ label: "-" },
+		{ label: "Sign Out", action: () => handleLogout() },
+	];
 
 	menuItems.push(
 		{
@@ -355,9 +306,7 @@ export function EllipsisMenu(props: EllipsisMenuProps) {
 						popup(WebviewModals.Profile);
 					},
 				},
-				{ label: "Change Email", action: () => popup(WebviewModals.ChangeEmail) },
 				{ label: "Change Username", action: () => popup(WebviewModals.ChangeUsername) },
-				{ label: "Change Full Name", action: () => popup(WebviewModals.ChangeFullName) },
 				{ label: "-" },
 				{ label: "Sign Out", action: () => dispatch(logout()) },
 			],
@@ -366,7 +315,11 @@ export function EllipsisMenu(props: EllipsisMenuProps) {
 			label: "Notifications",
 			action: () => dispatch(openModal(WebviewModals.Notifications)),
 		},
-		{ label: "Integrations", action: () => dispatch(openPanel(WebviewPanels.Integrations)) }
+		{ label: "Integrations", action: () => dispatch(openPanel(WebviewPanels.Integrations)) },
+		{
+			label: "Blame Map",
+			action: () => dispatch(openModal(WebviewModals.BlameMap)),
+		}
 	);
 
 	menuItems.push(
@@ -375,7 +328,7 @@ export function EllipsisMenu(props: EllipsisMenuProps) {
 			{
 				label: (
 					<>
-						<h3>{derivedState.company.name}</h3>
+						<h3>{derivedState.currentOrg?.organization_name}</h3>
 						{derivedState.currentHost && derivedState.hasMultipleEnvironments && (
 							<small>{derivedState.currentHost.name}</small>
 						)}

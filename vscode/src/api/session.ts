@@ -5,6 +5,7 @@ import {
 	ChangeDataType,
 	CodeStreamEnvironment,
 	CodeStreamEnvironmentInfo,
+	DidRefreshAccessTokenNotification,
 	DidChangeDataNotification,
 	DidChangeDocumentMarkersNotification,
 	DidChangePullRequestCommentsNotification,
@@ -380,6 +381,17 @@ export class CodeStreamSession implements Disposable {
 		}
 	}
 
+	onAccessTokenRefreshed(e: DidRefreshAccessTokenNotification) {
+		TokenManager.addOrUpdate(SaveTokenReason.REFRESH, e.url, e.email, e.teamId, {
+			url: e.url,
+			email: e.email,
+			value: e.token,
+			refreshToken: e.refreshToken,
+			tokenType: e.tokenType,
+			teamId: e.teamId
+		});
+	}
+
 	get signedIn() {
 		return this._status === SessionStatus.SignedIn;
 	}
@@ -568,13 +580,13 @@ export class CodeStreamSession implements Disposable {
 
 	goOffline(hideWebview: boolean = true) {
 		if (hideWebview) {
-			Container.webview.hide();
+			Container.sidebar.hide();
 		}
 		return this.logout(SessionSignedOutReason.UserWentOffline);
 	}
 
 	async reconnect() {
-		Container.webview.hide();
+		Container.sidebar.hide();
 		await this.logout(SessionSignedOutReason.UserWentOffline);
 		return Container.commands.signIn();
 	}

@@ -6,6 +6,8 @@ import com.codestream.codeStream
 import com.codestream.extensions.file
 import com.codestream.extensions.lspPosition
 import com.codestream.extensions.uri
+import com.codestream.protocols.agent.ClmParams
+import com.codestream.protocols.agent.ClmResult
 import com.codestream.protocols.agent.FileLevelTelemetryOptions
 import com.codestream.protocols.agent.FileLevelTelemetryParams
 import com.codestream.protocols.agent.FileLevelTelemetryResult
@@ -28,6 +30,7 @@ import com.codestream.webViewService
 import com.codestream.workaround.HintsPresentationWorkaround
 import com.intellij.codeInsight.hints.InlayPresentationFactory
 import com.intellij.codeInsight.hints.presentation.InlayPresentation
+import com.intellij.codeInsight.hints.presentation.PresentationRenderer
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.EDT
@@ -58,6 +61,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.eclipse.lsp4j.Range
 import java.awt.Point
 import java.awt.event.FocusEvent
@@ -70,7 +74,15 @@ private val OPTIONS = FileLevelTelemetryOptions(true, true, true)
 data class RenderElements(
     val range: TextRange,
     val referenceOnHoverPresentation: InlayPresentation,
-    val isAnomaly: Boolean
+    val isAnomaly: Boolean,
+    val type: String?
+)
+
+data class ClmElements(
+    val range: TextRange,
+    val text: String,
+    val isAnomaly: Boolean,
+    val type: String?
 )
 
 class Metrics {
@@ -120,7 +132,8 @@ abstract class CLMEditorManager(
     private val path = editor.document.getUserData(LOCAL_PATH) ?: editor.document.file?.path
     private val project = editor.project
     private var metricsBySymbol = mapOf<MethodLevelTelemetrySymbolIdentifier, Metrics>()
-    private val inlays = mutableSetOf<Inlay<CLMCustomRenderer>>()
+    private var clmResult: ClmResult? = null
+    private val inlays = mutableSetOf<Inlay<*>>()
     private var lastResult: FileLevelTelemetryResult? = null
     private var currentError: FileLevelTelemetryResultError? = null
     private var analyticsTracked = false
@@ -160,24 +173,42 @@ abstract class CLMEditorManager(
     fun loadInlays(resetCache: Boolean = false, skipStaleCheck: Boolean = false) {
         if (path == null) return
         if (editor !is EditorImpl) return
+        if (project == null || project.isDisposed) return
         if (!skipStaleCheck && !isStale()) return
 
-        project?.agentService?.onDidStart {
+        project.agentService?.onDidStart {
             tasksCoroutineScope.launch {
                 if (project.isDisposed) return@launch
                 if (!TEST_MODE && !editor.component.isShowing) return@launch
                 logger.info("loadInlays $path didStart launch isShowing")
-                val psiFile =
-                    PsiDocumentManager.getInstance(project).getPsiFile(editor.document) ?: return@launch
 
                 val classNames = if (lookupByClassName) {
-                    symbolResolver.getLookupClassNames(psiFile) ?: return@launch
+                    withContext(Dispatchers.Default) { // Switch out of EDT thread
+                        ApplicationManager.getApplication().runReadAction<List<String>> { // Requires read action
+                            // Kotlin psi internals run stuff not compatible with EDT thread
+                            val psiFile = PsiDocumentManager.getInstance(project).getPsiFile(editor.document)
+                            if (psiFile == null) {
+                                logger.warn("No psiFile for ${editor.document.uri}")
+                                return@runReadAction listOf<String>()
+                            }
+                            symbolResolver.getLookupClassNames(psiFile)
+                        }
+                    }
                 } else {
                     null
                 }
 
                 val spanSuffixes = if (lookupBySpan) {
-                    symbolResolver.getLookupSpanSuffixes(psiFile)
+                    withContext(Dispatchers.Default) { // Switch out of EDT thread
+                        ApplicationManager.getApplication().runReadAction<List<String>> { // Requires read action
+                            val psiFile = PsiDocumentManager.getInstance(project).getPsiFile(editor.document)
+                            if (psiFile == null) {
+                                logger.warn("No psiFile for ${editor.document.uri}")
+                                return@runReadAction listOf<String>()
+                            }
+                            symbolResolver.getLookupSpanSuffixes(psiFile)
+                        }
+                    }
                 } else {
                     null
                 }
@@ -190,61 +221,64 @@ abstract class CLMEditorManager(
                 //     val symbols = findSymbols(psiFile, result.responseTimes.map { it.name })
                 // }
 
-                tasksCoroutineScope.launch {
-                    try {
-                        lastFetchAttempt = System.currentTimeMillis()
-                        if (project.sessionService?.userLoggedIn?.user == null) {
-                            return@launch
-                        }
-                        // logger.info("=== Calling fileLevelTelemetry for ${editor.document.uri} resetCache: $resetCache")
-                        // next.js file path is like posts/[id].tsx - IntelliJ won't create an uri for this file name!
-                        val uri = editor.document.uri ?: "file://${editor.document.file?.path}"
-                        val result = project.agentService?.fileLevelTelemetry(
-                            FileLevelTelemetryParams(
-                                uri,
-                                languageId,
-                                FunctionLocator(classNames, null),
-                                null,
-                                null,
-                                resetCache,
-                                OPTIONS
-                            )
-                        ) ?: return@launch
-                        // result guaranteed to be non-null, don't overwrite previous result if we get a NR timeout
-                        if (result.error != null) {
-                            currentError = result.error
-                            if (result.error?.type == NOT_ASSOCIATED || result.error?.type == NOT_CONNECTED) {
-                                metricsBySymbol = mapOf()
-                                updateInlays()
-                            }
-                            logger.info("Not updating CLM metrics due to error ${result.error?.type}")
-                            return@launch
-                        } else {
-                            currentError = null
-                        }
-
-                        lastResult = result
-                        metricsBySymbol = mapOf()
-
-                        val updatedMetrics = mutableMapOf<MethodLevelTelemetrySymbolIdentifier, Metrics>()
-
-                        lastResult?.errorRate?.forEach { errorRate ->
-                            val metrics = updatedMetrics.getOrPut(errorRate.symbolIdentifier) { Metrics() }
-                            metrics.errorRate = errorRate
-                        }
-                        lastResult?.averageDuration?.forEach { averageDuration ->
-                            val metrics = updatedMetrics.getOrPut(averageDuration.symbolIdentifier) { Metrics() }
-                            metrics.averageDuration = averageDuration
-                        }
-                        lastResult?.sampleSize?.forEach { sampleSize ->
-                            val metrics = updatedMetrics.getOrPut(sampleSize.symbolIdentifier) { Metrics() }
-                            metrics.sampleSize = sampleSize
-                        }
-                        metricsBySymbol = updatedMetrics.toImmutableMap()
-                        updateInlays()
-                    } catch (ex: Exception) {
-                        logger.error("Error getting fileLevelTelemetry", ex)
+                try {
+                    lastFetchAttempt = System.currentTimeMillis()
+                    if (project.sessionService?.userLoggedIn?.user == null) {
+                        return@launch
                     }
+                    // logger.info("=== Calling fileLevelTelemetry for ${editor.document.uri} resetCache: $resetCache")
+                    // next.js file path is like posts/[id].tsx - IntelliJ won't create an uri for this file name!
+                    val uri = editor.document.uri ?: "file://${editor.document.file?.path}"
+                    val result = project.agentService?.fileLevelTelemetry(
+                        FileLevelTelemetryParams(
+                            uri,
+                            languageId,
+                            FunctionLocator(classNames, null),
+                            null,
+                            null,
+                            resetCache,
+                            OPTIONS
+                        )
+                    ) ?: return@launch
+                    // result guaranteed to be non-null, don't overwrite previous result if we get a NR timeout
+                    if (result.error != null) {
+                        currentError = result.error
+                        if (result.error?.type == NOT_ASSOCIATED || result.error?.type == NOT_CONNECTED) {
+                            metricsBySymbol = mapOf()
+                            updateInlays()
+                        }
+                        logger.info("Not updating CLM metrics due to error ${result.error?.type}")
+                        return@launch
+                    } else {
+                        currentError = null
+                    }
+
+                    lastResult = result
+                    metricsBySymbol = mapOf()
+
+                    val updatedMetrics = mutableMapOf<MethodLevelTelemetrySymbolIdentifier, Metrics>()
+
+                    lastResult?.errorRate?.forEach { errorRate ->
+                        val metrics = updatedMetrics.getOrPut(errorRate.symbolIdentifier) { Metrics() }
+                        metrics.errorRate = errorRate
+                    }
+                    lastResult?.averageDuration?.forEach { averageDuration ->
+                        val metrics = updatedMetrics.getOrPut(averageDuration.symbolIdentifier) { Metrics() }
+                        metrics.averageDuration = averageDuration
+                    }
+                    lastResult?.sampleSize?.forEach { sampleSize ->
+                        val metrics = updatedMetrics.getOrPut(sampleSize.symbolIdentifier) { Metrics() }
+                        metrics.sampleSize = sampleSize
+                    }
+                    metricsBySymbol = updatedMetrics.toImmutableMap()
+
+                    clmResult = project.agentService?.clm(ClmParams(
+                        result.newRelicEntityGuid!!
+                    ))
+
+                    updateInlays()
+                } catch (ex: Exception) {
+                    logger.error("Error getting fileLevelTelemetry", ex)
                 }
             }
         }
@@ -305,18 +339,16 @@ abstract class CLMEditorManager(
         return mapOf<String, String>()
     }
 
-    fun resolveSymbol(symbolIdentifier: MethodLevelTelemetrySymbolIdentifier, psiFile: PsiFile): PsiElement? {
-        return if (symbolIdentifier.className != null) {
-            symbolResolver.findClassFunctionFromFile(
-                psiFile,
-                symbolIdentifier.namespace,
-                symbolIdentifier.className,
-                symbolIdentifier.functionName
-            ) ?:
+    fun resolveSymbol(
+        symbolIdentifier: MethodLevelTelemetrySymbolIdentifier,
+        psiFile: PsiFile
+    ): PsiElement? {
+        val functionName = symbolIdentifier.functionName ?: return null
+        return symbolIdentifier.className?.let { className ->
+            symbolResolver.findClassFunctionFromFile(psiFile, symbolIdentifier.namespace, className, functionName)
+        } ?: run {
             // Metrics can have custom name in which case we don't get Module or Class names - just best effort match function name
-            symbolResolver.findTopLevelFunction(psiFile, symbolIdentifier.functionName)
-        } else {
-            symbolResolver.findTopLevelFunction(psiFile, symbolIdentifier.functionName)
+            symbolResolver.findTopLevelFunction(psiFile, functionName)
         }
     }
 
@@ -326,6 +358,9 @@ abstract class CLMEditorManager(
             return
         }
         val psiFile = PsiDocumentManager.getInstance(project).getPsiFile(editor.document) ?: return
+
+        val clmElements: List<ClmElements> = symbolResolver.clmElements(psiFile, clmResult)
+
         val presentationFactory = HintsPresentationWorkaround.newPresentationFactory(editor)
         val since = result.sinceDateFormatted?.replace(" ago", "") ?: "30 minutes"
         val toRender: List<RenderElements> = metricsBySymbol.mapNotNull { (symbolIdentifier, metrics) ->
@@ -372,8 +407,17 @@ abstract class CLMEditorManager(
                     }
                 }
                 )
-            RenderElements(range, referenceOnHoverPresentation, anomaly != null)
+            RenderElements(range, referenceOnHoverPresentation, anomaly != null, null)
         }
+
+        val clmPresentationFactory = HintsPresentationWorkaround.newPresentationFactory(editor)
+        val clmToRender: List<RenderElements> = clmElements.map {
+            val textPresentation = clmPresentationFactory.text(it.text)
+            val smallPresentation = clmPresentationFactory.roundWithBackgroundAndSmallInset(textPresentation)
+            val insetPresentation = clmPresentationFactory.inset(smallPresentation)
+            RenderElements(it.range, insetPresentation, false, it.type)
+        }
+
 
         ApplicationManager.getApplication().invokeLaterOnWriteThread {
             if (!analyticsTracked && toRender.isNotEmpty()) {
@@ -394,6 +438,20 @@ abstract class CLMEditorManager(
                 val inlay = editor.inlayModel.addBlockElement(range.startOffset, false, true, 1, renderer)
 
                 inlay.let {
+                    inlays.add(it)
+                }
+            }
+            for ((range, referenceOnHoverPresentation, isAnomaly, type) in clmToRender) {
+                val inlay = if (type == "methodCall") {
+                    val renderer = PresentationRenderer(referenceOnHoverPresentation)
+                    editor.inlayModel.addInlineElement(range.startOffset, false, renderer)
+                } else if (type === "class") {
+                    val renderer = CLMCustomRenderer(referenceOnHoverPresentation, isAnomaly)
+                    editor.inlayModel.addBlockElement(range.startOffset, false, true, 1, renderer)
+                } else {
+                    null
+                }
+                inlay?.let {
                     inlays.add(it)
                 }
             }

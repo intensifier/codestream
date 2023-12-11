@@ -1,7 +1,7 @@
 <idea-plugin require-restart="true">
     <id>com.codestream.jetbrains-codestream</id>
     <name>New Relic CodeStream</name>
-    <vendor email="codestream@newrelic.com" url="https://www.newrelic.com/codestream">New Relic</vendor>
+    <vendor>newrelic</vendor>
 
     <description>DO NOT EDIT: Generated from docs/description.html</description>
 
@@ -34,7 +34,7 @@
     </depends>
 
     <extensions defaultExtensionNs="com.intellij">
-        <toolWindow id="CodeStream" icon="/images/codestream.svg" anchor="left"
+        <toolWindow id="New Relic CodeStream" icon="/images/codestream.svg" anchor="left"
                     factoryClass="com.codestream.webview.CodeStreamToolWindowFactory"/>
 
         <statusBarWidgetFactory id="com.codestream.jetbrains-codestream" implementation="com.codestream.widgets.CodeStreamStatusBarWidgetFactory"/>
@@ -55,7 +55,7 @@
 <!--        <projectService serviceImplementation="com.codestream.editor.LineLevelBlameService"/>-->
         <projectService serviceImplementation="com.codestream.clm.CLMService"/>
 
-        <applicationConfigurable groupId="tools" displayName="CodeStream" id="preferences.CodeStreamConfigurable"
+        <applicationConfigurable groupId="tools" displayName="New Relic CodeStream" id="preferences.CodeStreamConfigurable"
                                  instance="com.codestream.settings.CodeStreamConfigurable"/>
 
         <errorHandler implementation="com.codestream.telemetry.ErrorHandler"/>
@@ -104,7 +104,7 @@
         <action id="CodeStream.TestUrlHandler" class="com.codestream.actions.TestUrlHandler"
                 text="CodeStream: Test URL handler"/>
 
-        <group id="com.codestream.Actions" popup="true" text="CodeStream" icon="/images/codestream.svg"
+        <group id="com.codestream.Actions" popup="true" text="New Relic CodeStream" icon="/images/codestream.svg"
                class="com.codestream.actions.CodeStreamActionGroup">
             <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="EditorPopupMenu2"/>
             <action id="CodeStream.AddComment" class="com.codestream.actions.AddComment" text="Add _Comment"
@@ -145,5 +145,5 @@
     </actions>
 
     <depends>Git4Idea</depends>
-    <idea-version since-build="221.5591.52"/>
+    <idea-version since-build="223.8836.35"/>
 </idea-plugin>

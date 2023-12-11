@@ -1,17 +1,19 @@
 plugins {
     id "java"
     id "idea"
-    id "org.jetbrains.intellij" version "1.12.0"
-    id "org.jetbrains.kotlin.jvm" version "1.6.10"
+    id "org.jetbrains.intellij" version "1.16.0"
+    // https://plugins.jetbrains.com/docs/intellij/using-kotlin.html#kotlin-standard-library tells you which
+    // kotlin version to target
+    id "org.jetbrains.kotlin.jvm" version "1.7.0"
     id "de.undercouch.download" version "5.1.0"
 }
 
 group "com.codestream"
 
-version "14.30.1"
+version "15.0.0"
 
-sourceCompatibility = JavaVersion.VERSION_11
-targetCompatibility = JavaVersion.VERSION_11
+sourceCompatibility = JavaVersion.VERSION_17
+targetCompatibility = JavaVersion.VERSION_17
 
 repositories {
     mavenCentral()
@@ -24,17 +26,15 @@ ext {
 }
 
 dependencies {
-    implementation "org.jetbrains.kotlin:kotlin-stdlib"
-    implementation "org.jetbrains.kotlin:kotlin-reflect:1.6.10"
-
     implementation "com.teamdev.jxbrowser:jxbrowser:${jxBrowserVersion}"
     implementation "com.teamdev.jxbrowser:jxbrowser-swing:${jxBrowserVersion}"
 
-    implementation "org.eclipse.lsp4j:org.eclipse.lsp4j:0.12.0"
-    implementation "com.google.guava:guava:30.0-jre"
-    implementation "com.github.salomonbrys.kotson:kotson:2.5.0"
+    implementation "org.eclipse.lsp4j:org.eclipse.lsp4j:0.20.1"
+    implementation 'com.google.code.gson:gson:2.10.1'
+    implementation ("com.github.salomonbrys.kotson:kotson:2.5.0") {
+        exclude group: "org.jetbrains.kotlin", module: "kotlin-stdlib"
+    }
 
-    implementation "commons-io:commons-io:2.7"
     implementation("org.reflections:reflections:0.10.2") {
         exclude group: "org.slf4j", module: "slf4j-api"
     }
@@ -45,11 +45,11 @@ dependencies {
 }
 
 compileKotlin {
-    kotlinOptions.jvmTarget = JavaVersion.VERSION_11
+    kotlinOptions.jvmTarget = JavaVersion.VERSION_17
 }
 
 compileTestKotlin {
-    kotlinOptions.jvmTarget = JavaVersion.VERSION_11
+    kotlinOptions.jvmTarget = JavaVersion.VERSION_17
 }
 
 patchPluginXml {
@@ -70,7 +70,7 @@ intellij {
     type = "IU"
     // the version parameter dictates which jars will be used at compilation time
 
-    version = "2022.1.1" // earliest version we support
+    version = "2022.3.3" // earliest version we support
     // version = "2022.1.1" // Rider version
 
     // version = "231.5920-EAP-CANDIDATE-SNAPSHOT"
@@ -94,12 +94,13 @@ intellij {
     plugins = [
         'java',
         'Git4Idea',
-        'org.jetbrains.plugins.go:221.5591.52',
-        'Pythonid:221.5591.52',
-        'org.jetbrains.plugins.ruby:221.5591.52',
-        'com.jetbrains.php:221.5591.58',
-        'org.jetbrains.kotlin:221-1.8.0-release-345-IJ5591.52',
-        'JavaScript'
+        'org.jetbrains.plugins.go:223.8836.7',
+        'Pythonid:223.8836.41',
+        'intellij.grid.impl', // For `test python method` unit test
+        'org.jetbrains.plugins.ruby:223.8836.39',
+        'com.jetbrains.php:223.8836.42',
+        'org.jetbrains.kotlin:223-1.8.21-release-380-IJ8836.35',
+        'JavaScript',
     ]
 }
 
@@ -159,7 +160,7 @@ task copyProtobuf(type: Copy) {
 def createCopyNodeTask(String platform) {
     String taskName = "copyNode-" + platform
     String supplementalSoftwarePath = System.getenv("TCBUILD_SUPPLEMENTAL_SOFTWARE_PATH")
-    String nodeVersion = 'v16.17.1'
+    String nodeVersion = 'v18.15.0'
     return tasks.create(taskName, Copy) {
         from "$supplementalSoftwarePath/node/node-$nodeVersion-${platform}"
         include "**/*"
@@ -214,6 +215,7 @@ copyDebugAgent.dependsOn buildDebugDeps
 
 task buildDebugDependencies {}
 buildDebugDependencies.dependsOn buildDebugDeps, copyDebugAgent, copyProtobuf
+
 
 
 

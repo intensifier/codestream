@@ -2,7 +2,7 @@
 // messages in real-time
 "use strict";
 import { Agent as HttpsAgent } from "https";
-import HttpsProxyAgent from "https-proxy-agent";
+import { HttpsProxyAgent } from "https-proxy-agent";
 import Pubnub from "pubnub";
 import { inspect } from "util";
 import { Disposable } from "vscode-languageserver";
@@ -43,7 +43,7 @@ export interface PubnubInitializer {
 	authKey: string; // unique Pubnub token provided in the login response
 	userId: string; // ID of the current user
 	debug?(msg: string, info?: any): void; // for debug messages
-	httpsAgent?: HttpsAgent | HttpsProxyAgent;
+	httpsAgent?: HttpsAgent | HttpsProxyAgent<string>;
 	onMessage: MessageCallback;
 	onStatus: StatusCallback;
 	onFetchHistory?: HistoryFetchCallback;
@@ -60,7 +60,7 @@ export class PubnubConnection implements BroadcasterConnection {
 	private _userId: string | undefined;
 	private _pubnub: Pubnub | undefined;
 	private _listener: Pubnub.ListenerParameters | undefined;
-	private _statusTimeout: NodeJS.Timer | undefined;
+	private _statusTimeout: NodeJS.Timeout | undefined;
 	private _logger: (msg: string, info?: any) => void = () => {};
 	private _messageCallback: MessageCallback | undefined;
 	private _statusCallback: StatusCallback | undefined;
@@ -75,6 +75,14 @@ export class PubnubConnection implements BroadcasterConnection {
 		this._debug(`Connection initializing...`);
 
 		this._userId = options.userId;
+		let proxy;
+		if (options.httpsAgent instanceof HttpsProxyAgent) {
+			proxy = {
+				protocol: options.httpsAgent.protocol,
+				host: options.httpsAgent.proxy.hostname,
+				port: options.httpsAgent.proxy.port,
+			};
+		}
 		this._pubnub = new Pubnub({
 			authKey: options.authKey,
 			uuid: options.userId,
@@ -83,8 +91,8 @@ export class PubnubConnection implements BroadcasterConnection {
 			logVerbosity: false,
 			// heartbeatInterval: 30,
 			autoNetworkDetection: true,
-			proxy: options.httpsAgent instanceof HttpsProxyAgent && options.httpsAgent.proxy,
-		} as Pubnub.PubnubConfig);
+			proxy: proxy,
+		} as Pubnub.PubnubConfig); // TODO @types/pubnub is very broken
 
 		this._messageCallback = options.onMessage;
 		this._statusCallback = options.onStatus;

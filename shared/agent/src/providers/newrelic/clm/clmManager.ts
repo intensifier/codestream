@@ -25,7 +25,7 @@ import { ReviewsManager } from "../../../managers/reviewsManager";
 import path, { join, relative, sep } from "path";
 import { URI } from "vscode-uri";
 import { ContextLogger, INewRelicProvider } from "../../newrelic";
-import Cache from "timed-cache";
+import Cache from "@codestream/utils/system/timedCache";
 import { GitRepository } from "../../../git/models/repository";
 import { FLTStrategyFactory } from "./FLTStrategy";
 
@@ -405,22 +405,31 @@ export class ClmManager {
 	}
 
 	private addAnomalies(metrics: FileLevelTelemetryMetric[], anomalies: ObservabilityAnomaly[]) {
-		for (const duration of metrics) {
+		for (const anomaly of anomalies) {
 			// FIXME quick workaround to account for methods implemented in Java superclasses
 			// className, when it comes from code attributes strategy, will be the name of the superclass
 			// where the method is implemented, but the actual metricTimesliceName (in which anomaly detection
 			// is also based) is the name of the concrete class
-			const parts = duration.metricTimesliceName.split("/");
+			const parts = anomaly.metricTimesliceName.split("/");
 			const altClassName = parts[parts.length - 2];
-			const anomalyMatch1 = anomalies.find(
-				_ => _.metricTimesliceName === duration.metricTimesliceName
-			);
-			const anomalyMatch2 = anomalies.find(
+			const metricMatch1 = metrics.find(_ => _.metricTimesliceName === anomaly.metricTimesliceName);
+			const metricMatch2 = metrics.find(
 				_ =>
-					(_.codeNamespace === duration.className || _.codeNamespace === altClassName) &&
-					_.codeFunction === duration.functionName
+					(_.className === anomaly.codeAttrs?.codeNamespace || _.className === altClassName) &&
+					_.functionName === anomaly.codeAttrs?.codeFunction
 			);
-			duration.anomaly = anomalyMatch1 || anomalyMatch2;
+			if (metricMatch1 || metricMatch2) {
+				(metricMatch1 || metricMatch2)!.anomaly = anomaly;
+			} else {
+				const metric: FileLevelTelemetryMetric = {
+					metricTimesliceName: anomaly.metricTimesliceName,
+					functionName: anomaly.codeAttrs?.codeFunction,
+					className: anomaly.codeAttrs?.codeNamespace,
+					namespace: anomaly.codeAttrs?.codeNamespace,
+					anomaly: anomaly,
+				};
+				metrics.push(metric);
+			}
 		}
 	}
 }

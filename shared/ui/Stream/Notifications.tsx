@@ -5,7 +5,6 @@ import { isFeatureEnabled } from "../store/apiVersioning/reducer";
 import { Checkbox } from "../src/components/Checkbox";
 import { RadioGroup, Radio } from "../src/components/RadioGroup";
 import { setUserPreference, closeModal } from "./actions";
-import { HostApi } from "../webview-api";
 import {
 	CSNotificationDeliveryPreference,
 	CSNotificationPreference,
@@ -57,7 +56,6 @@ export const Notifications = props => {
 
 	const handleChangeNotifyPerformanceIssues = async (value: boolean) => {
 		setLoadingNotifyPerformanceIssues(true);
-		HostApi.instance.track("Notify Performance Issues Changed", { Value: value });
 		dispatch(setUserPreference({ prefPath: ["notifyPerformanceIssues"], value }));
 		setLoadingNotifyPerformanceIssues(false);
 	};
@@ -126,19 +124,6 @@ export const Notifications = props => {
 								</RadioGroup>
 							</div>
 						)}
-						<h3>Email Notifications</h3>
-						{
-							<div style={{ marginTop: "20px" }}>
-								<Checkbox
-									name="weeklyEmails"
-									checked={derivedState.weeklyEmailDelivery}
-									onChange={handleChangeWeeklyEmailDelivery}
-									loading={loadingWeeklyEmailDelivery}
-								>
-									Send me weekly emails summarizing my activity
-								</Checkbox>
-							</div>
-						}
 						{derivedState.hasDesktopNotifications && derivedState.notificationDeliverySupported && (
 							<div>
 								<h3>Desktop Notifications</h3>

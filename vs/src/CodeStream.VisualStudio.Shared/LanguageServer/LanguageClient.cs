@@ -11,9 +11,12 @@ using StreamJsonRpc;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.Composition;
+using System.Net;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
+
+using CodeStream.VisualStudio.Shared.Authentication;
 using CodeStream.VisualStudio.Shared.Extensions;
 using CodeStream.VisualStudio.Shared.Models;
 using CodeStream.VisualStudio.Shared.Services;
@@ -69,7 +72,8 @@ namespace CodeStream.VisualStudio.Shared.LanguageServer
 			ISettingsServiceFactory settingsServiceFactory,
 			IHttpClientService httpClientService,
 			IMessageInterceptorService messageInterceptorService,
-			IFileResolutionService fileResolutionService
+			IFileResolutionService fileResolutionService,
+			ICredentialManager credentialManager
 		)
 			: base(
 				serviceProvider,
@@ -79,6 +83,7 @@ namespace CodeStream.VisualStudio.Shared.LanguageServer
 				settingsServiceFactory,
 				httpClientService,
 				fileResolutionService,
+				credentialManager,
 				Log
 			)
 		{
@@ -113,7 +118,7 @@ namespace CodeStream.VisualStudio.Shared.LanguageServer
 		}
 #endif
 
-		public string Name => Application.Name;
+		public string Name => Application.ShortName;
 
 		public IEnumerable<string> ConfigurationSections => null;
 
@@ -310,7 +315,9 @@ namespace CodeStream.VisualStudio.Shared.LanguageServer
 			projectType = e.ProjectType;
 
 			if (projectType == ProjectType.Folder)
+			{
 				return;
+			}
 
 			if (_state == 0)
 			{
@@ -347,7 +354,9 @@ namespace CodeStream.VisualStudio.Shared.LanguageServer
 			try
 			{
 				if (projectType == ProjectType.Folder || e.ProjectType == ProjectType.Folder)
+				{
 					return;
+				}
 
 				if (_state == 1)
 				{
@@ -382,7 +391,9 @@ namespace CodeStream.VisualStudio.Shared.LanguageServer
 		protected virtual void Dispose(bool disposing)
 		{
 			if (_disposed)
+			{
 				return;
+			}
 
 			if (disposing)
 			{

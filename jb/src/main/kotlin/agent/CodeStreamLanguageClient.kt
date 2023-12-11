@@ -125,6 +125,12 @@ class CodeStreamLanguageClient(private val project: Project) : LanguageClient {
         project.webViewService?.postNotification("codestream/didChangeServerUrl", json, true)
     }
 
+    @JsonNotification("codestream/didRefreshAccessToken")
+    fun didRefreshAccessToken(json: JsonElement) {
+        val notification = gson.fromJson<DidRefreshAccessTokenNotification>(json)
+        project.authenticationService?.onDidRefreshAccessToken(notification)
+    }
+
     @JsonNotification("codestream/didStartLogin")
     fun didStartLogin(json: JsonElement?) {}
 
@@ -257,6 +263,12 @@ class CodeStreamLanguageClient(private val project: Project) : LanguageClient {
         project.webViewService?.postNotification("codestream/nr/didResolveStackTraceLine", json, true)
     }
 
+    @JsonNotification("codestream/refreshMaintenancePoll")
+    fun refreshMaintenancePoll(json: JsonElement) {
+        // no-op justo register and stop getting Unsupported notification method logs
+        logger.info("codeStream/refreshMaintenancePoll $json")
+    }
+
     @JsonNotification("codestream/didChangeCodelenses")
     fun didChangeCodelenses(json: JsonElement?) {
         project.sessionService?.didChangeCodelenses()
@@ -336,6 +348,15 @@ class DidChangeUnreadsNotification(
 class DidLoginNotification(val data: LoginResult)
 
 class DidLogoutNotification(val reason: LogoutReason)
+
+class DidRefreshAccessTokenNotification(
+    val url: String,
+    val email: String,
+    val teamId: String,
+    val token: String,
+    val refreshToken: String?,
+    val tokenType: String?, // Tried enum but doesn't work with whatever serialization is on CodeStreamLanguageServer.loginToken
+)
 
 enum class LogoutReason {
     @SerializedName("token")

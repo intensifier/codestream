@@ -27,7 +27,7 @@ export class NotificationsController implements Disposable {
 
 	private async onSessionPostsReceived(e: PostsChangedEvent) {
 		const { user } = Container.session;
-		const { activeStreamThread: activeStream, visible: streamVisible } = Container.webview;
+		const { activeStreamThread: activeStream, visible: streamVisible } = Container.sidebar;
 
 		if (!user.wantsToastNotifications()) return;
 
@@ -93,16 +93,18 @@ export class NotificationsController implements Disposable {
 
 		if (result === actions[0]) {
 			Container.agent.telemetry.track("Toast Clicked", { Content: "CLM Anomaly" });
-			Container.webview.viewAnomaly({
+			Container.sidebar.viewAnomaly({
 				anomaly: firstAnomaly,
 				entityGuid: notification.entityGuid
 			});
-			Container.webview.goToClassMethodDefinition(
-				firstAnomaly.codeFilepath,
-				firstAnomaly.codeNamespace,
-				firstAnomaly.codeFunction,
-				firstAnomaly.language
-			);
+			if (firstAnomaly.codeAttrs) {
+				Container.sidebar.goToClassMethodDefinition(
+					firstAnomaly.codeAttrs.codeFilepath,
+					firstAnomaly.codeAttrs.codeNamespace,
+					firstAnomaly.codeAttrs.codeFunction,
+					firstAnomaly.language
+				);
+			}
 		}
 	}
 
@@ -128,9 +130,9 @@ export class NotificationsController implements Disposable {
 
 		if (result === actions[0]) {
 			if (codemark) {
-				Container.webview.openCodemark(codemark.id);
+				Container.sidebar.openCodemark(codemark.id);
 			} else if (review) {
-				Container.webview.openReview(review.id);
+				Container.sidebar.openReview(review.id);
 			}
 			Container.agent.telemetry.track("Toast Clicked", { Content: toastContentType });
 		}

@@ -4,7 +4,6 @@ import {
 	EntityGoldenMetrics,
 	ERROR_GENERIC_USE_ERROR_MESSAGE,
 	ERROR_NR_INSUFFICIENT_API_KEY,
-	GetAlertViolationsResponse,
 	GetEntityCountRequestType,
 	GetObservabilityAnomaliesRequestType,
 	GetObservabilityErrorAssignmentsRequestType,
@@ -19,9 +18,10 @@ import {
 	ObservabilityRepoError,
 	ServiceLevelObjectiveResult,
 	isNRErrorResponse,
+	GetIssuesResponse,
 } from "@codestream/protocols/agent";
 import cx from "classnames";
-import { head as _head, isEmpty, isEmpty as _isEmpty, isNil as _isNil } from "lodash-es";
+import { head as _head, isEmpty as _isEmpty, isNil as _isNil } from "lodash-es";
 import React, { useEffect, useState } from "react";
 import { shallowEqual } from "react-redux";
 import styled from "styled-components";
@@ -84,6 +84,7 @@ import { CLMSettings, DEFAULT_CLM_SETTINGS } from "@codestream/protocols/api";
 import { throwIfError } from "@codestream/webview/store/common";
 import { AnyObject } from "@codestream/webview/utils";
 import { isFeatureEnabled } from "../store/apiVersioning/reducer";
+import { ObservabilityAlertViolations } from "./ObservabilityAlertViolations";
 
 interface Props {
 	paneState: PaneState;
@@ -262,10 +263,16 @@ export const Observability = React.memo((props: Props) => {
 			providers["newrelic*com"] && isConnected(state, { id: "newrelic*com" });
 		const activeO11y = preferences.activeO11y;
 		const clmSettings = state.preferences.clmSettings || {};
+
 		let isO11yPaneOnly = true;
 		if (isFeatureEnabled(state, "showCodeAnalyzers")) {
 			isO11yPaneOnly = false;
 		}
+
+		const team = state.teams[state.context.currentTeamId] || {};
+		const company =
+			!_isEmpty(state.companies) && !_isEmpty(team) ? state.companies[team.companyId] : undefined;
+
 		return {
 			sessionStart: state.context.sessionStart,
 			newRelicIsConnected,
@@ -284,6 +291,7 @@ export const Observability = React.memo((props: Props) => {
 			recentErrorsTimeWindow: state.preferences.codeErrorTimeWindow,
 			currentObservabilityAnomalyEntityGuid: state.context.currentObservabilityAnomalyEntityGuid,
 			isO11yPaneOnly,
+			company,
 		};
 	}, shallowEqual);
 
@@ -338,10 +346,8 @@ export const Observability = React.memo((props: Props) => {
 		[]
 	);
 	const [currentObsRepo, setCurrentObsRepo] = useState<ObservabilityRepo | undefined>();
-	const [recentAlertViolations, setRecentAlertViolations] = useState<
-		GetAlertViolationsResponse | undefined
-	>();
-	const [recentAlertViolationsError, setRecentAlertViolationsError] = useState<string>();
+	const [recentIssues, setRecentIssues] = useState<GetIssuesResponse | undefined>();
+	const [recentIssuesError, setRecentIssuesError] = useState<string>();
 	const previousNewRelicIsConnected = usePrevious(derivedState.newRelicIsConnected);
 	const [anomalyDetectionSupported, setAnomalyDetectionSupported] = useState<boolean>(true);
 	const [isVulnPresent, setIsVulnPresent] = useState(false);
@@ -605,7 +611,7 @@ export const Observability = React.memo((props: Props) => {
 			telemetryStateValue = "Not Connected";
 		}
 
-		if (!isEmpty(telemetryStateValue)) {
+		if (!_isEmpty(telemetryStateValue)) {
 			console.debug("o11y: O11y Rendered", telemetryStateValue);
 			const properties: AnyObject = {
 				State: telemetryStateValue,
@@ -686,6 +692,9 @@ export const Observability = React.memo((props: Props) => {
 				filters,
 				force,
 				isVsCode: derivedState.isVsCode,
+				isMultiRegion: !_isEmpty(derivedState?.company)
+					? derivedState?.company?.isMultiRegion
+					: undefined,
 			});
 			if (response.repos) {
 				if (hasFilter) {
@@ -809,7 +818,7 @@ export const Observability = React.memo((props: Props) => {
 			const response = await HostApi.instance.send(GetServiceLevelTelemetryRequestType, {
 				newRelicEntityGuid: entityGuid,
 				repoId: currentRepoId,
-				fetchRecentAlertViolations: true,
+				fetchRecentIssues: true,
 				force,
 			});
 
@@ -824,14 +833,11 @@ export const Observability = React.memo((props: Props) => {
 					setEntityGoldenMetrics(response.entityGoldenMetrics);
 				}
 
-				if (isNRErrorResponse(response.recentAlertViolations)) {
-					errors.push(
-						response.recentAlertViolations.error.message ??
-							response.recentAlertViolations.error.type
-					);
+				if (isNRErrorResponse(response.recentIssues)) {
+					errors.push(response.recentIssues.error.message ?? response.recentIssues.error.type);
 				} else {
-					setRecentAlertViolations(response.recentAlertViolations);
-					setRecentAlertViolationsError(undefined);
+					setRecentIssues(response.recentIssues);
+					setRecentIssuesError(undefined);
 				}
 				setEntityGoldenMetricsErrors(errors);
 			} else {
@@ -1106,23 +1112,27 @@ export const Observability = React.memo((props: Props) => {
 												<GenericCopy>{genericError}</GenericCopy>
 											</GenericWrapper>
 										)}
-										{!hasEntities && !genericError && (
-											<GenericWrapper>
-												<GenericCopy>
-													Set up application performance monitoring for your project so that you can
-													discover and investigate errors with CodeStream
-												</GenericCopy>
-												<Button style={{ width: "100%" }} onClick={handleSetUpMonitoring}>
-													Set Up Monitoring
-												</Button>
-											</GenericWrapper>
-										)}
+										{!_isEmpty(currentRepoId) &&
+											!_isEmpty(repoForEntityAssociator) &&
+											!hasEntities &&
+											!genericError && (
+												<GenericWrapper>
+													<GenericCopy>
+														Set up application performance monitoring for your project so that you
+														can discover and investigate errors with CodeStream
+													</GenericCopy>
+													<Button style={{ width: "100%" }} onClick={handleSetUpMonitoring}>
+														Set Up Monitoring
+													</Button>
+												</GenericWrapper>
+											)}
+
 										{_isEmpty(currentRepoId) &&
 											_isEmpty(repoForEntityAssociator) &&
 											!genericError && (
 												<NoContent>
 													<p>
-														Open a source file to see how your code is performing.{" "}
+														Open a repository to see how your code is performing.{" "}
 														<a href="https://docs.newrelic.com/docs/codestream/how-use-codestream/performance-monitoring#observability-in-IDE">
 															Learn more.
 														</a>
@@ -1144,7 +1154,7 @@ export const Observability = React.memo((props: Props) => {
 															message: `Enable CodeLenses to see code-level metrics. 
 														Go to Tools > Options > Text Editor > All Languages > CodeLens or [learn more about code-level metrics]`,
 															helpUrl:
-																"https://docs.newrelic.com/docs/codestream/how-use-codestream/performance-monitoring#code-level",
+																"https://docs.newrelic.com/docs/codestream/observability/code-level-metrics",
 														},
 													]}
 													dismissCallback={e => {
@@ -1157,20 +1167,6 @@ export const Observability = React.memo((props: Props) => {
 													}}
 												/>
 											)}
-										{observabilityRepos.length == 0 && (
-											<>
-												{!loadingObservabilityErrors && !loadingEntities && (
-													<>
-														<PaneNodeName
-															title="Recent errors"
-															id="newrelic-errors-empty"
-														></PaneNodeName>
-
-														<ErrorRow title="No repositories found"></ErrorRow>
-													</>
-												)}
-											</>
-										)}
 
 										{currentEntityAccounts &&
 											currentEntityAccounts?.length !== 0 &&
@@ -1263,13 +1259,16 @@ export const Observability = React.memo((props: Props) => {
 																				) : (
 																					<>
 																						<>
+																							<ObservabilityAlertViolations
+																								issues={recentIssues?.recentIssues}
+																								customPadding={"2px 10px 2px 27px"}
+																								entityGuid={ea.entityGuid}
+																							/>
 																							<ObservabilityGoldenMetricDropdown
 																								entityGoldenMetrics={entityGoldenMetrics}
 																								loadingGoldenMetrics={loadingGoldenMetrics}
 																								errors={entityGoldenMetricsErrors}
-																								recentAlertViolations={
-																									recentAlertViolations ? recentAlertViolations : {}
-																								}
+																								recentIssues={recentIssues ? recentIssues : {}}
 																								entityGuid={ea.entityGuid}
 																							/>
 																							{hasServiceLevelObjectives && (
@@ -1400,7 +1399,7 @@ export const Observability = React.memo((props: Props) => {
 							<div className="filters" style={{ padding: "0 20px 10px 20px" }}>
 								<span>
 									Connect to New Relic to see how your code is performing and identify issues.{" "}
-									<Link href="https://docs.newrelic.com/docs/codestream/how-use-codestream/performance-monitoring/">
+									<Link href="https://docs.newrelic.com/docs/codestream/observability/performance-monitoring/">
 										Learn more.
 									</Link>
 									{/* <Tooltip title="Connect later on the Integrations page" placement="top">

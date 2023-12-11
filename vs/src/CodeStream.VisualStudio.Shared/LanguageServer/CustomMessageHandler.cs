@@ -23,6 +23,8 @@ using CodeStream.VisualStudio.Shared.Services;
 using System.Linq;
 using System.Threading.Tasks;
 
+using CodeStream.VisualStudio.Shared.Authentication;
+
 namespace CodeStream.VisualStudio.Shared.LanguageServer
 {
 	public class CustomMessageHandler : IDisposable
@@ -34,6 +36,7 @@ namespace CodeStream.VisualStudio.Shared.LanguageServer
 		private readonly IBrowserServiceFactory _browserServiceFactory;
 		private readonly ISettingsServiceFactory _settingsServiceFactory;
 		private readonly IFileResolutionService _fileResolutionService;
+		private readonly ICredentialManager _credentialManager;
 		private readonly Subject<DocumentMarkerChangedSubjectArgs> _documentMarkerChangedSubject;
 		private readonly Subject<UserPreferencesChangedSubjectArgs> _userPreferencesChangedSubject;
 		private readonly IDisposable _documentMarkerChangedSubscription;
@@ -44,7 +47,8 @@ namespace CodeStream.VisualStudio.Shared.LanguageServer
 			IEventAggregator eventAggregator,
 			IBrowserServiceFactory browserServiceFactory,
 			ISettingsServiceFactory settingsServiceFactory,
-			IFileResolutionService fileResolutionService
+			IFileResolutionService fileResolutionService,
+			ICredentialManager credentialManager
 		)
 		{
 			_serviceProvider = serviceProvider;
@@ -52,7 +56,7 @@ namespace CodeStream.VisualStudio.Shared.LanguageServer
 			_browserServiceFactory = browserServiceFactory;
 			_settingsServiceFactory = settingsServiceFactory;
 			_fileResolutionService = fileResolutionService;
-
+			_credentialManager = credentialManager;
 			_documentMarkerChangedSubject = new Subject<DocumentMarkerChangedSubjectArgs>();
 			_userPreferencesChangedSubject = new Subject<UserPreferencesChangedSubjectArgs>();
 
@@ -395,8 +399,8 @@ namespace CodeStream.VisualStudio.Shared.LanguageServer
 							_settingsServiceFactory.GetOrCreate(nameof(OnDidLogin)),
 							componentModel.GetService<ISessionService>(),
 							_eventAggregator,
-							componentModel.GetService<ICredentialsService>(),
-							componentModel.GetService<IWebviewUserSettingsService>()
+							componentModel.GetService<IWebviewUserSettingsService>(),
+							componentModel.GetService<ICredentialManager>()
 						);
 
 						authenticationController.CompleteSignin(e["data"]);
@@ -560,6 +564,36 @@ namespace CodeStream.VisualStudio.Shared.LanguageServer
 				{
 					Log.Error(ex, $"Problem with {nameof(OnDidResolveStackTraceLine)}");
 				}
+			}
+		}
+
+		[JsonRpcMethod(DidRefreshAccessTokenNotificationType.MethodName)]
+		public async System.Threading.Tasks.Task OnDidRefreshAccessTokenNotificationAsync(JToken e)
+		{
+			try
+			{
+				var token = e.ToObject<DidRefreshAccessTokenNotification>();
+
+				var newToken = new
+				{
+					token.Url,
+					token.Email,
+					token.TeamId,
+					token.RefreshToken,
+					Value = token.Token,
+					token.TokenType
+				};
+
+				await _credentialManager.StoreCredentialAsync(
+					token.Url,
+					token.Email,
+					token.TeamId,
+					newToken.ToJToken()
+				);
+			}
+			catch (Exception ex)
+			{
+				Log.Error(ex, nameof(OnDidRefreshAccessTokenNotificationAsync));
 			}
 		}
 

@@ -4,7 +4,6 @@ import { useAppDispatch, useAppSelector } from "@codestream/webview/utilities/ho
 import { CodeStreamState } from "../store";
 import { ErrorRow } from "./Observability";
 import { Row } from "./CrossPostIssueControls/IssuesPane";
-import Icon from "./Icon";
 import { HostApi } from "@codestream/webview/webview-api";
 import { EditorRevealSymbolRequestType } from "@codestream/protocols/webview";
 import { WebviewPanels } from "@codestream/protocols/api";
@@ -38,7 +37,6 @@ export const ObservabilityAnomaliesGroup = React.memo((props: Props) => {
 			clmSettings,
 		};
 	}, shallowEqual);
-	const [expanded, setExpanded] = useState<boolean>(props.collapseDefault ? false : true);
 	const [numToShow, setNumToShow] = useState(5);
 
 	const getRoundedPercentage = ratio => {
@@ -47,7 +45,7 @@ export const ObservabilityAnomaliesGroup = React.memo((props: Props) => {
 		return Math.floor(percentage * factor) / factor;
 	};
 
-	const getRoundedPercentageOutput = ratio => {
+	const getTypeAndValueOutput = (type: "errorRate" | "duration", ratio) => {
 		if (props.noAnomaly) return <div></div>;
 		const roundedPercentage = getRoundedPercentage(ratio);
 		let roundedPercentageText =
@@ -61,7 +59,7 @@ export const ObservabilityAnomaliesGroup = React.memo((props: Props) => {
 					textAlign: "right",
 					paddingLeft: "2.5px",
 					direction: "rtl",
-					width: "10%",
+					width: "40%",
 				}}
 			>
 				<span
@@ -71,8 +69,27 @@ export const ObservabilityAnomaliesGroup = React.memo((props: Props) => {
 				>
 					{roundedPercentageText}
 				</span>
+				<span
+					style={{
+						paddingRight: "5px",
+					}}
+					className="subtle"
+				>
+					{getAnomalyTypeLabel(type)}
+				</span>
 			</div>
 		);
+	};
+
+	const getAnomalyTypeLabel = (type: "errorRate" | "duration") => {
+		switch (type) {
+			case "duration":
+				return "avg duration";
+			case "errorRate":
+				return "error rate";
+			default:
+				return "";
+		}
 	};
 
 	const hasMoreAnomaliesToShow = props.observabilityAnomalies.length > numToShow;
@@ -91,32 +108,19 @@ export const ObservabilityAnomaliesGroup = React.memo((props: Props) => {
 	function handleClick(anomaly: ObservabilityAnomaly) {
 		handleClickTelemetry();
 		HostApi.instance.send(EditorRevealSymbolRequestType, {
-			codeFilepath: anomaly.codeFilepath,
-			codeNamespace: anomaly.codeNamespace,
-			codeFunction: anomaly.codeFunction,
+			codeFilepath: anomaly.codeAttrs?.codeFilepath,
+			codeNamespace: anomaly.codeAttrs?.codeNamespace,
+			codeFunction: anomaly.codeAttrs?.codeFunction,
 			language: anomaly.language,
 		});
-		if (!props.noAnomaly) {
-			dispatch(closeAllPanels());
-			dispatch(setCurrentObservabilityAnomaly(anomaly, props.entityGuid!));
-			dispatch(openPanel(WebviewPanels.ObservabilityAnomaly));
-		}
+		dispatch(closeAllPanels());
+		dispatch(setCurrentObservabilityAnomaly(anomaly, props.entityGuid!));
+		dispatch(openPanel(WebviewPanels.ObservabilityAnomaly));
 	}
 
 	return (
 		<>
-			<Row
-				style={{
-					padding: "2px 10px 2px 40px",
-				}}
-				className={"pr-row"}
-				onClick={() => setExpanded(!expanded)}
-			>
-				{expanded && <Icon name="chevron-down-thin" />}
-				{!expanded && <Icon name="chevron-right-thin" />}
-				<span style={{ marginLeft: "2px" }}>{props.title}</span>
-			</Row>
-			{expanded && (
+			{
 				<>
 					{props.observabilityAnomalies.length == 0 ? (
 						<ErrorRow
@@ -144,7 +148,7 @@ export const ObservabilityAnomaliesGroup = React.memo((props: Props) => {
 										>
 											<div
 												style={{
-													width: "75%",
+													width: "60%",
 													textAlign: "left",
 													marginRight: "auto",
 													direction: "rtl",
@@ -154,7 +158,7 @@ export const ObservabilityAnomaliesGroup = React.memo((props: Props) => {
 											</div>
 										</Tooltip>
 
-										{getRoundedPercentageOutput(anomaly.ratio)}
+										<div>{getTypeAndValueOutput(anomaly.type, anomaly.ratio)}</div>
 									</Row>
 								);
 							})}
@@ -172,7 +176,7 @@ export const ObservabilityAnomaliesGroup = React.memo((props: Props) => {
 						</div>
 					)}
 				</>
-			)}
+			}
 		</>
 	);
 });

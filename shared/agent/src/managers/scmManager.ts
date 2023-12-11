@@ -1287,7 +1287,8 @@ export class ScmManager {
 					}
 
 					branch = await git.getCurrentBranch(uri.fsPath);
-					rev = gitSha || (await git.getFileCurrentRevision(uri.fsPath));
+					const fullGitSha = gitSha && (await git.getCommit(repoPath, gitSha))?.ref;
+					rev = fullGitSha || (await git.getFileCurrentRevision(uri.fsPath));
 					const repo = await git.getRepositoryByFilePath(uri.fsPath);
 					repoId = repo && repo.id;
 					const repoHeadHash = await git.getRepoHeadRevision(repoPath);

@@ -1,8 +1,10 @@
 import { RequestType } from "vscode-languageserver-protocol";
+
 import { AccessToken, AgentState } from "./agent.protocol";
 import {
 	CSConfirmRegistrationRequest,
 	CSEligibleJoinCompany,
+	CSPossibleAuthDomain,
 	CSGetInviteInfoRequest,
 	CSGetInviteInfoResponse,
 	CSLoginResponse,
@@ -125,6 +127,7 @@ export interface RegisterNrUserResponse {
 	notInviteRelated?: boolean;
 	teamId: string;
 	eligibleJoinCompanies: CSEligibleJoinCompany[];
+	possibleAuthDomains: CSPossibleAuthDomain[];
 	isWebmail?: boolean;
 	companies?: CSCompany[];
 	accountIsConnected: boolean;
@@ -147,6 +150,7 @@ export interface ConfirmRegistrationResponse {
 	user?: {
 		id: string;
 		eligibleJoinCompanies?: CSEligibleJoinCompany[];
+		possibleAuthDomains?: CSPossibleAuthDomain[];
 	};
 	status: LoginResult;
 	token?: string;
@@ -157,6 +161,7 @@ export interface ConfirmRegistrationResponse {
 		environment: string;
 		serverUrl: string;
 	};
+	forceCreateCompany?: boolean;
 }
 
 export const ConfirmRegistrationRequestType = new RequestType<
