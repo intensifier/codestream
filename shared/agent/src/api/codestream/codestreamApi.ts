@@ -2474,6 +2474,7 @@ export class CodeStreamApiProvider implements ApiProvider {
 				})
 				.catch(ex => {
 					Logger.error(ex, cc);
+					delete this._refreshNRTokenPromise;
 					reject(ex);
 				});
 		});

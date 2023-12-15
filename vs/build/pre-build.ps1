@@ -3,6 +3,7 @@ param([string] $checkoutDir = $pwd, [string] $assetEnv = "")
 $computer = 'teamcity.cdstrm.dev'
 $username = 'web'
 $keyfile = 'C:\Users\Administrator\.ssh\id_rsa'
+$supplmentalSoftwarePath = 'C:\supplemental-build-software'
 $localReleaseLicenseFile = $checkoutDir + '\vs\licenses\Release\teamdev.licenses'
 $localDebugLicenseFile = $checkoutDir + '\vs\licenses\Debug\teamdev.licenses'
 $remoteLicenseFile = '/home/web/.codestream/licenses/teamdev.DotNetBrowser.licenses.txt'
@@ -37,5 +38,16 @@ Write-Host '************ npm install -g lightercollective'
 & npm install -g lightercollective
 
 Write-Host 'DISABLE_OPENCOLLECTIVE is set to' $env:DISABLE_OPENCOLLECTIVE
+
+if((Test-Path "$checkoutDir\vs\src\CodeStream.VisualStudio.Vsix.x64\agent\") -eq $False){
+    mkdir "$checkoutDir\vs\src\CodeStream.VisualStudio.Vsix.x64\agent\"
+}
+
+if((Test-Path "$checkoutDir\vs\src\CodeStream.VisualStudio.Vsix.x86\agent\") -eq $False){
+    mkdir "$checkoutDir\vs\src\CodeStream.VisualStudio.Vsix.x86\agent\"
+}
+
+Copy-Item "$supplmentalSoftwarePath\node\node-v18.15.0-win-x64\node.exe" -Destination "$checkoutDir\vs\src\CodeStream.VisualStudio.Vsix.x64\agent\node.exe"
+Copy-Item "$supplmentalSoftwarePath\node\node-v18.15.0-win-x86\node.exe" -Destination "$checkoutDir\vs\src\CodeStream.VisualStudio.Vsix.x86\agent\node.exe"
 
 . $PSScriptRoot\Bump-Version.ps1 -BumpBuild -BuildNumber $env:BUILD_NUMBER -Environment $assetEnv

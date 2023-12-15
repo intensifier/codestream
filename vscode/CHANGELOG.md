@@ -1,5 +1,11 @@
 # Change Log
 
+## [15.0.1] - 2023-12-15
+
+### Changed
+
+- Generative AI assistant is now named New Relic AI
+
 ## [15.0.0] - 2023-12-13
 
 ### Changed
