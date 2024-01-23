@@ -433,7 +433,7 @@ export const Signup = (props: Props) => {
 								{(props.newOrg || props.joinCompanyId) && <h2>Create an account</h2>}
 								{!props.newOrg && !props.joinCompanyId && (
 									<>
-										<h3>Sign in to CodeStream with your New Relic account</h3>
+										<h3>Sign in to see your data</h3>
 										{!limitAuthentication && (
 											<>
 												<Button
@@ -457,7 +457,7 @@ export const Signup = (props: Props) => {
 											)}
 											{!props.newOrg && !props.joinCompanyId && (
 												<>
-													Don't have a New Relic account?{" "}
+													Don't have an account?{" "}
 													<Link href="https://newrelic.com/signup?utm_source=codestream&utm_medium=programmatic&utm_campaign=global-ever-green-codestream-signin-form">
 														Sign up for free.
 													</Link>
@@ -511,7 +511,7 @@ export const Signup = (props: Props) => {
 									<div className="error-message form-error">
 										<FormattedMessage id="signUp.conflict" defaultMessage="Invitation conflict." />{" "}
 										<FormattedMessage id="contactSupport" defaultMessage="Contact support">
-											{text => <Link href="mailto:codestream@newrelic.com">{text}</Link>}
+											{text => <Link href="https://one.newrelic.com/help-xp">{text}</Link>}
 										</FormattedMessage>
 										.
 									</div>
@@ -578,8 +578,6 @@ export const Signup = (props: Props) => {
 
 					<p style={{ opacity: 0.5, fontSize: ".9em", textAlign: "center" }}>
 						CodeStream Version {derivedState.pluginVersion}
-						<br />
-						Connected to {derivedState.whichServer}.
 					</p>
 					{false && ( // enable me if you need CodeStream login
 						<div>

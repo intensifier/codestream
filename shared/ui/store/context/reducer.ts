@@ -276,6 +276,14 @@ export function reduceContext(
 				...state,
 				currentObservabilityAnomaly: action.payload.anomaly,
 				currentObservabilityAnomalyEntityGuid: action.payload.entityGuid,
+				currentObservabilityAnomalyEntityName: action.payload?.entityName,
+			};
+		}
+
+		case ContextActionsType.SetCurrentTransactionSpan: {
+			return {
+				...state,
+				currentTransactionSpan: action.payload.data,
 			};
 		}
 

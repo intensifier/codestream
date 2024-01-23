@@ -17,6 +17,7 @@ interface Props {
 	observabilityAssignments?: ObservabilityErrorCore[];
 	entityGuid?: string;
 	errorInboxError?: string;
+	domain?: string;
 }
 
 export const ObservabilityAssignmentsDropdown = React.memo((props: Props) => {
@@ -101,6 +102,8 @@ export const ObservabilityAssignmentsDropdown = React.memo((props: Props) => {
 															pendingErrorGroupGuid: _.errorGroupGuid,
 															openType: "Observability Section",
 															remote: _?.remote || undefined,
+															stackSourceMap: response?.stackSourceMap,
+															domain: props.domain,
 														})
 													);
 												} else {

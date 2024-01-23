@@ -24,6 +24,7 @@
 		"classnames": "2.2.6",
 		"code-prettify": "https://github.com/TeamCodeStream/code-prettify.git#62943684566f616b403ac354a1b5a094344c85bc",
 		"copy-to-clipboard": "3.3.1",
+		"csv": "6.3.6",
 		"emoji-mart": "2.11.1",
 		"ignore": "3.3.10",
 		"lint-staged": "13.2.3",
@@ -97,7 +98,7 @@
 		"prettier": "3.0.0",
 		"redux-mock-store": "1.5.4",
 		"ts-jest": "29.1.1",
-		"typescript": "5.1.6",
+		"typescript": "5.3.3",
 		"yargs": "15.3.1"
 	},
 	"overrides": {

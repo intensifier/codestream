@@ -40,4 +40,4 @@ Become a hands-on observability practitioner by [creating a free account](https:
 
 # Help & Feedback
 
-Check out the [user guide](https://docs.newrelic.com/docs/codestream/) for more information on getting started with New Relic CodeStream. Please follow [@newrelic](http://twitter.com/newrelic) for product updates and to share feedback and questions. You can also email us at codestream@newrelic.com.
+Check out the [user guide](https://docs.newrelic.com/docs/codestream/) for more information on getting started with New Relic CodeStream. Please follow [@newrelic](http://twitter.com/newrelic) for product updates and to share feedback and questions. You can also [contact support](https://support.newrelic.com).

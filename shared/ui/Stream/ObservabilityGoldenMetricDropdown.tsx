@@ -8,6 +8,8 @@ import { ObservabilityLoadingGoldenMetrics } from "@codestream/webview/Stream/Ob
 import { useAppSelector, useAppDispatch } from "../utilities/hooks";
 import { CodeStreamState } from "@codestream/webview/store";
 import { setUserPreference } from "./actions";
+import { HostApi } from "../webview-api";
+import { OpenUrlRequestType } from "../ipc/host.protocol";
 
 interface Props {
 	entityGoldenMetrics: EntityGoldenMetrics | undefined;
@@ -33,6 +35,104 @@ export const ObservabilityGoldenMetricDropdown = React.memo((props: Props) => {
 
 	const { errors, entityGuid, entityGoldenMetrics, loadingGoldenMetrics, noDropdown } = props;
 
+	const pillsData = entityGoldenMetrics?.pillsData;
+
+	function getErrorPillsJSX(displayValue, displayUnits) {
+		return (
+			<>
+				<span className={"status"} style={{ opacity: 1, color: "var(--text-color)" }}>
+					<>
+						{displayValue}
+						{displayUnits && <>{displayUnits} </>}
+					</>
+
+					{Number(pillsData?.errorRateData?.percentChange) >= 0 ? (
+						<span
+							style={
+								Number(pillsData?.errorRateData?.percentChange) >= 0 &&
+								Number(pillsData?.errorRateData?.percentChange) <= 5
+									? { color: "#FFD23D" }
+									: Number(pillsData?.errorRateData?.percentChange) > 5
+									? { color: "#DF2D24" }
+									: {}
+							}
+						>
+							<>
+								{Number(pillsData?.errorRateData?.percentChange) === 0 ? (
+									<>(+{"<"}1%)</>
+								) : (
+									<>(+{pillsData?.errorRateData?.percentChange}%)</>
+								)}
+							</>
+						</span>
+					) : (
+						<></>
+					)}
+				</span>
+				<span>{getGlobeIcon()}</span>
+			</>
+		);
+	}
+
+	function getResponseTimePillsJSX(displayValue, displayUnits) {
+		return (
+			<>
+				<span className={"status"} style={{ opacity: 1, color: "var(--text-color)" }}>
+					<>
+						{displayValue}
+						{displayUnits && <>{displayUnits} </>}
+					</>
+
+					{Number(pillsData?.responseTimeData?.percentChange) >= 0 ? (
+						<span
+							style={
+								Number(pillsData?.responseTimeData?.percentChange) >= 0 &&
+								Number(pillsData?.responseTimeData?.percentChange) <= 5
+									? { color: "#FFD23D" }
+									: Number(pillsData?.responseTimeData?.percentChange) > 5
+									? { color: "#DF2D24" }
+									: {}
+							}
+						>
+							<>
+								{Number(pillsData?.responseTimeData?.percentChange) === 0 ? (
+									<>(+{"<"}1%)</>
+								) : (
+									<>(+{pillsData?.responseTimeData?.percentChange}%)</>
+								)}
+							</>
+						</span>
+					) : (
+						<></>
+					)}
+				</span>
+				<span>{getGlobeIcon()}</span>
+			</>
+		);
+	}
+
+	function getGlobeIcon() {
+		return (
+			<Icon
+				name="globe"
+				className="clickable"
+				title="View on New Relic"
+				placement="bottomLeft"
+				delay={1}
+				onClick={e => {
+					e.preventDefault();
+					e.stopPropagation();
+					HostApi.instance.send(OpenUrlRequestType, {
+						url:
+							pillsData?.responseTimeData?.permalinkUrl ||
+							pillsData?.errorRateData?.permalinkUrl ||
+							"",
+					});
+				}}
+			/>
+		);
+	}
+
 	const errorTitle: string | undefined =
 		errors.length === 0 ? undefined : `Last request failed:\n${errors.join("\n")}`;
 
@@ -42,10 +142,10 @@ export const ObservabilityGoldenMetricDropdown = React.memo((props: Props) => {
 				{entityGoldenMetrics?.metrics.map(gm => {
 					return (
 						<Row
+							className={"pr-row no-shrink"}
 							style={{
 								padding: noDropdown ? "0 10px 0 60px" : "0 10px 0 42px",
 							}}
-							className={"pr-row no-shrink"}
 						>
 							<div data-testid={`${gm.name}-${entityGuid}`}>
 								<Tooltip placement="topRight" title={gm.title} delay={1}>
@@ -53,17 +153,23 @@ export const ObservabilityGoldenMetricDropdown = React.memo((props: Props) => {
 								</Tooltip>
 							</div>
 
-							<div className="icons">
-								<span className={"details"}>
-									{gm.value || gm.value === 0 ? (
-										<>
-											{gm.displayValue} {gm.displayUnit && <>{gm.displayUnit}</>}
-										</>
-									) : (
-										<>No Data</>
-									)}
-								</span>
-							</div>
+							<span className={"icons"}>
+								{gm.value || gm.value === 0 ? (
+									<>
+										{gm.name === "errorRate" ? (
+											<> {getErrorPillsJSX(gm.displayValue, gm.displayUnit)}</>
+										) : gm.name === "responseTimeMs" ? (
+											<> {getResponseTimePillsJSX(gm.displayValue, gm.displayUnit)}</>
+										) : (
+											<span>
+												{gm.displayValue} {gm.displayUnit && <>{gm.displayUnit}</>}
+											</span>
+										)}
+									</>
+								) : (
+									<>No Data</>
+								)}
+							</span>
 						</Row>
 					);
 				})}
@@ -122,7 +228,6 @@ export const ObservabilityGoldenMetricDropdown = React.memo((props: Props) => {
 								delay={1}
 							/>
 						)}
-						{}
 					</Row>
 				</>
 			)}

@@ -13,6 +13,9 @@ import {
 	FindCandidateMainFilesRequest,
 	FindCandidateMainFilesRequestType,
 	FindCandidateMainFilesResponse,
+	GetRepoFileFromAbsolutePathRequest,
+	GetRepoFileFromAbsolutePathRequestType,
+	GetRepoFileFromAbsolutePathResponse,
 	InstallNewRelicRequest,
 	InstallNewRelicRequestType,
 	InstallNewRelicResponse,
@@ -28,15 +31,15 @@ import {
 	ResolveStackTraceRequestType,
 	ResolveStackTraceResponse,
 	WarningOrError,
+	SourceMapEntry,
 } from "@codestream/protocols/agent";
 import { CSStackTraceInfo, CSStackTraceLine } from "@codestream/protocols/api";
 import { structuredPatch } from "diff";
-
+import { isEmpty } from "lodash";
 import { Container, SessionContainer } from "../container";
 import { isWindows } from "../git/shell";
 import { Logger } from "../logger";
 import { calculateLocation, MAX_RANGE_VALUE } from "../markerLocation/calculator";
-import { NewRelicProvider } from "../providers/newrelic";
 import { CodeStreamSession } from "../session";
 import { log } from "../system/decorators/log";
 import { lsp, lspHandler } from "../system/decorators/lsp";
@@ -55,6 +58,7 @@ import { Parser as phpParser } from "./stackTraceParsers/phpStackTraceParser";
 import { Parser as pythonParser } from "./stackTraceParsers/pythonStackTraceParser";
 import { Parser as rubyParser } from "./stackTraceParsers/rubyStackTraceParser";
 import fs from "fs";
+import { parseId } from "../providers/newrelic/utils";
 
 const ExtensionToLanguageMap: { [key: string]: string } = {
 	js: "javascript",
@@ -143,7 +147,7 @@ export class NRManager {
 		} else {
 			try {
 				const telemetry = Container.instance().telemetry;
-				const parsed = NewRelicProvider.parseId(errorGroupGuid || "");
+				const parsed = parseId(errorGroupGuid || "");
 
 				telemetry.track({
 					eventName: "Error Parsing Trace",
@@ -192,6 +196,8 @@ export class NRManager {
 		ref,
 		occurrenceId,
 		codeErrorId,
+		stackSourceMap,
+		domain,
 	}: ResolveStackTraceRequest): Promise<ResolveStackTraceResponse> {
 		const { git, repos } = SessionContainer.instance();
 		const matchingRepo = await git.getRepositoryById(repoId);
@@ -204,6 +210,14 @@ export class NRManager {
 			// only set the warning if we haven't already set it.
 			if (!firstWarning) firstWarning = warning;
 		};
+
+		if (domain === "BROWSER" && isEmpty(stackSourceMap)) {
+			setWarning({
+				message: `[Upload a source map] so that an un-minified stack trace can be displayed.`,
+				helpUrl: `https://docs.newrelic.com/docs/browser/browser-monitoring/browser-pro-features/upload-source-maps-un-minify-js-errors/`,
+			});
+		}
+
 		if (!matchingRepoPath) {
 			const repo = await repos.getById(repoId);
 			setWarning({
@@ -283,6 +297,20 @@ export class NRManager {
 		};
 
 		if (parsedStackInfo.lines) {
+			if (stackSourceMap?.stackTrace?.length > 0) {
+				parsedStackInfo.lines.forEach(entry => {
+					const matchingEntry = stackSourceMap.stackTrace.find((sourceMapEntry: SourceMapEntry) => {
+						return sourceMapEntry.original.fileName === entry.fileFullPath;
+					});
+
+					if (matchingEntry && matchingEntry.mapped) {
+						entry.fileFullPath = matchingEntry.mapped.fileName;
+						entry.column = matchingEntry.mapped.columnNumber;
+						entry.line = matchingEntry.mapped.lineNumber;
+					}
+				});
+			}
+
 			void this.resolveStackTraceLines(
 				parsedStackInfo,
 				resolvedStackInfo,
@@ -538,6 +566,33 @@ export class NRManager {
 			Logger.warn(response.error);
 		}
 		return response;
+	}
+
+	@lspHandler(GetRepoFileFromAbsolutePathRequestType)
+	@log()
+	async getRepoFileFromAbsolutePath(
+		request: GetRepoFileFromAbsolutePathRequest
+	): Promise<GetRepoFileFromAbsolutePathResponse> {
+		const { git } = SessionContainer.instance();
+
+		const matchingRepo = await git.getRepositoryById(request.repo.id);
+		const matchingRepoPath = matchingRepo?.path;
+		const fileSearchResponse =
+			matchingRepoPath &&
+			(await SessionContainer.instance().session.onFileSearch(
+				matchingRepoPath,
+				request.absoluteFilePath
+			));
+		const bestPath =
+			fileSearchResponse &&
+			NRManager.getBestMatchingPath(request.absoluteFilePath, fileSearchResponse.files);
+		if (!bestPath) {
+			return { error: `Unable to find matching file for path ${request.absoluteFilePath}` };
+		}
+
+		return {
+			uri: bestPath,
+		};
 	}
 
 	static getBestMatchingPath(pathSuffix: string, allFilePaths: string[]) {

@@ -206,9 +206,10 @@ export class PubnubConnection implements BroadcasterConnection {
 			status.category === Pubnub.CATEGORIES.PNAccessDeniedCategory
 		) {
 			// an access denied message, in direct response to a subscription attempt
-			if (!status.errorData?.payload?.channels) {
-				this._debug(`Access denied status: ${JSON.stringify(status)}`);
-			}
+			// BEWARE: the (commented) code below can leak our subscription key, and the user's pubnub token
+			//if (!status.errorData?.payload?.channels) {
+			//	this._debug(`Access denied status: ${JSON.stringify(status)}`);
+			//}
 			const channels = status.errorData?.payload?.channels || [];
 			this._debug(`Access denied for channels: ${channels}`);
 			const criticalChannels: string[] = [];

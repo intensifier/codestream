@@ -144,8 +144,12 @@ export const setCurrentMethodLevelTelemetry = (data: any) =>
 
 export const setCurrentObservabilityAnomaly = (
 	anomaly?: ObservabilityAnomaly,
-	entityGuid?: string
-) => action(ContextActionsType.SetCurrentObservabilityAnomaly, { anomaly, entityGuid });
+	entityGuid?: string,
+	entityName?: string
+) => action(ContextActionsType.SetCurrentObservabilityAnomaly, { anomaly, entityGuid, entityName });
+
+export const setCurrentTransactionSpan = (data: any) =>
+	action(ContextActionsType.SetCurrentTransactionSpan, { data });
 
 export const setComposeCodemarkActive = (type: CodemarkType | undefined) =>
 	action(ContextActionsType.SetComposeCodemarkActive, { type });

@@ -14,6 +14,12 @@ import { ReviewPlus } from "./agent.protocol.reviews";
 import { CSRepository, PullRequestQuery } from "./api.protocol.models";
 import { TrunkCheckResults } from "./agent.protocol.trunk";
 
+export interface NewThirdPartyProviderConfig {
+	id: string;
+	apiUrl: string;
+	name: string;
+	baseHeaders: { [key: string]: string };
+}
 export interface ThirdPartyProviderConfig {
 	id: string;
 	name: string; // e.g. "trello"
@@ -1404,6 +1410,8 @@ export interface GetObservabilityAnomaliesRequest {
 export interface ObservabilityAnomaly {
 	language: string;
 	name: string;
+	scope?: string;
+	children?: ObservabilityAnomaly[];
 	type: "duration" | "errorRate";
 	codeAttrs?: CodeAttributes;
 	oldValue: number;
@@ -1430,7 +1438,11 @@ export interface NameValue extends Named {
 	value: number;
 }
 
-export interface Comparison extends Named {
+export interface Scoped {
+	scope?: string;
+}
+
+export interface Comparison extends Named, Scoped {
 	oldValue: number;
 	newValue: number;
 	ratio: number;
@@ -1478,12 +1490,9 @@ export interface CodeLevelMetrics {
 	errorRate?: number;
 }
 
-export const GetClmRequestType = new RequestType<
-	GetClmRequest,
-	GetClmResponse,
-	void,
-	void
->("codestream/newrelic/clm");
+export const GetClmRequestType = new RequestType<GetClmRequest, GetClmResponse, void, void>(
+	"codestream/newrelic/clm"
+);
 
 export interface GetObservabilityResponseTimesRequest {
 	fileUri: string;
@@ -1583,6 +1592,7 @@ export interface GetObservabilityErrorGroupMetadataResponse {
 	entityId?: string;
 	remote?: string;
 	relatedRepos: RelatedRepository;
+	stackSourceMap?: any;
 }
 
 export const GetObservabilityErrorGroupMetadataRequestType = new RequestType<
@@ -1628,6 +1638,7 @@ export interface GetMethodLevelTelemetryRequest {
 		functionName?: string;
 		relativeFilePath?: string;
 	};
+	scope?: string;
 	since?: string;
 	timeseriesGroup?: string;
 	includeDeployments?: boolean;
@@ -1799,6 +1810,58 @@ export interface GetIssuesResponse {
 	recentIssues?: RecentIssue[];
 }
 
+export interface SpanLineChartDataValue {
+	beginTimeSeconds: number;
+	endTimeSeconds: number;
+	value: number;
+}
+
+/*export interface SpanLineChartData {
+	thisHost: SpanLineChartDataValue[];
+	allHosts: SpanLineChartDataValue[];
+}*/
+export type SpanLineChartData = SpanLineChartDataPoint[];
+
+export interface SpanLineChartDataPoint {
+	endTimeMs: number;
+	thisHost?: number;
+	allHosts?: number;
+}
+
+/*export interface SpanHistogramData {
+	bucketSize: number;
+	minValue: number;
+	maxValue: number;
+	values: number[];
+}*/
+export type SpanHistogramData = SpanHistogramDataPoint[];
+
+export interface SpanHistogramDataPoint {
+	durationRange: string;
+	count: number;
+}
+
+export interface GetSpanChartDataRequest {
+	accountId: number;
+	entityGuid: string;
+	spanName: string;
+	spanHost: string;
+	timeRange: string;
+}
+
+export interface GetSpanChartDataResponse {
+	responseTime: SpanLineChartDataPoint[];
+	throughput: SpanLineChartDataPoint[];
+	duration: SpanHistogramDataPoint[];
+}
+
+export const GetSpanChartDataRequestType = new RequestType<
+	GetSpanChartDataRequest,
+	GetSpanChartDataResponse,
+	void,
+	void
+>("codestream/newrelic/spanChartData");
+
 export interface Deployment {
 	seconds: number;
 	version: string;
@@ -1926,6 +1989,7 @@ export type EntityType =
 	| "APM_DATABASE_INSTANCE_ENTITY"
 	| "APM_EXTERNAL_SERVICE_ENTITY"
 	| "BROWSER_APPLICATION_ENTITY"
+	| "THIRD_PARTY_SERVICE_ENTITY"
 	| "DASHBOARD_ENTITY"
 	| "EXTERNAL_ENTITY"
 	| "GENERIC_ENTITY"
@@ -1949,7 +2013,7 @@ export interface Entity {
 	alertSeverity?: string;
 	guid: string;
 	name: string;
-	type?: "APPLICATION" | "REPOSITORY";
+	type?: "APPLICATION" | "REPOSITORY" | "SERVICE" | "AWSLAMBDAFUNCTION";
 	entityType?: EntityType;
 	tags?: {
 		key: string;
@@ -2271,6 +2335,16 @@ export interface EntityGoldenMetrics {
 		value: number;
 		displayValue: string;
 	}[];
+	pillsData?: {
+		errorRateData?: {
+			percentChange: string;
+			permalinkUrl: string;
+		};
+		responseTimeData?: {
+			percentChange: string;
+			permalinkUrl: string;
+		};
+	};
 }
 
 export interface MethodGoldenMetrics {
