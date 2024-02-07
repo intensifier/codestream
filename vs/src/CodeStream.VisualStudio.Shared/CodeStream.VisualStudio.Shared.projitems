@@ -95,7 +95,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)Services\AuthenticationService.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Services\AuthenticationServiceFactory.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Services\BrowserServiceExtensions.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Services\CodeLevelMetricsCallbackService.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Services\CodeStreamAgentService.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Services\CodeStreamAgentServiceFactory.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Services\CodeStreamService.cs" />
@@ -136,6 +135,15 @@
     <Compile Include="$(MSBuildThisFileDirectory)Services\WebviewUserSettingsService.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Services\WpfTextViewCache.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)UI\ActiveTextEditorExtensions.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)UI\CodeLevelMetrics\CodeLevelMetricsGlyph.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)UI\CodeLevelMetrics\CodeLevelMetricsGlyphFactory.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)UI\CodeLevelMetrics\CodeLevelMetricsGlyphFactoryProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)UI\CodeLevelMetrics\CodeLevelMetricsGlyphTagger.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)UI\CodeLevelMetrics\CodeLevelMetricsGlyphTaggerProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)UI\CodeLevelMetrics\CodeLevelMetricsControl.xaml.cs">
+      <DependentUpon>CodeLevelMetricsControl.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="$(MSBuildThisFileDirectory)UI\Converters\StringNullToVisibilityConverter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)UI\DocumentMarkerManager.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)UI\Extensions\AnimationExtensions.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)UI\Glyphs\DocumentMarkGlyphFactory.cs" />
@@ -168,10 +176,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)UI\TextViewCreationListener.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)UI\TextViewExtensions.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)UI\TextViewRoles.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)UI\ToolWindows\CodeLevelMetricsDetails.xaml.cs">
-      <DependentUpon>CodeLevelMetricsDetails.xaml</DependentUpon>
-    </Compile>
-    <Compile Include="$(MSBuildThisFileDirectory)UI\ToolWindows\CodeLevelMetricsDetailsViewFactory.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)UI\ToolWindows\WebViewControl.xaml.cs">
       <DependentUpon>WebViewControl.xaml</DependentUpon>
     </Compile>
@@ -180,11 +184,11 @@
     <Compile Include="$(MSBuildThisFileDirectory)WebViewRouter.cs" />
   </ItemGroup>
   <ItemGroup>
-    <Page Include="$(MSBuildThisFileDirectory)UI\Margins\DocumentMark.xaml">
+    <Page Include="$(MSBuildThisFileDirectory)UI\CodeLevelMetrics\CodeLevelMetricsControl.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
-    <Page Include="$(MSBuildThisFileDirectory)UI\ToolWindows\CodeLevelMetricsDetails.xaml">
+    <Page Include="$(MSBuildThisFileDirectory)UI\Margins\DocumentMark.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>

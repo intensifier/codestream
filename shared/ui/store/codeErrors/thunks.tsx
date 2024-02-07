@@ -1,4 +1,5 @@
 import {
+	CodeBlock,
 	CreateShareableCodeErrorRequestType,
 	CSAsyncGrokError,
 	CSGrokStream,
@@ -8,6 +9,8 @@ import {
 	GetNewRelicErrorGroupRequestType,
 	GetNewRelicErrorGroupResponse,
 	ResolveStackTracePositionRequestType,
+	ResolveStackTraceRequest,
+	ResolveStackTraceRequestType,
 	UpdateCodeErrorRequestType,
 } from "@codestream/protocols/agent";
 import { CSCodeError, CSStackTraceLine } from "@codestream/protocols/api";
@@ -49,7 +52,7 @@ import { confirmPopup } from "@codestream/webview/Stream/Confirm";
 import { HostApi } from "@codestream/webview/webview-api";
 import { Position, Range } from "vscode-languageserver-types";
 import React from "react";
-import { getGrokPostLength } from "@codestream/webview/store/posts/reducer";
+import { getNrAiPostLength } from "@codestream/webview/store/posts/reducer";
 import { URI } from "vscode-uri";
 import { clearResolvedFlag } from "@codestream/utils/api/codeErrorCleanup";
 import { GrokStreamEvent } from "@codestream/webview/store/posts/types";
@@ -103,7 +106,7 @@ export interface CreateCodeErrorError {
 
 export const createCodeError =
 	(attributes: NewCodeErrorAttributes) => async (dispatch, getState: () => CodeStreamState) => {
-		// console.debug("===--- createCodeError ---===", attributes);
+		// console.debug("createCodeError", attributes);
 		try {
 			const response = await HostApi.instance.send(CreateShareableCodeErrorRequestType, {
 				attributes,
@@ -111,6 +114,7 @@ export const createCodeError =
 				addedUsers: attributes.addedUsers,
 				replyPost: attributes.replyPost,
 				codeBlock: attributes.codeBlock,
+				language: attributes.language,
 				analyze: attributes.analyze,
 				reinitialize: attributes.reinitialize,
 				parentPostId: attributes.parentPostId,
@@ -276,9 +280,9 @@ export const openErrorGroup =
 		}
 
 		if (message) {
-			HostApi.instance.track("Error Roadblocked", {
-				"Error Group ID": errorGroupGuid,
-				"NR Account ID": response && response.accountId,
+			HostApi.instance.track("codestream/errors/error_group roadblocked", {
+				meta_data: `error_group_id: ${errorGroupGuid}`,
+				event_type: "response",
 			});
 			confirmPopup({
 				title: "Error Can't Be Opened",
@@ -339,11 +343,12 @@ export const upgradePendingCodeError =
 	(
 		codeErrorId: string,
 		source: "Comment" | "Status Change" | "Assignee Change",
-		codeBlock?: string,
+		codeBlock?: CodeBlock,
+		language?: string,
 		analyze = false
 	) =>
 	async (dispatch, getState: () => CodeStreamState) => {
-		// console.debug("===--- upgradePendingCodeError ===---", { codeErrorId: codeErrorId, source });
+		console.debug("upgradePendingCodeError", { codeErrorId, source, codeBlock, language });
 		try {
 			const state = getState();
 			const existingCodeError = getCodeError(state.codeErrors, codeErrorId);
@@ -365,6 +370,7 @@ export const upgradePendingCodeError =
 					stackTraces,
 					objectInfo,
 					codeBlock,
+					language,
 					analyze,
 					reinitialize: !isPending && analyze,
 					parentPostId: postId,
@@ -509,12 +515,6 @@ export const api =
 			// );
 			logError(error, { providerId, pullRequestId, method, message: errorString });
 
-			HostApi.instance.track("ErrorGroup Error", {
-				Host: providerId,
-				Operation: method,
-				Error: errorString,
-				IsOAuthError: errorString && errorString.indexOf("OAuth App access restrictions") > -1,
-			});
 			return {
 				error: errorString,
 			};
@@ -522,12 +522,13 @@ export const api =
 	};
 
 export const replaceSymbol =
-	(uri: string, symbol: string, codeBlock: string) =>
+	(uri: string, symbol: string, codeBlock: string, namespace?: string) =>
 	async (dispatch, getState: () => CodeStreamState) => {
 		await HostApi.instance.send(EditorReplaceSymbolType, {
 			uri,
 			symbolName: symbol,
 			codeBlock,
+			namespace,
 		});
 	};
 
@@ -573,6 +574,9 @@ export const copySymbolFromIde =
 					codeBlock: symbolDetails.text,
 					symbol: stackLine.method,
 					uri: lookupPath,
+					range: symbolDetails.range,
+					namespace: stackLine.namespace,
+					language: symbolDetails.language,
 				})
 			);
 		} else {
@@ -581,7 +585,7 @@ export const copySymbolFromIde =
 	};
 
 export const jumpToStackLine =
-	(lineIndex: number, stackLine: CSStackTraceLine, ref: string, repoId: string) =>
+	(lineIndex: number, stackLine: CSStackTraceLine, repoId: string, ref?: string) =>
 	async (dispatch, getState: () => CodeStreamState) => {
 		const state = getState();
 		dispatch(
@@ -647,9 +651,27 @@ export const fetchNewRelicErrorGroup =
 		return HostApi.instance.send(GetNewRelicErrorGroupRequestType, request);
 	};
 
+/**
+ *  "resolving" the stack trace here gives us two pieces of info for each line of the stack
+ *	the info parsed directly from the stack, and the "resolved" info that is specific to the
+ *	file the user has currently in their repo ... this position may be different if the user is
+ *	on a particular commit ... the "parsed" stack info is considered permanent, the "resolved"
+ *	stack info is considered ephemeral, since it only applies to the current user in the current state
+ *	resolved line number that gives the full path and line of the
+ * @param errorGroupGuid
+ * @param repoId
+ * @param sha
+ * @param occurrenceId
+ * @param stackTrace
+ * @returns ResolveStackTraceResponse
+ */
+export const resolveStackTrace = (request: ResolveStackTraceRequest) => async dispatch => {
+	return HostApi.instance.send(ResolveStackTraceRequestType, request);
+};
+
 export const startGrokLoading = (codeError: CSCodeError) => async (dispatch, getState) => {
 	const state: CodeStreamState = getState();
-	const grokPostLength = getGrokPostLength(state, codeError.streamId, codeError.postId);
+	const grokPostLength = getNrAiPostLength(state, codeError.streamId, codeError.postId);
 	// console.debug(
 	// 	`===--- startGrokLoading called, grokPostLength: ${grokPostLength}`
 	// );

@@ -17,12 +17,14 @@ import {
 	DetectionMethod,
 	ObservabilityAnomaly,
 	ObservabilityRepo,
+	TelemetryData,
 } from "@codestream/protocols/agent";
 import Icon from "./Icon";
 import styled from "styled-components";
 import { isEmpty as _isEmpty } from "lodash-es";
 
 interface Props {
+	accountId: number;
 	observabilityAnomalies: ObservabilityAnomaly[];
 	observabilityRepo: ObservabilityRepo;
 	detectionMethod?: DetectionMethod;
@@ -66,19 +68,36 @@ export const ObservabilityAnomaliesGroup = React.memo((props: Props) => {
 	const [hoveredRowIndex, setHoveredRowIndex] = useState<string | undefined>(undefined);
 	const hasMoreAnomaliesToShow = props.observabilityAnomalies.length > numToShow;
 
-	const handleClickTelemetry = () => {
-		const event = {
-			"Detection Method": props.detectionMethod ?? "<unknown>",
-			Language: props.observabilityAnomalies[0]?.language ?? "<unknown>",
+	const handleClickTelemetry = (anomaly: ObservabilityAnomaly) => {
+		const event: TelemetryData = {
+			entity_guid: props.entityGuid,
+			account_id: props.accountId,
+			meta_data: `anomaly_category: ${anomaly.scope ? "metric" : "transaction"}`,
+			meta_data_2: `anomaly_type: ${
+				anomaly.type === "duration"
+					? "avg_duration"
+					: anomaly.type === "errorRate"
+					? "error_rate"
+					: ""
+			}`,
+			meta_data_4: `detection_method: ${
+				props.detectionMethod === "Release Based"
+					? "release_based"
+					: props.detectionMethod === "Time Based"
+					? "time_based"
+					: "<unknown>"
+			}`,
+			meta_data_3: `language: ${props.observabilityAnomalies[0]?.language ?? "<unknown>"}`,
+			event_type: "click",
 		};
 
 		console.debug("CLM Anomaly Clicked", event);
 
-		HostApi.instance.track("CLM Anomaly Clicked", event);
+		HostApi.instance.track("codestream/anomaly clicked", event);
 	};
 
 	const handleClick = (anomaly: ObservabilityAnomaly) => {
-		handleClickTelemetry();
+		handleClickTelemetry(anomaly);
 		HostApi.instance.send(EditorRevealSymbolRequestType, {
 			codeFilepath: anomaly.codeAttrs?.codeFilepath,
 			codeNamespace: anomaly.codeAttrs?.codeNamespace,

@@ -1,12 +1,23 @@
 import * as paths from "path";
 
 import { CodemarkType, CSMarkerIdentifier, CSReviewCheckpoint } from "@codestream/protocols/api";
-import { commands, Disposable, env, Range, Uri, ViewColumn, window, workspace } from "vscode";
+import {
+	commands,
+	Disposable,
+	env,
+	Range,
+	Uri,
+	ViewColumn,
+	window,
+	workspace,
+	TextDocument
+} from "vscode";
 import {
 	FileLevelTelemetryRequestOptions,
 	MetricTimesliceNameMapping,
 	ObservabilityAnomaly
 } from "@codestream/protocols/agent";
+import { SymbolLocator } from "providers/symbolLocator";
 
 import { Editor } from "./extensions/editor";
 import { openUrl } from "./urlHandler";
@@ -19,6 +30,8 @@ import { Container } from "./container";
 import { Logger } from "./logger";
 import { Command, createCommandDecorator, Strings } from "./system";
 import * as csUri from "./system/uri";
+import { md5 } from "@codestream/utils/system/string";
+// import { md5 } from "@codestream/utils/system/string";
 
 const commandRegistry: Command[] = [];
 const command = createCommandDecorator(commandRegistry);
@@ -125,6 +138,7 @@ export interface ViewMethodLevelTelemetryCommandArgs
 
 export class Commands implements Disposable {
 	private readonly _disposable: Disposable;
+	private readonly _symbolLocator: SymbolLocator;
 
 	constructor() {
 		this._disposable = Disposable.from(
@@ -135,6 +149,7 @@ export class Commands implements Disposable {
 				Container.sidebar.show()
 			)
 		);
+		this._symbolLocator = new SymbolLocator();
 	}
 
 	dispose() {
@@ -491,7 +506,12 @@ export class Commands implements Disposable {
 	async openCodemark(args: OpenCodemarkCommandArgs): Promise<void> {
 		if (args === undefined) return;
 
-		Container.agent.telemetry.track("Codemark Clicked", { "Codemark Location": "Source File" });
+		Container.agent.telemetry.track("codestream/codemarks/codemark displayed", {
+			meta_data: `codemark_location: source_file`,
+			meta_data_2: "codemark_type: comment",
+			meta_data_3: `following: false`,
+			event_type: "modal_display"
+		});
 
 		const { codemarkId: _codemarkId, ...options } = args;
 		return Container.sidebar.openCodemark(args.codemarkId, options);
@@ -512,7 +532,7 @@ export class Commands implements Disposable {
 			trackParams["Comment Location"] = "Diff Gutter";
 		}
 
-		Container.agent.telemetry.track("PR Comment Clicked", trackParams);
+		// Container.agent.telemetry.track("PR Comment Clicked", trackParams);
 
 		if (args.externalUrl) {
 			return openUrl(args.externalUrl);
@@ -588,9 +608,9 @@ export class Commands implements Disposable {
 		try {
 			parsedArgs = JSON.parse(args) as ViewMethodLevelTelemetryCommandArgs;
 			if (parsedArgs.error?.type === "NO_RUBY_VSCODE_EXTENSION") {
-				Container.agent.telemetry.track("MLT Language Extension Prompt", {
-					Language: parsedArgs.languageId
-				});
+				// Container.agent.telemetry.track("MLT Language Extension Prompt", {
+				// 	Language: parsedArgs.languageId
+				// });
 			}
 			if (parsedArgs.error?.type === "NO_SPANS") {
 				// no-op
@@ -608,6 +628,103 @@ export class Commands implements Disposable {
 		} catch (ex) {
 			Logger.error(ex);
 		}
+	}
+
+	@command("executeNrql")
+	async executeNrql(fileUri: Uri, text: string, lineNumber?: number): Promise<void> {
+		// fileUri is passed in by both CodeLens provider and the command provider
+		// lineNumber is only passed by the CodeLens provider, which we do need.
+
+		let nrqlQuery: string | undefined = undefined;
+		const editor = window.activeTextEditor;
+		if (editor === undefined) return;
+
+		if (editor.selection && !editor.selection.isEmpty) {
+			nrqlQuery = editor.document.getText(editor.selection);
+		} else {
+			if (text) {
+				nrqlQuery = text;
+			} else if (lineNumber) {
+				nrqlQuery = editor.document.lineAt(lineNumber).text;
+			}
+		}
+		if (!nrqlQuery) {
+			// notification of some sort that we couldn't find anything to search on?
+			await window.showErrorMessage("Please select a NRQL query to execute", "Dismiss");
+		} else {
+			const currentRepoId = Container.session.user?.preferences?.currentO11yRepoId;
+
+			const currentEntityGuid = currentRepoId
+				? (Container.session?.user?.preferences?.activeO11y?.[currentRepoId] as string)
+				: undefined;
+
+			await Container.panel.initializeOrShowEditor({
+				panelLocation: ViewColumn.Beside,
+				// UI can get the accountId based on the entityGuid (parsed)
+				accountId: undefined,
+				entityGuid: currentEntityGuid!,
+				entityAccounts: [],
+				panel: "nrql",
+				title: "NRQL",
+				query: nrqlQuery,
+				entryPoint: "nrql_file",
+				hash: md5(fileUri.toString()),
+				ide: {
+					name: "VSC"
+				}
+			});
+		}
+	}
+
+	@command("logSearch")
+	async logSearch(): Promise<void> {
+		const editor = window.activeTextEditor;
+		if (editor === undefined) return;
+
+		let searchTerm = editor.document.getText(editor.selection);
+
+		if (!searchTerm) {
+			// cursor sitting on a line, but nothing actually highlighted
+			searchTerm = this.extractStringsFromLine(editor.document, editor.selection.start.line);
+		} else {
+			// take highlighted section minus leading/trailing quotes & spaces.
+			searchTerm = searchTerm
+				.trim()
+				.replace(/^["'`]|["'`]$/g, "")
+				.trim();
+		}
+
+		if (!searchTerm) {
+			// notification of some sort that we couldn't find anything to search on?
+			await window.showErrorMessage(
+				"We were unable to determine the search criteria from your selection or line of code.",
+				"Dismiss"
+			);
+		} else {
+			await Container.sidebar.logSearch({ query: searchTerm, entryPoint: "context_menu" });
+		}
+	}
+
+	private extractStringsFromLine(document: TextDocument, lineNumber: number): string {
+		const line = document.lineAt(lineNumber);
+
+		// https://regex101.com/r/Pky4GV/6
+		const matches = line.text.match(
+			/"(?:[^"]|"")*(?:"|$)|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^'\\]|\\.)*`/gim
+		);
+		const match = matches?.[0];
+
+		if (!match) {
+			return "";
+		}
+
+		const fixed = match
+			.trim()
+			.replace(/\$?{.*}/g, "") // replace interpolated values - {0}, {variable2}, ${something}, ${variable23}
+			.replace(/^["'`]|["'`]$/g, "") // replace leading and trailing quotes - ' / " / `
+			.trim();
+
+		return fixed;
 	}
 
 	async updateEditorCodeLens(): Promise<boolean> {

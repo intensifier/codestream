@@ -51,6 +51,8 @@ import {
 	HostDidChangeWorkspaceFoldersNotificationType,
 	HostDidLogoutNotificationType,
 	HostDidReceiveRequestNotificationType,
+	InitiateLogSearchNotification,
+	InitiateLogSearchNotificationType,
 	InsertTextRequestType,
 	IpcRoutes,
 	isIpcRequestMessage,
@@ -68,6 +70,7 @@ import {
 	ReviewCloseDiffRequestType,
 	ReviewShowDiffRequestType,
 	ReviewShowLocalDiffRequestType,
+	OpenEditorViewNotificationType,
 	ShellPromptFolderRequestType,
 	ShowCodemarkNotificationType,
 	ShowNextChangedFileNotificationType,
@@ -90,7 +93,8 @@ import {
 	WebviewDidInitializeNotificationType,
 	WebviewIpcMessage,
 	WebviewIpcNotificationMessage,
-	WebviewIpcRequestMessage
+	WebviewIpcRequestMessage,
+	IdeNames
 } from "@codestream/protocols/webview";
 import {
 	authentication,
@@ -108,7 +112,8 @@ import {
 	ViewColumn,
 	window,
 	workspace,
-	SymbolInformation
+	SymbolInformation,
+	ExtensionContext
 } from "vscode";
 import { NotificationType, RequestType } from "vscode-languageclient";
 
@@ -161,6 +166,7 @@ export class SidebarController implements Disposable {
 	private readonly _notifyActiveEditorChangedDebounced: (e: TextEditor | undefined) => void;
 
 	constructor(
+		private context: ExtensionContext,
 		public readonly session: CodeStreamSession,
 		private _sidebar?: WebviewLike
 	) {
@@ -226,12 +232,11 @@ export class SidebarController implements Disposable {
 				}
 
 				if (
-					this._sidebar !== undefined &&
-					e.reason === SessionSignedOutReason.UserSignedOutFromExtension
+					(this._sidebar !== undefined &&
+						e.reason === SessionSignedOutReason.UserSignedOutFromExtension) ||
+					e.reason === SessionSignedOutReason.InvalidRefreshToken
 				) {
-					if (this._sidebar !== undefined) {
-						this._sidebar.notify(HostDidLogoutNotificationType, {});
-					}
+					this._sidebar?.notify(HostDidLogoutNotificationType, {});
 					break;
 				}
 
@@ -530,6 +535,16 @@ export class SidebarController implements Disposable {
 	}
 
 	@log()
+	async logSearch(args: InitiateLogSearchNotification): Promise<void> {
+		if (!this._sidebar) {
+			// it's possible that the webview is closing...
+			return;
+		}
+
+		this._sidebar!.notify(InitiateLogSearchNotificationType, args);
+	}
+
+	@log()
 	async viewAnomaly(args: ViewAnomalyNotification): Promise<void> {
 		if (this.visible) {
 			await this._sidebar!.show();
@@ -804,7 +819,7 @@ export class SidebarController implements Disposable {
 		this.closeWebview("user");
 	}
 
-	private async onWebviewMessageReceived(webview: WebviewLike, e: WebviewIpcMessage) {
+	async onWebviewMessageReceived(webview: WebviewLike, e: WebviewIpcMessage) {
 		try {
 			Logger.log(`WebviewController: Received message ${toLoggableIpcMessage(e)} from the webview`);
 
@@ -843,6 +858,10 @@ export class SidebarController implements Disposable {
 
 	private onWebviewNotification(webview: WebviewLike, e: WebviewIpcNotificationMessage) {
 		switch (e.method) {
+			case OpenEditorViewNotificationType.method: {
+				Container.panel.initializeOrShowEditor(e.params);
+				break;
+			}
 			case WebviewDidInitializeNotificationType.method: {
 				// view is rendered and ready to receive messages
 				webview.onIpcReady();
@@ -1374,7 +1393,7 @@ export class SidebarController implements Disposable {
 			},
 			environmentInfo: this.session.environmentInfo,
 			ide: {
-				name: "VSC",
+				name: "VSC" as IdeNames,
 				detail: env.appName
 			},
 			context: this._context

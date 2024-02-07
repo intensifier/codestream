@@ -6,8 +6,10 @@ import { Project, RepoProjectType } from "./agent.protocol.scm";
 import { CSRepository, CSStackTraceInfo, CSStackTraceLine } from "./api.protocol.models";
 
 export interface ParseStackTraceRequest {
+	entityGuid: string;
 	errorGroupGuid: string;
 	stackTrace: string | string[];
+	occurrenceId: string | undefined;
 }
 
 export interface ParseStackTraceResponse extends CSStackTraceInfo {
@@ -23,6 +25,7 @@ export const ParseStackTraceRequestType = new RequestType<
 >("codestream/nr/parseStackTrace");
 
 export interface ResolveStackTraceRequest {
+	entityGuid: string;
 	// tracking
 	errorGroupGuid: string;
 	occurrenceId: string;
@@ -77,7 +80,7 @@ export const DidResolveStackTraceLineNotificationType = new NotificationType<
 >("codestream/nr/didResolveStackTraceLine");
 
 export interface ResolveStackTracePositionRequest {
-	ref: string;
+	ref?: string;
 	repoId: string;
 	filePath: string;
 	line?: number;

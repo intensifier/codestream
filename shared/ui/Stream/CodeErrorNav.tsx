@@ -5,7 +5,9 @@ import {
 	MatchReposResponse,
 	NormalizeUrlRequestType,
 	NormalizeUrlResponse,
+	ResolveStackTraceRequest,
 	ResolveStackTraceResponse,
+	TelemetryData,
 	WarningOrError,
 } from "@codestream/protocols/agent";
 import { CSCodeError, CSStackTraceInfo } from "@codestream/protocols/api";
@@ -15,12 +17,13 @@ import {
 	bootstrapCodeErrors,
 	fetchCodeError,
 	PENDING_CODE_ERROR_ID_PREFIX,
-	resolveStackTrace,
+	resetNrAi,
 } from "@codestream/webview/store/codeErrors/actions";
 import {
 	api,
 	fetchErrorGroup,
 	openErrorGroup,
+	resolveStackTrace,
 	setErrorGroup,
 	updateCodeError,
 } from "@codestream/webview/store/codeErrors/thunks";
@@ -443,7 +446,7 @@ export function CodeErrorNav(props: Props) {
 							title: "Which Repository?",
 							description: `Select the repository that this error is associated with so that we can take you to the code. If the repository doesn't appear in the list, open it in your IDE.`,
 						});
-						HostApi.instance.track("Page Viewed", { "Page Name": "NR Repo Association" });
+
 						return;
 					}
 				}
@@ -493,7 +496,7 @@ export function CodeErrorNav(props: Props) {
 							targetRemote,
 							timestamp: derivedState.currentCodeErrorData?.timestamp,
 						});
-						HostApi.instance.track("Page Viewed", { "Page Name": "NR Repo Not Open" });
+
 						return;
 					}
 					repoId = reposResponse.repos[0].id!;
@@ -517,16 +520,18 @@ export function CodeErrorNav(props: Props) {
 				}
 
 				if (stack) {
-					stackInfo = (await resolveStackTrace(
-						errorGroupGuidToUse!,
-						repoId!,
-						refToUse!,
-						occurrenceIdToUse!,
-						stack!,
-						derivedState.currentCodeErrorId!,
-						derivedState.currentCodeErrorData.stackSourceMap,
-						derivedState.currentCodeErrorData?.domain
-					)) as ResolveStackTraceResponse;
+					const request: ResolveStackTraceRequest = {
+						entityGuid: entityIdToUse!,
+						errorGroupGuid: errorGroupGuidToUse!,
+						repoId: repoId!,
+						ref: refToUse!,
+						occurrenceId: occurrenceIdToUse!,
+						stackTrace: stack!,
+						codeErrorId: derivedState.currentCodeErrorId!,
+						stackSourceMap: derivedState.currentCodeErrorData.stackSourceMap,
+						domain: derivedState.currentCodeErrorData?.domain,
+					};
+					stackInfo = await dispatch(resolveStackTrace(request));
 				}
 			}
 
@@ -610,19 +615,32 @@ export function CodeErrorNav(props: Props) {
 			setIsResolved(true);
 
 			let trackingData = {
-				"Error Group ID": errorGroupResult?.errorGroup?.guid || codeError?.objectInfo?.entityId,
-				"NR Account ID": errorGroupResult?.accountId || codeError?.objectInfo?.accountId || "0",
-				"Entry Point": derivedState.currentCodeErrorData?.openType || "Open in IDE Flow",
-				"Stack Trace": !!(stackInfo && !stackInfo.error),
-			};
-			if (trackingData["Stack Trace"]) {
-				trackingData["Build ref"] = !refToUse
-					? "Missing"
+				entity_guid: entityIdToUse,
+				account_id: errorGroupResult?.accountId || codeError?.objectInfo?.accountId,
+				meta_data: `error_group_id: ${
+					errorGroupResult?.errorGroup?.guid || codeError?.objectInfo?.entityId
+				}`,
+
+				meta_data_2: `entry_point: ${
+					derivedState.currentCodeErrorData?.openType === "Observability Section"
+						? "observability_section"
+						: derivedState.currentCodeErrorData?.openType === "Activity Feed"
+						? "activity_feed"
+						: "open_in_ide"
+				}`,
+				meta_data_3: `stack_trace: ${!!(stackInfo && !stackInfo.error)}`,
+				meta_data_4: `build_sha: missing`,
+				event_type: "modal_display",
+			} as TelemetryData;
+
+			if (trackingData["meta_data_3"]) {
+				trackingData["meta_data_4"] = !refToUse
+					? "build_sha: missing"
 					: stackInfo?.warning
-					? "Warning"
-					: "Populated";
+					? "build_sha: warning"
+					: "build_sha: populated";
 			}
-			HostApi.instance.track("Error Opened", trackingData);
+			HostApi.instance.track("codestream/errors/error_group displayed", trackingData);
 		} catch (ex) {
 			console.warn(ex);
 			const title = "Unexpected Error";
@@ -659,6 +677,8 @@ export function CodeErrorNav(props: Props) {
 	};
 
 	useDidMount(() => {
+		// clear nrai states
+		dispatch(resetNrAi());
 		// Kind of a HACK leaving this here, BUT...
 		// since <CancelButton /> uses the OLD version of Button.js
 		// and not Button.tsx (below), there's no way to keep the style.
@@ -800,9 +820,9 @@ export function CodeErrorNav(props: Props) {
 							errorGroupGuid: derivedState.codeError?.objectId || pendingErrorGroupGuid!,
 						};
 						if (!skipTracking) {
-							HostApi.instance.track("NR Multi Repo Selected", {
-								"Error Group ID": payload.errorGroupGuid,
-							});
+							// HostApi.instance.track("NR Multi Repo Selected", {
+							// 	"Error Group ID": payload.errorGroupGuid,
+							// });
 						}
 						onConnected(undefined, r.remote);
 					});
@@ -838,9 +858,9 @@ export function CodeErrorNav(props: Props) {
 								setRepoAssociationError(undefined);
 								resolve(true);
 
-								HostApi.instance.track("NR Repo Association", {
-									"Error Group ID": payload.errorGroupGuid,
-								});
+								// HostApi.instance.track("NR Repo Association", {
+								// 	"Error Group ID": payload.errorGroupGuid,
+								// });
 
 								let remoteForOnConnected;
 								let repoFromAssignDirective = _.directives.find(

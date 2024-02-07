@@ -1,5 +1,13 @@
 # Change Log
 
+## [15.2.0] - 2023-2-7
+
+### Changed
+
+- A new "Apply Fix" button allows you to easily accept a suggested code fix when NRAI analyzes an error for you
+- Code fixes suggested by NRAI are now presented in a diff view
+- In-editor code-level metrics are now represented by a New Relic icon in the gutter, with a red icon indicating anomalous performance
+
 ## [15.1.1] - 2023-1-25
 
 ### Added

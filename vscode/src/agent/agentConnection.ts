@@ -1,8 +1,5 @@
 "use strict";
-import { Agent as HttpsAgent } from "https";
-import * as url from "url";
 
-import HttpsProxyAgent from "https-proxy-agent";
 import {
 	commands,
 	DocumentSymbol,
@@ -153,7 +150,10 @@ import {
 	UpdateUserRequest,
 	UpdateUserRequestType,
 	UserDidCommitNotification,
-	UserDidCommitNotificationType
+	UserDidCommitNotificationType,
+	DidEncounterInvalidRefreshTokenNotificationType,
+	TelemetryEventName,
+	TelemetryData
 } from "@codestream/protocols/agent";
 import {
 	ChannelServiceType,
@@ -202,6 +202,11 @@ export class CodeStreamAgentConnection implements Disposable {
 	private _onDidFailLogin = new EventEmitter<void>();
 	get onDidFailLogin(): Event<void> {
 		return this._onDidFailLogin.event;
+	}
+
+	private _onDidEncounterInvalidRefreshToken = new EventEmitter<void>();
+	get onDidEncounterInvalidRefreshToken(): Event<void> {
+		return this._onDidEncounterInvalidRefreshToken.event;
 	}
 
 	private _onDidRequireRestart = new EventEmitter<void>();
@@ -310,6 +315,7 @@ export class CodeStreamAgentConnection implements Disposable {
 	private _serverOptions: CSServerOptions;
 	private _restartCount = 0;
 	private _outputChannel: OutputChannel | undefined;
+	private _logsOutputChannel: OutputChannel | undefined;
 
 	constructor(context: ExtensionContext, options: BaseAgentOptions) {
 		const env = process.env;
@@ -413,6 +419,9 @@ export class CodeStreamAgentConnection implements Disposable {
 		if (this._outputChannel) {
 			this._outputChannel.dispose();
 		}
+		if (this._logsOutputChannel) {
+			this._logsOutputChannel.dispose();
+		}
 		this._disposable && this._disposable.dispose();
 		if (this._clientReadyCancellation !== undefined) {
 			this._clientReadyCancellation.dispose();
@@ -466,7 +475,6 @@ export class CodeStreamAgentConnection implements Disposable {
 		}
 		await Container.agent.start(newServerUrl);
 	}
-
 	get codemarks() {
 		return this._codemarks;
 	}
@@ -925,7 +933,7 @@ export class CodeStreamAgentConnection implements Disposable {
 	private readonly _telemetry = new (class {
 		constructor(private readonly _connection: CodeStreamAgentConnection) {}
 
-		async track(eventName: string, properties?: { [key: string]: string | number | boolean }) {
+		async track(eventName: TelemetryEventName, properties?: TelemetryData) {
 			if (!this._connection.started) return;
 
 			Logger.debug("(5) track called from agentConnection.ts :: ", eventName);
@@ -1161,6 +1169,41 @@ export class CodeStreamAgentConnection implements Disposable {
 		}
 	}
 
+	sendRawRequest<R>(
+		method:
+			| "textDocument/documentSymbol"
+			| "textDocument/didOpen"
+			| "textDocument/didChange"
+			| "textDocument/willSave"
+			| "textDocument/willSaveWaitUntil"
+			| "textDocument/didSave"
+			| "textDocument/didClose"
+			| "textDocument/publishDiagnostics"
+			| "textDocument/completion"
+			| "completionItem/resolve"
+			| "textDocument/hover"
+			| "textDocument/signatureHelp"
+			| "textDocument/references"
+			| "textDocument/documentHighlight"
+			| "workspace/symbol"
+			| "workspace/executeCommand"
+			| "workspace/configuration"
+			| "initialize"
+			| "initialized"
+			| "shutdown"
+			| "exit"
+			| "workspace/applyEdit",
+		param: any,
+		token?: CancellationToken
+	): Thenable<R> {
+		try {
+			return this._client!.sendRequest(method, param, token);
+		} catch (ex) {
+			Logger.error(ex, `AgentConnection.sendRawRequest(${method})`);
+			throw ex;
+		}
+	}
+
 	private async ensureStartingCompleted(): Promise<void> {
 		if (this._starting === undefined) return;
 
@@ -1192,6 +1235,8 @@ export class CodeStreamAgentConnection implements Disposable {
 		this._clientOptions.outputChannel = this._outputChannel =
 			window.createOutputChannel("CodeStream (Agent)");
 		this._clientOptions.revealOutputChannelOn = RevealOutputChannelOn.Never;
+
+		this._logsOutputChannel = window.createOutputChannel("New Relic Logs");
 
 		const initializationOptions = getInitializationOptions({
 			...this._clientOptions.initializationOptions
@@ -1302,6 +1347,9 @@ export class CodeStreamAgentConnection implements Disposable {
 		this._client.onNotification(DidLoginNotificationType, e => this._onDidLogin.fire(e));
 		this._client.onNotification(DidStartLoginNotificationType, () => this._onDidStartLogin.fire());
 		this._client.onNotification(DidFailLoginNotificationType, () => this._onDidFailLogin.fire());
+		this._client.onNotification(DidEncounterInvalidRefreshTokenNotificationType, () =>
+			this._onDidEncounterInvalidRefreshToken.fire()
+		);
 		this._client.onNotification(DidLogoutNotificationType, this.onLogout.bind(this));
 		this._client.onNotification(RestartRequiredNotificationType, () => {
 			this._onDidRequireRestart.fire();
@@ -1409,64 +1457,16 @@ export class CodeStreamAgentConnection implements Disposable {
 			this._outputChannel.dispose();
 		}
 
+		if (this._logsOutputChannel) {
+			this._logsOutputChannel.dispose();
+		}
+
 		if (this._client === undefined) return;
 		this._disposable && this._disposable.dispose();
 		await Functions.cancellable(this._client.stop(), 30000, { onDidCancel: resolve => resolve() });
 
 		this._starting = undefined;
 		this._client = undefined;
-	}
-
-	private getHttpsProxyAgent(options: {
-		proxySupport?: string;
-		proxy?: {
-			url: string;
-			strictSSL?: boolean;
-		};
-	}) {
-		let _httpsAgent: HttpsAgent | HttpsProxyAgent | undefined = undefined;
-		const redactProxyPasswdRegex = /(http:\/\/.*:)(.*)(@.*)/gi;
-		if (
-			options.proxySupport === "override" ||
-			(options.proxySupport == null && options.proxy != null)
-		) {
-			if (options.proxy != null) {
-				const redactedUrl = options.proxy.url.replace(redactProxyPasswdRegex, "$1*****$3");
-				Logger.log(
-					`Proxy support is in override with url=${redactedUrl}, strictSSL=${options.proxy.strictSSL}`
-				);
-				_httpsAgent = new HttpsProxyAgent({
-					...url.parse(options.proxy.url),
-					rejectUnauthorized: options.proxy.strictSSL
-				} as any);
-			} else {
-				Logger.log("Proxy support is in override, but no proxy settings were provided");
-			}
-		} else if (options.proxySupport === "on") {
-			const proxyUrl = process.env.HTTPS_PROXY || process.env.HTTP_PROXY;
-			if (proxyUrl) {
-				const strictSSL = options.proxy ? options.proxy.strictSSL : true;
-				const redactedUrl = proxyUrl.replace(redactProxyPasswdRegex, "$1*****$3");
-				Logger.log(`Proxy support is on with url=${redactedUrl}, strictSSL=${strictSSL}`);
-
-				let proxyUri;
-				try {
-					proxyUri = url.parse(proxyUrl);
-				} catch {}
-
-				if (proxyUri) {
-					_httpsAgent = new HttpsProxyAgent({
-						...proxyUri,
-						rejectUnauthorized: options.proxy ? options.proxy.strictSSL : true
-					} as any);
-				}
-			} else {
-				Logger.log("Proxy support is on, but no proxy url was found");
-			}
-		} else {
-			Logger.log("Proxy support is off");
-		}
-		return _httpsAgent;
 	}
 
 	public setServerUrl(url: string) {

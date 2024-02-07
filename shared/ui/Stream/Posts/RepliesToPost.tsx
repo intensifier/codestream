@@ -1,4 +1,4 @@
-import { PostPlus } from "@codestream/protocols/agent";
+import { NewRelicErrorGroup, PostPlus } from "@codestream/protocols/agent";
 import { CodeStreamState } from "@codestream/webview/store";
 import { getThreadPosts } from "@codestream/webview/store/posts/reducer";
 import {
@@ -19,6 +19,7 @@ import Menu from "../Menu";
 import { MessageInput, AttachmentField } from "../MessageInput";
 import { Reply } from "./Reply";
 import { MenuItem } from "@codestream/webview/src/components/controls/InlineMenu";
+import { FunctionToEdit } from "@codestream/webview/store/codeErrors/types";
 
 const ComposeWrapper = styled.div.attrs(() => ({
 	className: "compose codemark-compose",
@@ -44,7 +45,10 @@ export const RepliesToPost = (props: {
 	itemId: string;
 	numReplies: number;
 	codeErrorId?: string;
+	errorGroup?: NewRelicErrorGroup;
 	noReply?: boolean;
+	file?: string;
+	functionToEdit?: FunctionToEdit;
 	scrollNewTargetCallback?: (target: RefObject<HTMLElement>) => void;
 }) => {
 	const dispatch = useAppDispatch();
@@ -64,7 +68,7 @@ export const RepliesToPost = (props: {
 	const [newReplyText, setNewReplyText] = React.useState("");
 	const [attachments, setAttachments] = React.useState<AttachmentField[]>([]);
 	const [isLoading, setIsLoading] = React.useState(false);
-	const lastCommentRef = React.useRef<HTMLElement>(null);
+	const lastCommentRef = React.useRef<HTMLDivElement>(null);
 
 	const contextValue = React.useMemo(
 		() => ({
@@ -158,10 +162,13 @@ export const RepliesToPost = (props: {
 						<Reply
 							ref={idx === replies.length ? lastCommentRef : null}
 							author={allUsers[reply.creatorId]}
+							file={props.file}
+							functionToEdit={props.functionToEdit}
 							post={reply}
 							editingPostId={editingPostId}
 							nestedReplies={nestedRepliesByParent[reply.id]}
 							codeErrorId={props.codeErrorId}
+							errorGroup={props.errorGroup}
 							renderMenu={(target, close) => (
 								<Menu target={target} action={close} items={menuItems} />
 							)}

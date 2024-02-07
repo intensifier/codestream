@@ -1,6 +1,7 @@
 import { lsp, lspHandler } from "../../../system/decorators/lsp";
 import {
 	EntityType,
+	EntityTypeMap,
 	ERROR_GENERIC_USE_ERROR_MESSAGE,
 	ERROR_NRQL_GENERIC,
 	ERROR_NRQL_TIMEOUT,
@@ -133,6 +134,7 @@ export class EntityProvider implements Disposable {
 						name: _.name,
 						account: _.account.name,
 						entityType: _.entityType,
+						entityTypeDescription: EntityTypeMap[_.entityType],
 					};
 				}
 			);

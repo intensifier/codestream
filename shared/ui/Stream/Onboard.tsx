@@ -1107,8 +1107,9 @@ export const InviteTeammates = (props: { className: string; skip: Function; unwr
 			props.skip();
 			return;
 		}
-		if (derivedState.webviewFocused)
-			HostApi.instance.track("Page Viewed", { "Page Name": "Invite Teammates - Onboarding" });
+		// if (derivedState.webviewFocused) {
+		// 	HostApi.instance.track("Page Viewed", { "Page Name": "Invite Teammates - Onboarding" });
+		// }
 		getSuggestedInvitees();
 	});
 
@@ -1164,10 +1165,10 @@ export const InviteTeammates = (props: { className: string; skip: Function; unwr
 	const inviteEmail = async (email: string, method: "Onboarding" | "Onboarding Suggestion") => {
 		if (email) {
 			await dispatch(invite({ email, inviteType: method }));
-			HostApi.instance.track("Teammate Invited", {
-				"Invitee Email Address": email,
-				"Invitation Method": method,
-			});
+			// HostApi.instance.track("Teammate Invited", {
+			// 	"Invitee Email Address": email,
+			// 	"Invitation Method": method,
+			// });
 		}
 	};
 
@@ -1215,7 +1216,7 @@ export const InviteTeammates = (props: { className: string; skip: Function; unwr
 					companyId,
 					domainJoining: allowDomainBasedJoining ? [domain] : [],
 				});
-				HostApi.instance.track("Domain Joining Enabled");
+				// HostApi.instance.track("Domain Joining Enabled");
 			} catch (ex) {
 				console.error(ex);
 				return;
@@ -1427,10 +1428,11 @@ const ProviderButtons = (props: { providerIds: string[]; setShowNextMessagingSte
 										url: "https://docs.newrelic.com/docs/codestream/code-discussion/msteams-integration/",
 									});
 									HostApi.instance.send(TelemetryRequestType, {
-										eventName: "Service Connected",
+										eventName: "codestream/integration connected",
 										properties: {
-											Service: provider.name,
-											"Connection Location": "Onboard",
+											meta_data: `service: ${provider.name}`,
+											meta_data_2: `connection_location: onboard`,
+											event_type: "response",
 										},
 									});
 									if (props.setShowNextMessagingStep) props.setShowNextMessagingStep(true);

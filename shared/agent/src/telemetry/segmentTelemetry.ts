@@ -7,6 +7,7 @@ import { SessionStatus } from "../types";
 // FIXME: sorry, typescript purists: i simply gave up trying to get the type definitions for this module to work
 import Analytics from "analytics-node";
 import { debug } from "../system";
+import { TelemetryData, TelemetryEventName } from "@codestream/protocols/agent";
 
 export class SegmentTelemetryService {
 	private _segmentInstance: Analytics | undefined;
@@ -16,8 +17,6 @@ export class SegmentTelemetryService {
 	private _hasOptedOut: boolean;
 	private _session: CodeStreamSession;
 	private _readyPromise: Promise<void>;
-	private _firstSessionStartedAt?: number;
-	private _firstSessionTimesOutAfter?: number;
 	private _eventQueue: {
 		event: string;
 		data?: { [key: string]: string | number | boolean };
@@ -104,12 +103,14 @@ export class SegmentTelemetryService {
 
 		try {
 			Logger.debug(`Telemetry identify ${this._distinctId}`);
+			/*
 			this._segmentInstance.identify({
 				userId: this._distinctId,
 				anonymousId: this._anonymousId,
 				traits: props,
 			});
 			this._segmentInstance.flush();
+			*/
 		} catch (ex) {
 			Logger.error(ex);
 		}
@@ -122,10 +123,12 @@ export class SegmentTelemetryService {
 		try {
 			Logger.debug(`Telemetry setAnonymousId ${id}`);
 			this._anonymousId = id;
+			/*
 			this._segmentInstance.identify({
 				anonymousId: id,
 			});
 			this._segmentInstance.flush();
+			*/
 		} catch (ex) {
 			Logger.error(ex);
 		}
@@ -150,13 +153,8 @@ export class SegmentTelemetryService {
 		};
 	}
 
-	setFirstSessionProps(firstSessionStartedAt: number, firstSessionTimesOutAfter: number) {
-		this._firstSessionStartedAt = firstSessionStartedAt;
-		this._firstSessionTimesOutAfter = firstSessionTimesOutAfter;
-	}
-
 	@debug()
-	track(event: string, data?: { [key: string]: string | number | boolean }) {
+	track(event: TelemetryEventName, data?: TelemetryData) {
 		const cc = Logger.getCorrelationContext();
 
 		if (this._hasOptedOut || this._segmentInstance == null) {
@@ -164,19 +162,11 @@ export class SegmentTelemetryService {
 			return;
 		}
 
-		if (
-			this._firstSessionStartedAt &&
-			this._firstSessionTimesOutAfter &&
-			Date.now() > this._firstSessionStartedAt + this._firstSessionTimesOutAfter
-		) {
-			this._superProps["First Session"] = false;
-		}
-
 		const payload: { [key: string]: any } = { ...data, ...this._superProps };
 
-		if (this._distinctId != null) {
-			payload["distinct_id"] = this._distinctId;
-		}
+		//if (this._distinctId != null) {
+		//	payload["distinct_id"] = this._distinctId;
+		//}
 
 		Logger.debug(
 			`Tracking userId=${this._distinctId} anonymousId=${this._anonymousId}:`,

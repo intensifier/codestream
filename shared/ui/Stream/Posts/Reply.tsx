@@ -1,4 +1,4 @@
-import { PostPlus } from "@codestream/protocols/agent";
+import { NewRelicErrorGroup, PostPlus } from "@codestream/protocols/agent";
 import { CSPost, CSUser } from "@codestream/protocols/api";
 import { Headshot } from "@codestream/webview/src/components/Headshot";
 import { ProfileLink } from "@codestream/webview/src/components/ProfileLink";
@@ -32,8 +32,8 @@ import { AddReactionIcon, Reactions } from "../Reactions";
 import Tag from "../Tag";
 import Timestamp from "../Timestamp";
 import { RepliesToPostContext } from "./RepliesToPost";
-import { GrokFeedback } from "@codestream/webview/Stream/Posts/GrokFeedback";
-import { GrokLoading } from "@codestream/webview/Stream/CodeError/GrokLoading";
+import { NrAiComponent } from "@codestream/webview/Stream/Posts/NrAiComponent";
+import { FunctionToEdit } from "@codestream/webview/store/codeErrors/types";
 
 const AuthorInfo = styled.div`
 	display: flex;
@@ -160,7 +160,7 @@ const ParentPreview = styled.span`
 	white-space: pre;
 `;
 
-const MarkdownContent = styled.div`
+export const MarkdownContent = styled.div`
 	margin-left: 27px;
 	display: flex;
 	flex-direction: column;
@@ -209,7 +209,10 @@ const ComposeWrapper = styled.div.attrs(() => ({
 export interface ReplyProps {
 	author: Partial<CSUser>;
 	post: Post;
+	file?: string;
+	functionToEdit?: FunctionToEdit;
 	codeErrorId?: string;
+	errorGroup?: NewRelicErrorGroup;
 	nestedReplies?: PostPlus[];
 	renderMenu?: (target: any, onClose: () => void) => React.ReactNode;
 	className?: string;
@@ -220,7 +223,7 @@ export interface ReplyProps {
 	noReply?: boolean;
 }
 
-export const Reply = forwardRef((props: ReplyProps, ref: Ref<any>) => {
+export const Reply = forwardRef((props: ReplyProps, ref: Ref<HTMLDivElement>) => {
 	const dispatch = useAppDispatch();
 	const { setEditingPostId, setReplyingToPostId } = React.useContext(RepliesToPostContext);
 	const [menuState, setMenuState] = React.useState<{
@@ -273,6 +276,7 @@ export const Reply = forwardRef((props: ReplyProps, ref: Ref<any>) => {
 	const isNestedReply = props.showParentPreview && parentPost.parentPostId != null;
 	const numNestedReplies = props.nestedReplies ? props.nestedReplies.length : 0;
 	const hasNestedReplies = numNestedReplies > 0;
+	const isForGrok = !isPending(props.post) && props.post.forGrok;
 
 	const postText = codemark != null ? codemark.text : props.post.text;
 	const escapedPostText = escapeHtml(postText);
@@ -321,8 +325,6 @@ export const Reply = forwardRef((props: ReplyProps, ref: Ref<any>) => {
 	const checkpoint = props.post.reviewCheckpoint;
 
 	const author = props.author || { username: "???" };
-
-	const showGrokLoader = !isPending(props.post) && props.post.forGrok && !postText;
 
 	return (
 		<Root ref={ref} className={props.className}>
@@ -438,9 +440,18 @@ export const Reply = forwardRef((props: ReplyProps, ref: Ref<any>) => {
 						</div>
 					</>
 				)}
-				{emote || isEditing ? null : (
+				{isForGrok && props.errorGroup && (
+					<NrAiComponent
+						codeErrorId={props.codeErrorId}
+						post={props.post as PostPlus}
+						errorGroup={props.errorGroup}
+						postText={postText}
+						file={props.file!}
+						functionToEdit={props.functionToEdit}
+					/>
+				)}
+				{emote || isEditing || isForGrok ? null : (
 					<>
-						{showGrokLoader && <GrokLoading />}
 						<MarkdownContent className="reply-content-container">
 							<MarkdownText
 								text={postText}
@@ -463,9 +474,6 @@ export const Reply = forwardRef((props: ReplyProps, ref: Ref<any>) => {
 					</>
 				)}
 				{!isPending(props.post) && <Reactions post={props.post} />}
-				{!isPending(props.post) && props.codeErrorId && props.post.forGrok && (
-					<GrokFeedback postId={props.post.id} errorId={props.codeErrorId} />
-				)}
 			</ReplyBody>
 			{props.nestedReplies &&
 				props.nestedReplies.length > 0 &&
@@ -474,6 +482,7 @@ export const Reply = forwardRef((props: ReplyProps, ref: Ref<any>) => {
 						editingPostId={props.editingPostId}
 						key={r.id}
 						post={r}
+						functionToEdit={props.functionToEdit}
 						threadId={props.post.id}
 						lastNestedReply={index === numNestedReplies - 1}
 					/>
@@ -485,6 +494,8 @@ export const Reply = forwardRef((props: ReplyProps, ref: Ref<any>) => {
 const NestedReply = (props: {
 	post: Post;
 	threadId: string;
+	errorGroup?: NewRelicErrorGroup;
+	functionToEdit?: FunctionToEdit;
 	editingPostId?: string;
 	lastNestedReply?: boolean;
 }) => {
@@ -541,9 +552,11 @@ const NestedReply = (props: {
 		<NestedReplyRoot
 			author={author}
 			post={props.post}
+			errorGroup={props.errorGroup}
 			editingPostId={props.editingPostId}
 			threadId={props.threadId}
 			lastNestedReply={props.lastNestedReply}
+			functionToEdit={props.functionToEdit}
 			renderMenu={(target, close) => <Menu target={target} action={close} items={menuItems} />}
 		/>
 	);

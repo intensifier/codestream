@@ -1,12 +1,74 @@
 import { describe, expect, it } from "@jest/globals";
 import {
 	advanceRecombinedStream,
-	GROK_TIMEOUT,
+	extractParts,
+	NRAI_TIMEOUT,
 	isGrokStreamDone,
 	RecombinedStream,
 } from "@codestream/webview/store/posts/recombinedStream";
 
 describe("RecombinedStream", () => {
+	it("should updateParts", () => {
+		const recombinedStream: RecombinedStream = {
+			items: [],
+			content:
+				"**INTRO**\nintro\nblah blah\n**CODE_FIX**\ncodeFix\nblah blah\n**DESCRIPTION**\ndescription\nblahblah\n",
+			receivedDoneEvent: false,
+		};
+		const parts = extractParts(recombinedStream.content);
+		expect(parts?.intro).toBe("intro\nblah blah\n");
+		expect(parts?.codeFix).toBe("codeFix\nblah blah\n");
+		expect(parts?.description).toBe("description\nblahblah\n");
+	});
+
+	it("should updateParts when only DESCRIPTION is present", () => {
+		const recombinedStream: RecombinedStream = {
+			items: [],
+			content: "**DESCRIPTION**\ndescription\nblahblah\n",
+			receivedDoneEvent: false,
+		};
+		const parts = extractParts(recombinedStream.content);
+		expect(parts?.intro).toBe("");
+		expect(parts?.codeFix).toBe("");
+		expect(parts?.description).toBe("description\nblahblah\n");
+	});
+
+	it("should updateParts when only INTRO is present", () => {
+		const recombinedStream: RecombinedStream = {
+			items: [],
+			content: "**INTRO**\nintro\nblah blah\n",
+			receivedDoneEvent: false,
+		};
+		const parts = extractParts(recombinedStream.content);
+		expect(parts?.intro).toBe("intro\nblah blah\n");
+		expect(parts?.codeFix).toBe("");
+		expect(parts?.description).toBe("");
+	});
+
+	it("should updateParts when only CODE_FIX is present", () => {
+		const recombinedStream: RecombinedStream = {
+			items: [],
+			content: "**CODE_FIX**\ncodeFix\nblah blah\n",
+			receivedDoneEvent: false,
+		};
+		const parts = extractParts(recombinedStream.content);
+		expect(parts?.intro).toBe("");
+		expect(parts?.codeFix).toBe("codeFix\nblah blah\n");
+		expect(parts?.description).toBe("");
+	});
+
+	it("should updateParts when CODE_FIX is missing", () => {
+		const recombinedStream: RecombinedStream = {
+			items: [],
+			content: "**INTRO**\nintro\nblah blah\n**DESCRIPTION**\ndescription\nblahblah\n",
+			receivedDoneEvent: false,
+		};
+		const parts = extractParts(recombinedStream.content);
+		expect(parts?.intro).toBe("intro\nblah blah\n");
+		expect(parts?.codeFix).toBe("");
+		expect(parts?.description).toBe("description\nblahblah\n");
+	});
+
 	it("should start from empty without dupes", () => {
 		const recombinedStream: RecombinedStream = {
 			items: [],
@@ -401,7 +463,7 @@ describe("RecombinedStream", () => {
 			],
 			content: "",
 			receivedDoneEvent: false,
-			lastMessageReceivedAt: Date.now() - (GROK_TIMEOUT + 1000),
+			lastMessageReceivedAt: Date.now() - (NRAI_TIMEOUT + 1000),
 		};
 
 		expect(isGrokStreamDone(recombinedStream)).toBe(true);

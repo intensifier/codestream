@@ -204,3 +204,26 @@ export const HandlePullRequestDirectivesNotificationType = new NotificationType<
 	HandlePullRequestDirectivesNotification,
 	void
 >(`${IpcRoutes.Webview}/pullRequest/handleDirectives`);
+
+export interface InitiateLogSearchNotification {
+	query?: string;
+	entryPoint: "global_nav" | "context_menu" | "tree_view" | "codelens";
+}
+
+export const InitiateLogSearchNotificationType = new NotificationType<
+	InitiateLogSearchNotification,
+	void
+>(`${IpcRoutes.Webview}/logs/search`);
+
+export interface InitiateNrqlExecutionNotification {
+	query: string;
+	/** Used for internally keying mechanisms */
+	hash?: string;
+
+	entryPoint: "global_nav" | "context_menu" | "tree_view" | "nrql_file";
+}
+
+export const InitiateNrqlExecutionNotificationType = new NotificationType<
+	InitiateNrqlExecutionNotification,
+	void
+>(`${IpcRoutes.Webview}/nrql/execute`);

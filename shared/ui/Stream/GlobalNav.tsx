@@ -1,5 +1,6 @@
 import {
 	LocalFilesCloseDiffRequestType,
+	OpenEditorViewNotificationType,
 	ReviewCloseDiffRequestType,
 } from "@codestream/protocols/webview";
 import { useAppDispatch, useAppSelector } from "@codestream/webview/utilities/hooks";
@@ -21,6 +22,8 @@ import Icon from "./Icon";
 import { Link } from "./Link";
 import { PlusMenu } from "./PlusMenu";
 import Tooltip, { placeArrowTopRight, TipTitle } from "./Tooltip";
+import { parseId } from "../utilities/newRelic";
+import { isFeatureEnabled } from "../store/apiVersioning/reducer";
 
 const sum = (total, num) => total + Math.round(num);
 
@@ -38,6 +41,8 @@ export function GlobalNav() {
 				}
 			});
 		}
+		const currentRepoId = user?.preferences?.currentO11yRepoId;
+
 		return {
 			currentUserId: state.session.userId,
 			activePanel: state.context.panelStack[0],
@@ -50,8 +55,16 @@ export function GlobalNav() {
 			currentPullRequestId: state.context.currentPullRequest
 				? state.context.currentPullRequest.id
 				: undefined,
+			currentEntityGuid: currentRepoId
+				? (user?.preferences?.activeO11y?.[currentRepoId] as string)
+				: undefined,
+			entityAccounts: state.context.entityAccounts || [],
 			eligibleJoinCompanies,
 			inviteCount,
+			isVsCode: state.ide.name === "VSC",
+			ideName: state.ide.name,
+			showNrqlBuilder: isFeatureEnabled(state, "showNrqlBuilder") && state.ide.name === "VSC",
+			showLogSearch: isFeatureEnabled(state, "showLogSearch") && state.ide.name === "VSC",
 		};
 	});
 
@@ -87,6 +100,33 @@ export function GlobalNav() {
 
 	const togglePlusMenu = event => {
 		setPlusMenuOpen(plusMenuOpen ? undefined : event.target.closest("label"));
+	};
+
+	const launchNrqlEditor = () => {
+		HostApi.instance.notify(OpenEditorViewNotificationType, {
+			panel: "nrql",
+			title: "NRQL",
+			entryPoint: "global_nav",
+			accountId: parseId(derivedState.currentEntityGuid || "")?.accountId,
+			entityGuid: derivedState.currentEntityGuid!,
+			entityAccounts: derivedState.entityAccounts,
+			ide: {
+				name: derivedState.ideName,
+			},
+		});
+	};
+
+	const launchLogSearch = () => {
+		HostApi.instance.notify(OpenEditorViewNotificationType, {
+			panel: "logs",
+			title: "Logs",
+			entryPoint: "global_nav",
+			entityAccounts: derivedState.entityAccounts,
+			entityGuid: derivedState.currentEntityGuid,
+			ide: {
+				name: derivedState.ideName,
+			},
+		});
 	};
 
 	const go = panel => {
@@ -179,6 +219,34 @@ export function GlobalNav() {
 							/>
 						)}
 					</label>
+
+					{derivedState.showNrqlBuilder && (
+						<label onClick={launchNrqlEditor} id="global-nav-query-label">
+							<span>
+								<Icon
+									name="terminal"
+									title="Query your data"
+									placement="bottom"
+									delay={1}
+									trigger={["hover"]}
+								/>
+							</span>
+						</label>
+					)}
+
+					{derivedState.showLogSearch && (
+						<label onClick={launchLogSearch} id="global-nav-logs-label">
+							<span>
+								<Icon
+									name="logs"
+									title="View Logs"
+									placement="bottom"
+									delay={1}
+									trigger={["hover"]}
+								/>
+							</span>
+						</label>
+					)}
 
 					<label
 						className={cx({ active: plusMenuOpen })}

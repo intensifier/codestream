@@ -20,6 +20,7 @@ import { ObservabilityGoldenMetricDropdown } from "./ObservabilityGoldenMetricDr
 import { ObservabilityAlertViolations } from "./ObservabilityAlertViolations";
 
 interface Props {
+	accountId: number;
 	relatedEntity: RelatedEntityByType;
 	currentRepoId: string;
 }
@@ -32,7 +33,7 @@ export const ObservabilityRelatedEntity = React.memo((props: Props) => {
 	const [newRelicUrl, setNewRelicUrl] = useState<string>("");
 	const [recentIssues, setRecentIssues] = useState<GetIssuesResponse | undefined>();
 
-	const { relatedEntity } = props;
+	const { relatedEntity, accountId } = props;
 	const alertSeverityColor = ALERT_SEVERITY_COLORS[relatedEntity?.alertSeverity];
 
 	useDidMount(() => {
@@ -41,7 +42,12 @@ export const ObservabilityRelatedEntity = React.memo((props: Props) => {
 
 	useEffect(() => {
 		if (expanded) {
-			HostApi.instance.track("Related Service Clicked", {});
+			HostApi.instance.track("codestream/related_service clicked", {
+				entity_guid: relatedEntity.guid,
+				account_id: accountId,
+				target: "related_service",
+				event_type: "click",
+			});
 			setLoadingGoldenMetrics(true);
 			fetchGoldenMetrics(relatedEntity.guid);
 		}
@@ -132,8 +138,12 @@ export const ObservabilityRelatedEntity = React.memo((props: Props) => {
 						onClick={e => {
 							e.preventDefault();
 							e.stopPropagation();
-							HostApi.instance.track("Open Service Summary on NR", {
-								Section: "Related Services",
+							HostApi.instance.track("codestream/link_to_newrelic clicked", {
+								entity_guid: props.relatedEntity.guid,
+								account_id: props.accountId,
+								meta_data: "destination: apm_service_summary",
+								meta_data_2: `codestream_section: related_services`,
+								event_type: "click",
 							});
 							HostApi.instance.send(OpenUrlRequestType, {
 								url: newRelicUrl,
@@ -155,6 +165,7 @@ export const ObservabilityRelatedEntity = React.memo((props: Props) => {
 						loadingGoldenMetrics={loadingGoldenMetrics}
 						noDropdown={true}
 						entityGuid={relatedEntity.guid}
+						accountId={props.accountId}
 					/>
 				</>
 			)}

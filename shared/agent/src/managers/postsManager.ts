@@ -89,6 +89,7 @@ import {
 	SharePostViaServerRequest,
 	SharePostViaServerRequestType,
 	SharePostViaServerResponse,
+	TelemetryData,
 	UpdatePostSharingDataRequest,
 	UpdatePostSharingDataRequestType,
 	UpdatePostSharingDataResponse,
@@ -519,41 +520,62 @@ function trackPostCreation(
 						}
 					}
 
-					if (request.codemark && request.codemark.reviewId && request.isPseudoCodemark) {
-						// this is a pseudo codemark, aka a reply to a review marked as "Change Request"
-						const properties = {
-							"Parent ID": request.codemark.reviewId,
-							"Parent Type": "Review",
-						};
-						telemetry.track({ eventName: "Reply Created", properties: properties });
-					} else if (request.codemark) {
+					let entryPoint = "global_nav";
+					if (request.entryPoint != null) {
+						switch (request.entryPoint) {
+							case "Gutter":
+								entryPoint = "gutter";
+								break;
+							case "Global Nav":
+								entryPoint = "global_nav";
+								break;
+							case "Shortcut":
+								entryPoint = "shortcut";
+								break;
+							case "Lightbulb Menu":
+								entryPoint = "lightbulb_menu";
+								break;
+							case "Action List":
+								entryPoint = "action_list";
+								break;
+							case "Hover Icons":
+								entryPoint = "hover_icons";
+								break;
+							case "Advanced Link":
+								entryPoint = "advanced_link";
+								break;
+						}
+					}
+
+					if (request.codemark) {
 						// this is a standard codemark -- note its event name includes "created" rather than "reply"
 						const { markers = [] } = request.codemark;
-						const codemarkProperties: {
-							[key: string]: any;
-						} = {
-							"Codemark ID": codemarkId,
-							"Codemark Type": request.codemark.type,
-							"Linked Service": request.codemark.externalProvider,
-							"Entry Point": request.entryPoint,
-							Tags: (request.codemark.tags || []).length,
-							Markers: markers.length,
-							"Invitee Mentions": request.addedUsers ? request.addedUsers.length : 0,
+						const codemarkProperties: TelemetryData = {
+							meta_data: `entry_point: ${entryPoint ?? ""}`,
+							meta_data_2: `linked_service: ${request.codemark.externalProvider}`,
+							meta_data_3: `error_group: false`,
+							meta_data_4: `codemark_type: ${
+								markerType === "Comment" ? "comment" : markerType === "Issue" ? "issue" : ""
+							}`,
+							event_type: "response",
 						};
 						if (request.codemark.codeErrorId) {
-							codemarkProperties["Code Error"] = true;
+							codemarkProperties["meta_data_3"] = `error_group: true`;
 						}
 						if (textDocuments && textDocuments.length) {
 							for (const textDocument of textDocuments) {
 								const firstError = await getGitError(textDocument);
-								codemarkProperties["Git Error"] = firstError;
+								// codemarkProperties["Git Error"] = firstError;
 								if (firstError) {
 									// stop after the first
 									break;
 								}
 							}
 						}
-						telemetry.track({ eventName: "Codemark Created", properties: codemarkProperties });
+						telemetry.track({
+							eventName: "codestream/codemarks/codemark created",
+							properties: codemarkProperties,
+						});
 					} else if (request.parentPostId) {
 						const parentPost = await SessionContainer.instance().posts.getById(
 							request.parentPostId
@@ -563,61 +585,51 @@ function trackPostCreation(
 								const grandParentPost = await SessionContainer.instance().posts.getById(
 									parentPost.parentPostId
 								);
-								if (parentPost.codemarkId && grandParentPost && grandParentPost.reviewId) {
-									// reply to a codemark in a review
-									const postProperties = {
-										"Parent ID": parentPost.codemarkId,
-										"Parent Type": "Review.Codemark",
-									};
-									telemetry.track({ eventName: "Reply Created", properties: postProperties });
-								}
+
 								if (parentPost.codemarkId && grandParentPost && grandParentPost.codeErrorId) {
 									// reply to a codemark in a code error
-									const postProperties = {
-										"Parent ID": parentPost.codemarkId,
-										"Parent Type": "Error.Codemark",
-									};
-									telemetry.track({ eventName: "Reply Created", properties: postProperties });
-								} else if (grandParentPost && grandParentPost.reviewId) {
-									// reply to a reply in a review
-									const postProperties = {
-										"Parent ID": grandParentPost.reviewId,
-										"Parent Type": "Review.Reply",
-									};
-									telemetry.track({ eventName: "Reply Created", properties: postProperties });
+
+									telemetry.track({
+										eventName: "codestream/codemarks/reply created",
+										properties: {
+											meta_data: "parent_type: error",
+											event_type: "response",
+										},
+									});
 								} else if (grandParentPost && grandParentPost.codeErrorId) {
 									// reply to a reply in a code error
-									const postProperties = {
-										"Parent ID": grandParentPost.codeErrorId,
-										"Parent Type": "Error.Reply",
-									};
-									telemetry.track({ eventName: "Reply Created", properties: postProperties });
+
+									telemetry.track({
+										eventName: "codestream/codemarks/reply created",
+										properties: {
+											meta_data: "parent_type: error",
+											event_type: "response",
+										},
+									});
 								}
-							} else if (parentPost.reviewId) {
-								// reply to a review
-								const postProperties = {
-									"Parent ID": parentPost.reviewId,
-									"Parent Type": "Review",
-								};
-								telemetry.track({ eventName: "Reply Created", properties: postProperties });
 							} else if (parentPost.codeErrorId) {
 								// reply to a code error
-								const postProperties = {
-									"Parent ID": parentPost.codeErrorId,
-									"Parent Type": "Error",
-								};
-								telemetry.track({ eventName: "Reply Created", properties: postProperties });
+
+								telemetry.track({
+									eventName: "codestream/codemarks/reply created",
+									properties: {
+										meta_data: "parent_type: error",
+										event_type: "response",
+									},
+								});
 							} else if (parentPost.codemarkId) {
 								// reply to a standard codemark
 								const codemark = await SessionContainer.instance().codemarks.getById(
 									parentPost.codemarkId
 								);
-								const postProperties = {
-									"Parent ID": parentPost.codemarkId,
-									"Parent Type": "Codemark",
-									Following: (codemark.followerIds || []).includes(session.userId),
-								};
-								telemetry.track({ eventName: "Reply Created", properties: postProperties });
+
+								telemetry.track({
+									eventName: "codestream/codemarks/reply created",
+									properties: {
+										meta_data: "parent_type: codemark",
+										event_type: "response",
+									},
+								});
 							}
 						}
 					}
@@ -629,75 +641,75 @@ function trackPostCreation(
 	});
 }
 
-export function trackReviewPostCreation(
-	review: ReviewPlus,
-	totalExcludedFilesCount: number,
-	reviewChangesetsSizeInBytes: number,
-	skippedCommitsCount: number,
-	entryPoint?: string,
-	addedUsers?: string[]
-) {
-	process.nextTick(() => {
-		try {
-			const telemetry = Container.instance().telemetry;
-			const reviewProperties: {
-				[key: string]: any;
-			} = {
-				"Review ID": review.id,
-				"Entry Point": entryPoint,
-				Approvals: review.allReviewersMustApprove === true ? "Everyone" : "Anyone",
-				Reviewers: review.reviewers.length,
-				Files: review.reviewChangesets.map(_ => _.modifiedFiles.length).reduce((acc, x) => acc + x),
-				"Pushed Commits": review.reviewChangesets
-					.map(_ => _.commits.filter(c => !c.localOnly).length)
-					.reduce((acc, x) => acc + x),
-				"Local Commits": review.reviewChangesets
-					.map(_ => _.commits.filter(c => c.localOnly).length)
-					.reduce((acc, x) => acc + x),
-				"Staged Changes": review.reviewChangesets.some(_ => _.includeStaged),
-				"Saved Changes": review.reviewChangesets.some(_ => _.includeSaved),
-				"Excluded Files": totalExcludedFilesCount,
-				"Skipped Commits": skippedCommitsCount,
-				// rounds to 4 places
-				"Payload Size":
-					reviewChangesetsSizeInBytes > 0
-						? Math.round((reviewChangesetsSizeInBytes / 1048576) * 10000) / 10000
-						: 0,
-				"Invitee Reviewers": addedUsers ? addedUsers.length : 0,
-			};
+// export function trackReviewPostCreation(
+// 	review: ReviewPlus,
+// 	totalExcludedFilesCount: number,
+// 	reviewChangesetsSizeInBytes: number,
+// 	skippedCommitsCount: number,
+// 	entryPoint?: string,
+// 	addedUsers?: string[]
+// ) {
+// 	process.nextTick(() => {
+// 		try {
+// 			const telemetry = Container.instance().telemetry;
+// 			const reviewProperties: {
+// 				[key: string]: any;
+// 			} = {
+// 				"Review ID": review.id,
+// 				"Entry Point": entryPoint,
+// 				Approvals: review.allReviewersMustApprove === true ? "Everyone" : "Anyone",
+// 				Reviewers: review.reviewers.length,
+// 				Files: review.reviewChangesets.map(_ => _.modifiedFiles.length).reduce((acc, x) => acc + x),
+// 				"Pushed Commits": review.reviewChangesets
+// 					.map(_ => _.commits.filter(c => !c.localOnly).length)
+// 					.reduce((acc, x) => acc + x),
+// 				"Local Commits": review.reviewChangesets
+// 					.map(_ => _.commits.filter(c => c.localOnly).length)
+// 					.reduce((acc, x) => acc + x),
+// 				"Staged Changes": review.reviewChangesets.some(_ => _.includeStaged),
+// 				"Saved Changes": review.reviewChangesets.some(_ => _.includeSaved),
+// 				"Excluded Files": totalExcludedFilesCount,
+// 				"Skipped Commits": skippedCommitsCount,
+// 				// rounds to 4 places
+// 				"Payload Size":
+// 					reviewChangesetsSizeInBytes > 0
+// 						? Math.round((reviewChangesetsSizeInBytes / 1048576) * 10000) / 10000
+// 						: 0,
+// 				"Invitee Reviewers": addedUsers ? addedUsers.length : 0,
+// 			};
 
-			telemetry.track({
-				eventName: "Review Created",
-				properties: reviewProperties,
-			});
-		} catch (ex) {
-			Logger.error(ex);
-		}
-	});
-}
+// 			telemetry.track({
+// 				eventName: "Review Created",
+// 				properties: reviewProperties,
+// 			});
+// 		} catch (ex) {
+// 			Logger.error(ex);
+// 		}
+// 	});
+// }
 
-export function trackCodeErrorPostCreation(
-	codeError: CSCodeError,
-	entryPoint?: string,
-	addedUsers?: string[]
-) {
-	process.nextTick(() => {
-		try {
-			const telemetry = Container.instance().telemetry;
-			const codeErrorProperties: {
-				[key: string]: any;
-			} = {
-				"Code Error ID": codeError.id,
-				"Entry Point": entryPoint,
-				Assignees: codeError.assignees?.length ?? 0,
-				// rounds to 4 places
-				"Invitee Assignees": addedUsers ? addedUsers.length : 0,
-			};
-		} catch (ex) {
-			Logger.error(ex);
-		}
-	});
-}
+// export function trackCodeErrorPostCreation(
+// 	codeError: CSCodeError,
+// 	entryPoint?: string,
+// 	addedUsers?: string[]
+// ) {
+// 	process.nextTick(() => {
+// 		try {
+// 			const telemetry = Container.instance().telemetry;
+// 			const codeErrorProperties: {
+// 				[key: string]: any;
+// 			} = {
+// 				"Code Error ID": codeError.id,
+// 				"Entry Point": entryPoint,
+// 				Assignees: codeError.assignees?.length ?? 0,
+// 				// rounds to 4 places
+// 				"Invitee Assignees": addedUsers ? addedUsers.length : 0,
+// 			};
+// 		} catch (ex) {
+// 			Logger.error(ex);
+// 		}
+// 	});
+// }
 
 function getGitError(textDocument?: TextDocumentIdentifier): Promise<string | void> {
 	return new Promise(resolve => {
@@ -1456,14 +1468,14 @@ export class PostsManager extends EntityManagerBase<CSPost> {
 			}
 		}
 
-		trackReviewPostCreation(
-			review,
-			totalExcludedFilesCount,
-			reviewChangesetsSizeInBytes,
-			skippedCommitsCount,
-			request.entryPoint,
-			request.addedUsers
-		);
+		// trackReviewPostCreation(
+		// 	review,
+		// 	totalExcludedFilesCount,
+		// 	reviewChangesetsSizeInBytes,
+		// 	skippedCommitsCount,
+		// 	request.entryPoint,
+		// 	request.addedUsers
+		// );
 		this.cacheResponse(response!);
 		return {
 			stream,
@@ -1493,7 +1505,8 @@ export class PostsManager extends EntityManagerBase<CSPost> {
 			dontSendEmail: false,
 			mentionedUserIds: request.mentionedUserIds,
 			addedUsers: request.addedUsers,
-			codeBlock: request.codeBlock,
+			codeBlock: request.codeBlock?.code,
+			language: request.language,
 			analyze: request.analyze,
 			reinitialize: request.reinitialize,
 			parentPostId: request.parentPostId, // For grok reinitialization
@@ -1501,7 +1514,7 @@ export class PostsManager extends EntityManagerBase<CSPost> {
 
 		codeError = response.codeError!;
 
-		trackCodeErrorPostCreation(codeError, request.entryPoint, request.addedUsers);
+		// trackCodeErrorPostCreation(codeError, request.entryPoint, request.addedUsers);
 		this.cacheResponse(response!);
 
 		let replyPostResponse: CreatePostResponse | undefined = undefined;

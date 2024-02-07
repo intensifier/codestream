@@ -19,6 +19,7 @@ import {
 	ServiceLevelObjectiveResult,
 	isNRErrorResponse,
 	GetIssuesResponse,
+	TelemetryData,
 } from "@codestream/protocols/agent";
 import cx from "classnames";
 import { head as _head, isEmpty as _isEmpty, isNil as _isNil } from "lodash-es";
@@ -33,13 +34,14 @@ import {
 	ObservabilityLoadingServiceEntity,
 } from "@codestream/webview/Stream/ObservabilityLoading";
 import { CurrentMethodLevelTelemetry } from "@codestream/webview/store/context/types";
-import { setRefreshAnomalies } from "../store/context/actions";
+import { setEntityAccounts, setRefreshAnomalies } from "../store/context/actions";
 
 import { HealthIcon } from "@codestream/webview/src/components/HealthIcon";
 import {
 	HostDidChangeWorkspaceFoldersNotificationType,
 	OpenUrlRequestType,
 	RefreshEditorsCodeLensRequestType,
+	OpenEditorViewNotificationType,
 } from "@codestream/protocols/webview";
 import { SecurityIssuesWrapper } from "@codestream/webview/Stream/SecurityIssuesWrapper";
 import { ObservabilityServiceLevelObjectives } from "@codestream/webview/Stream/ObservabilityServiceLevelObjectives";
@@ -82,9 +84,10 @@ import { WarningBox } from "./WarningBox";
 import { ObservabilityAnomaliesWrapper } from "@codestream/webview/Stream/ObservabilityAnomaliesWrapper";
 import { CLMSettings, DEFAULT_CLM_SETTINGS } from "@codestream/protocols/api";
 import { throwIfError } from "@codestream/webview/store/common";
-import { AnyObject } from "@codestream/webview/utils";
 import { isFeatureEnabled } from "../store/apiVersioning/reducer";
 import { ObservabilityAlertViolations } from "./ObservabilityAlertViolations";
+import { parseId } from "../utilities/newRelic";
+import { bootstrapNrCapabilities } from "../store/nrCapabilities/thunks";
 
 interface Props {
 	paneState: PaneState;
@@ -173,7 +176,7 @@ const SubtleRight = styled.time`
 	}
 `;
 
-type TelemetryState = "No Entities" | "No Services" | "Services" | "Not Connected";
+type TelemetryState = "no_entities" | "no_services" | "services" | "Not Connected";
 
 export const ErrorRow = (props: {
 	title: string;
@@ -226,20 +229,17 @@ export const ErrorRow = (props: {
 						onClick={e => {
 							e.preventDefault();
 							e.stopPropagation();
+							HostApi.instance.track("codestream/link_to_newrelic clicked", {
+								meta_data: "destination: error_group",
+								meta_data_2: `codestream_section: code_level_metrics`,
+								event_type: "click",
+							});
 							HostApi.instance.send(OpenUrlRequestType, {
-								url:
-									props.url +
-									`&utm_source=codestream&utm_medium=ide-${derivedState.ideName}&utm_campaign=error_group_link`,
+								url: `${props.url}&utm_source=codestream&utm_medium=ide-${derivedState.ideName}&utm_campaign=error_group_link`,
 							});
 						}}
 					>
-						<Icon
-							name="globe"
-							className="clickable"
-							title="View on New Relic"
-							placement="bottomLeft"
-							delay={1}
-						/>
+						<Icon name="globe" title="View on New Relic" placement="bottomLeft" delay={1} />
 					</span>
 				)}
 
@@ -281,6 +281,7 @@ export const Observability = React.memo((props: Props) => {
 			activeO11y,
 			observabilityRepoEntities: preferences.observabilityRepoEntities || EMPTY_ARRAY,
 			showGoldenSignalsInEditor: state?.configs?.showGoldenSignalsInEditor,
+			ideName: state.ide.name,
 			isVS: state.ide.name === "VS",
 			isVsCode: state.ide.name === "VSC",
 			hideCodeLevelMetricsInstructions: state.preferences.hideCodeLevelMetricsInstructions,
@@ -294,6 +295,7 @@ export const Observability = React.memo((props: Props) => {
 			currentObservabilityAnomalyEntityGuid: state.context.currentObservabilityAnomalyEntityGuid,
 			isO11yPaneOnly,
 			company,
+			showLogSearch: isFeatureEnabled(state, "showLogSearch") && state.ide.name === "VSC",
 		};
 	}, shallowEqual);
 
@@ -347,6 +349,7 @@ export const Observability = React.memo((props: Props) => {
 	const [currentEntityAccounts, setCurrentEntityAccounts] = useState<EntityAccount[] | undefined>(
 		[]
 	);
+	const [allEntityAccounts, setAllEntityAccounts] = useState<EntityAccount[]>([]);
 	const [currentObsRepo, setCurrentObsRepo] = useState<ObservabilityRepo | undefined>();
 	const [recentIssues, setRecentIssues] = useState<GetIssuesResponse | undefined>();
 	const [recentIssuesError, setRecentIssuesError] = useState<string>();
@@ -385,8 +388,9 @@ export const Observability = React.memo((props: Props) => {
 		} catch (ex) {
 			setLoadingAssignments(false);
 			if (ex.code === ERROR_NR_INSUFFICIENT_API_KEY) {
-				HostApi.instance.track("NR Access Denied", {
-					Query: "GetObservabilityErrorAssignments",
+				HostApi.instance.track("codestream/o11y fetch_failed", {
+					meta_data: `query: GetObservabilityErrorAssignments`,
+					event_type: "response",
 				});
 				setNoErrorsAccess(NO_ERRORS_ACCESS_ERROR_MESSAGE);
 			} else if (ex.code === ERROR_GENERIC_USE_ERROR_MESSAGE) {
@@ -439,8 +443,9 @@ export const Observability = React.memo((props: Props) => {
 				}
 			} catch (err) {
 				if (err.code === ERROR_NR_INSUFFICIENT_API_KEY) {
-					HostApi.instance.track("NR Access Denied", {
-						Query: "GetObservabilityErrors",
+					HostApi.instance.track("codestream/o11y fetch_failed", {
+						meta_data: `query: GetObservabilityErrors`,
+						event_type: "response",
 					});
 					setNoErrorsAccess(NO_ERRORS_ACCESS_ERROR_MESSAGE);
 				} else if (err.code === ERROR_GENERIC_USE_ERROR_MESSAGE) {
@@ -452,6 +457,10 @@ export const Observability = React.memo((props: Props) => {
 				setLoadingObservabilityErrors(false);
 			}
 		}
+	};
+
+	const _bootstrapNrCapabilities = async () => {
+		dispatch(bootstrapNrCapabilities());
 	};
 
 	const getEntityCount = async (force = false) => {
@@ -469,10 +478,16 @@ export const Observability = React.memo((props: Props) => {
 			setDidMount(true);
 			return;
 		}
+
 		setGenericError(undefined);
 		setLoadingEntities(true);
 		try {
-			await Promise.all([loadAssignments(), fetchObservabilityRepos(force), getEntityCount(true)]);
+			await Promise.all([
+				loadAssignments(),
+				fetchObservabilityRepos(force),
+				getEntityCount(true),
+				_bootstrapNrCapabilities(),
+			]);
 			console.debug(`o11y: Promise.all finished`);
 		} finally {
 			setLoadingEntities(false);
@@ -596,16 +611,16 @@ export const Observability = React.memo((props: Props) => {
 			)} and genericError ${JSON.stringify(genericError)}`
 		);
 		if (!hasEntities && !genericError) {
-			telemetryStateValue = "No Entities";
+			telemetryStateValue = "no_entities";
 		}
 		// "No Services" - There are entities but the current repo isn’t associated with one, so we’re
 		//  displaying the repo-association prompt.
 		if (hasEntities && !_isEmpty(repoForEntityAssociator)) {
-			telemetryStateValue = "No Services";
+			telemetryStateValue = "no_services";
 		}
 		// "Services" - We’re displaying one or more services for the current repo.
 		if (currentEntityAccounts && currentEntityAccounts?.length !== 0 && hasEntities) {
-			telemetryStateValue = "Services";
+			telemetryStateValue = "services";
 		}
 
 		// "Not Connected" - not connected to NR, this goes away with UID completion
@@ -615,18 +630,19 @@ export const Observability = React.memo((props: Props) => {
 
 		if (!_isEmpty(telemetryStateValue)) {
 			console.debug("o11y: O11y Rendered", telemetryStateValue);
-			const properties: AnyObject = {
-				State: telemetryStateValue,
+			const properties: TelemetryData = {
+				meta_data: `state: ${telemetryStateValue}`,
+				event_type: "state_load",
 			};
-			if (telemetryStateValue === "No Services") {
-				properties.Meta = {
-					hasEntities,
-					hasRepoForEntityAssociator: !_isEmpty(repoForEntityAssociator),
-					currentEntityAccounts: currentEntityAccounts?.length ?? -1,
-					observabilityRepoCount: observabilityRepos?.length ?? -1,
-				};
+			if (telemetryStateValue === "no_services") {
+				properties.meta_data_2 = `meta: {
+					hasEntities: ${hasEntities},
+					hasRepoForEntityAssociator: ${!_isEmpty(repoForEntityAssociator)},
+					currentEntityAccounts: ${currentEntityAccounts?.length ?? -1},
+					observabilityRepoCount: ${observabilityRepos?.length ?? -1},
+				}`;
 			}
-			HostApi.instance.track("O11y Rendered", properties);
+			HostApi.instance.track("codestream/o11y rendered", properties);
 		}
 	};
 
@@ -645,16 +661,25 @@ export const Observability = React.memo((props: Props) => {
 				observabilityAnomalies.errorRate.length > 0 ||
 				observabilityAnomalies.responseTime.length > 0;
 
-			const event = {
-				"Errors Listed": !_isEmpty(filteredCurrentRepoErrors) || !_isEmpty(filteredAssignments),
-				"SLOs Listed": hasServiceLevelObjectives,
-				"CLM Anomalies Listed": hasAnomalies,
-				"Vulnerabilities Listed": isVulnPresent,
+			const entity = derivedState.observabilityRepoEntities.find(_ => _.repoId === currentRepoId);
+
+			const account = currentEntityAccounts?.find(_ => _.entityGuid === entity?.entityGuid);
+
+			const telemetryData: TelemetryData = {
+				entity_guid: entity?.entityGuid,
+				account_id: account?.accountId,
+				meta_data: `errors_listed: ${
+					!_isEmpty(filteredCurrentRepoErrors) || !_isEmpty(filteredAssignments)
+				}`,
+				meta_data_2: `slos_listed: ${hasServiceLevelObjectives}`,
+				meta_data_4: `anomalies_listed: ${hasAnomalies}`,
+				meta_data_3: `vulnerabilities_listed: ${isVulnPresent}`,
+				event_type: "state_load",
 			};
 
-			console.debug(`o11y: NR Service Clicked`, event);
+			console.debug(`o11y: NR Service Clicked`, telemetryData);
 
-			HostApi.instance.track("NR Service Clicked", event);
+			HostApi.instance.track("codestream/service rendered", telemetryData);
 			setPendingServiceClickedTelemetryCall(false);
 		} catch (ex) {
 			console.error(ex);
@@ -712,8 +737,9 @@ export const Observability = React.memo((props: Props) => {
 		} catch (ex) {
 			console.debug(`o11y: fetchObservabilityRepos nope`, ex);
 			if (ex.code === ERROR_NR_INSUFFICIENT_API_KEY) {
-				HostApi.instance.track("NR Access Denied", {
-					Query: "GetObservabilityRepos",
+				HostApi.instance.track("codestream/o11y fetch_failed", {
+					meta_data: `query: GetObservabilityRepos`,
+					event_type: "response",
 				});
 				setNoErrorsAccess(NO_ERRORS_ACCESS_ERROR_MESSAGE);
 			} else if (ex.code === ERROR_GENERIC_USE_ERROR_MESSAGE) {
@@ -1039,11 +1065,18 @@ export const Observability = React.memo((props: Props) => {
 							`o11y: useEffect on scmInfo calling setObservabilityRepos ${JSON.stringify(_.repos)}`
 						);
 						setObservabilityRepos(_.repos || []);
-						// updateCurrentEntityAccounts();
 					});
 			}
 		}
 	}, [derivedState.scmInfo]);
+
+	useEffect(() => {
+		const entityAccounts = observabilityRepos.flatMap(or => {
+			return or.entityAccounts;
+		});
+		dispatch(setEntityAccounts(entityAccounts));
+		setAllEntityAccounts(entityAccounts);
+	}, [observabilityRepos]);
 
 	useEffect(() => {
 		if (!_isEmpty(currentRepoId) && _isEmpty(observabilityRepos) && didMount) {
@@ -1246,9 +1279,20 @@ export const Observability = React.memo((props: Props) => {
 																					onClick={e => {
 																						e.preventDefault();
 																						e.stopPropagation();
-																						HostApi.instance.track("Open Service Summary on NR", {
-																							Section: "Golden Metrics",
-																						});
+																						HostApi.instance.track(
+																							"codestream/link_to_newrelic clicked",
+																							{
+																								entity_guid:
+																									derivedState.currentMethodLevelTelemetry
+																										.newRelicEntityGuid,
+																								account_id:
+																									derivedState.currentMethodLevelTelemetry
+																										.newRelicAccountId,
+																								meta_data: "destination: apm_service_summary",
+																								meta_data_2: `codestream_section: golden_metrics`,
+																								event_type: "click",
+																							}
+																						);
 																						HostApi.instance.send(OpenUrlRequestType, {
 																							url: ea.url!,
 																						});
@@ -1276,6 +1320,7 @@ export const Observability = React.memo((props: Props) => {
 																								errors={entityGoldenMetricsErrors}
 																								recentIssues={recentIssues ? recentIssues : {}}
 																								entityGuid={ea.entityGuid}
+																								accountId={ea.accountId}
 																							/>
 																							{hasServiceLevelObjectives &&
 																								ea?.domain !== "INFRA" && (
@@ -1286,6 +1331,7 @@ export const Observability = React.memo((props: Props) => {
 																								)}
 																							{anomalyDetectionSupported && (
 																								<ObservabilityAnomaliesWrapper
+																									accountId={ea.accountId}
 																									observabilityAnomalies={observabilityAnomalies}
 																									observabilityRepo={_observabilityRepo}
 																									entityGuid={ea.entityGuid}
@@ -1333,10 +1379,51 @@ export const Observability = React.memo((props: Props) => {
 																							)}
 																							{currentRepoId && ea?.domain !== "INFRA" && (
 																								<ObservabilityRelatedWrapper
+																									accountId={ea.accountId}
 																									currentRepoId={currentRepoId}
 																									entityGuid={ea.entityGuid}
 																								/>
 																							)}
+
+																							{derivedState.showLogSearch &&
+																								(ea?.domain === "APM" || ea?.domain === "EXT") && (
+																									<Row
+																										style={{
+																											padding: "2px 10px 2px 30px",
+																										}}
+																										className={"pr-row"}
+																										onClick={e => {
+																											e.preventDefault();
+																											e.stopPropagation();
+
+																											HostApi.instance.notify(
+																												OpenEditorViewNotificationType,
+																												{
+																													panel: "logs",
+																													title: "Logs",
+																													entityGuid: ea.entityGuid,
+																													entityAccounts: allEntityAccounts,
+																													entryPoint: "tree_view",
+																													ide: {
+																														name: derivedState.ideName,
+																													},
+																												}
+																											);
+																										}}
+																									>
+																										<span
+																											data-testid={`view-logs-${ea.entityGuid}`}
+																											style={{ marginLeft: "2px" }}
+																										>
+																											<Icon
+																												style={{ marginRight: "4px" }}
+																												name="logs"
+																												title="View Logs"
+																											/>
+																											View Logs
+																										</span>
+																									</Row>
+																								)}
 																						</>
 																					</>
 																				)}
@@ -1356,6 +1443,12 @@ export const Observability = React.memo((props: Props) => {
 																		`o11y: ObservabilityAddAdditionalService calling doRefresh(force)`
 																	);
 																	doRefresh(true);
+																	HostApi.instance.track("codestream/entity associated_with_repo", {
+																		entity_guid: e?.entityGuid,
+																		account_id: parseId(e?.entityGuid)?.accountId,
+																		event_type: "response",
+																		meta_data: "first_association: false",
+																	});
 																}}
 																remote={currentObsRepo.repoRemote}
 																remoteName={currentObsRepo.repoName}
@@ -1385,8 +1478,11 @@ export const Observability = React.memo((props: Props) => {
 																</span>
 															}
 															onSuccess={async e => {
-																HostApi.instance.track("NR Entity Association", {
-																	"Repo ID": repoForEntityAssociator.repoId,
+																HostApi.instance.track("codestream/entity associated_with_repo", {
+																	entity_guid: e?.entityGuid,
+																	account_id: parseId(e?.entityGuid)?.accountId,
+																	event_type: "response",
+																	meta_data: "first_association: true",
 																});
 
 																_useDidMount(true);

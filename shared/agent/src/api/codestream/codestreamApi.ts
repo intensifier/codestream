@@ -65,6 +65,8 @@ import {
 	DeleteUserRequest,
 	DeleteUserResponse,
 	DidChangeDataNotificationType,
+	DidEncounterInvalidRefreshTokenNotificationType,
+	ERROR_GENERIC_USE_ERROR_MESSAGE,
 	EditPostRequest,
 	FetchCodeErrorsRequest,
 	FetchCodeErrorsResponse,
@@ -95,6 +97,8 @@ import {
 	FollowReviewRequest,
 	FollowReviewResponse,
 	GenerateLoginCodeRequest,
+	GenerateMSTeamsConnectCodeRequest,
+	GenerateMSTeamsConnectCodeResponse,
 	GetCodeErrorRequest,
 	GetCodeErrorResponse,
 	GetCodemarkRequest,
@@ -118,12 +122,12 @@ import {
 	JoinCompanyRequest,
 	JoinCompanyResponse,
 	JoinStreamRequest,
-	LogoutCompanyRequest,
-	LogoutCompanyResponse,
 	KickUserRequest,
 	KickUserResponse,
 	LeaveStreamRequest,
 	LoginFailResponse,
+	LogoutCompanyRequest,
+	LogoutCompanyResponse,
 	LookupNewRelicOrganizationsRequest,
 	LookupNewRelicOrganizationsResponse,
 	MarkItemReadRequest,
@@ -178,9 +182,6 @@ import {
 	UploadFileRequest,
 	UploadFileRequestType,
 	VerifyConnectivityResponse,
-	GenerateMSTeamsConnectCodeRequest,
-	GenerateMSTeamsConnectCodeResponse,
-	ERROR_GENERIC_USE_ERROR_MESSAGE,
 } from "@codestream/protocols/agent";
 import {
 	CSAccessTokenType,
@@ -1425,9 +1426,10 @@ export class CodeStreamApiProvider implements ApiProvider {
 			if (provider.name === "slack") {
 				const telemetry = Container.instance().telemetry;
 				telemetry.track({
-					eventName: "Slack Sharing Error",
+					eventName: "codestream/codemarks/slack_sharing failed",
 					properties: {
-						Error: ex.message,
+						meta_data: `error: ex.message`,
+						event_type: "response",
 					},
 				});
 			}
@@ -2474,6 +2476,15 @@ export class CodeStreamApiProvider implements ApiProvider {
 				})
 				.catch(ex => {
 					Logger.error(ex, cc);
+					if (ex.statusCode === 403) {
+						Logger.warn(
+							"New Relic access token refresh failed, sending DidEncounterInvalidRefreshTokenNotification..."
+						);
+						Container.instance().agent.sendNotification(
+							DidEncounterInvalidRefreshTokenNotificationType,
+							undefined
+						);
+					}
 					delete this._refreshNRTokenPromise;
 					reject(ex);
 				});
@@ -2810,7 +2821,7 @@ export class CodeStreamApiProvider implements ApiProvider {
 			}
 
 			let id;
-			let resp;
+			let resp: Response | undefined;
 			let retryCount = 0;
 			let triedRefresh = false;
 			if (json === undefined) {

@@ -1,29 +1,35 @@
 // eslint-disable: Keep unused vars to make it easy to inject objects into new dependencies as they are added
 /* eslint-disable  unused-imports/no-unused-vars */
-import { NewRelicGraphqlClient } from "./newRelicGraphqlClient";
-import { CodeStreamSession } from "../../session";
-import { SessionServiceContainer } from "../../container";
+import { NewThirdPartyProviderConfig } from "@codestream/protocols/agent";
 import { CSNewRelicProviderInfo } from "@codestream/protocols/api";
+import { CompletionItem, CompletionParams } from "vscode-languageserver";
+import { CodeStreamAgent } from "../../agent";
 import { User } from "../../api/extensions";
 import { HttpClient } from "../../api/httpClient";
-import { NewThirdPartyProviderConfig } from "@codestream/protocols/agent";
-import { DeploymentsProvider } from "./deployments/deploymentsProvider";
+import { SessionServiceContainer } from "../../container";
+import { CodeStreamSession } from "../../session";
+import { Disposable } from "../../system/disposable";
 import { AnomaliesProvider } from "./anomalies/anomaliesProvider";
 import { ClmManager } from "./clm/clmManager";
+import { ClmProvider } from "./clm/clmProvider";
 import { EntityAccountResolver } from "./clm/entityAccountResolver";
+import { DeploymentsProvider } from "./deployments/deploymentsProvider";
+import { NrDirectives } from "./directives/nrDirectives";
 import { EntityProvider } from "./entity/entityProvider";
-import { ReposProvider } from "./repos/reposProvider";
-import { NrApiConfig } from "./nrApiConfig";
 import { ObservabilityErrorsProvider } from "./errors/observabilityErrorsProvider";
 import { GoldenSignalsProvider } from "./goldenSignals/goldenSignalsProvider";
+import { NewRelicGraphqlClient } from "./newRelicGraphqlClient";
+import { NrApiConfig } from "./nrApiConfig";
 import { NrOrgProvider } from "./orgs/nrOrgProvider";
+import { ReposProvider } from "./repos/reposProvider";
 import { SloProvider } from "./slo/sloProvider";
-import { NewRelicVulnerabilitiesProvider } from "./vuln/nrVulnerability";
-import { ClmProvider } from "./clm/clmProvider";
-import { NrDirectives } from "./directives/nrDirectives";
-import { Disposable } from "../../system/disposable";
-import { CodeStreamAgent } from "../../agent";
 import { SpansProvider } from "./spans/spansProvider";
+import { NraiProvider } from "./nrai/nraiProvider";
+import { NrLogsProvider } from "./logs/nrLogsProvider";
+import { NrNRQLProvider } from "./nrql/nrqlProvider";
+import { NewRelicVulnerabilitiesProvider } from "./vuln/nrVulnerability";
+import { NrqlCompletionProvider } from "./nrql/nrqlCompletionProvider";
+import { AccountProvider } from "./account/accountProvider";
 
 let nrDirectives: NrDirectives | undefined;
 let disposables: Disposable[] = [];
@@ -86,8 +92,7 @@ export async function injectNR(sessionServiceContainer: SessionServiceContainer)
 
 	// Avoid circular dependency between NewRelicGraphqlClient and NrOrgProvider
 	newRelicGraphqlClient.addOnGraphqlClientConnected(async (newRelicUserId: number) => {
-		const { orgId } = await nrOrgProvider.updateOrgId({ teamId: session.teamId });
-		await session.addNewRelicSuperProps(newRelicUserId, orgId);
+		await nrOrgProvider.updateOrgId({ teamId: session.teamId });
 	});
 
 	const nrHttpClient = new HttpClient(newRelicProviderConfig, session, newRelicProviderInfo);
@@ -104,8 +109,11 @@ export async function injectNR(sessionServiceContainer: SessionServiceContainer)
 
 	disposables.push(reposProvider);
 
+	const nraiProvider = new NraiProvider(newRelicGraphqlClient);
+
 	const observabilityErrorsProvider = new ObservabilityErrorsProvider(
 		reposProvider,
+		nraiProvider,
 		newRelicGraphqlClient,
 		nrApiConfig,
 		newRelicProviderInfo
@@ -114,6 +122,8 @@ export async function injectNR(sessionServiceContainer: SessionServiceContainer)
 	const entityProvider = new EntityProvider(newRelicGraphqlClient);
 
 	disposables.push(entityProvider);
+
+	disposables.push(new AccountProvider(newRelicGraphqlClient));
 
 	const goldenSignalsProvider = new GoldenSignalsProvider(
 		newRelicGraphqlClient,
@@ -186,11 +196,32 @@ export async function injectNR(sessionServiceContainer: SessionServiceContainer)
 
 	disposables.push(newRelicVulnerabilitiesProvider);
 
+	const logsProvider = new NrLogsProvider(newRelicGraphqlClient);
+	const nrqlProvider = new NrNRQLProvider(newRelicGraphqlClient);
+
 	nrDirectives = new NrDirectives(
 		newRelicGraphqlClient,
 		observabilityErrorsProvider,
 		reposProvider
 	);
+
+	const nrqlCompletionProvider = new NrqlCompletionProvider(session, nrqlProvider);
+	session.agent.connection.onCompletion(async (textDocumentPosition: CompletionParams) => {
+		return new Promise<CompletionItem[]>((resolve, reject) => {
+			nrqlCompletionProvider
+				.onCompletion(textDocumentPosition)
+				.then((data: CompletionItem[]) => {
+					resolve(data);
+				})
+				.catch((error: any) => {
+					reject(error);
+				});
+		});
+	});
+
+	session.agent.connection.onCompletionResolve((item: CompletionItem) => {
+		return nrqlCompletionProvider.onCompletionResolve(item);
+	});
 }
 
 export function getNrDirectives(): NrDirectives | undefined {

@@ -419,7 +419,10 @@ describe("Observability", () => {
 		await waitFor(() => {
 			expect(screen.queryByTestId("observability-label-title")).toHaveTextContent("Observability");
 			expect(mockTrack).toHaveBeenCalledTimes(1);
-			expect(mockTrack).toHaveBeenCalledWith("O11y Rendered", { State: "Services" });
+			expect(mockTrack).toHaveBeenCalledWith("codestream/o11y rendered", {
+				meta_data: `state: services`,
+				event_type: "state_load",
+			});
 		});
 	});
 
@@ -445,7 +448,10 @@ describe("Observability", () => {
 		await waitFor(() => {
 			expect(screen.queryByTestId("observability-label-title")).toHaveTextContent("Observability");
 			expect(mockTrack).toHaveBeenCalledTimes(1);
-			expect(mockTrack).toHaveBeenCalledWith("O11y Rendered", { State: "No Entities" });
+			expect(mockTrack).toHaveBeenCalledWith("codestream/o11y rendered", {
+				meta_data: `state: no_entities`,
+				event_type: "state_load",
+			});
 		});
 	});
 
@@ -483,14 +489,15 @@ describe("Observability", () => {
 		await waitFor(() => {
 			expect(screen.queryByTestId("observability-label-title")).toHaveTextContent("Observability");
 			expect(mockTrack).toHaveBeenCalledTimes(1);
-			expect(mockTrack).toHaveBeenCalledWith("O11y Rendered", {
-				State: "No Services",
-				Meta: {
-					currentEntityAccounts: 0,
+			expect(mockTrack).toHaveBeenCalledWith("codestream/o11y rendered", {
+				meta_data: `state: no_services`,
+				event_type: "state_load",
+				meta_data_2: `meta: {
 					hasEntities: true,
 					hasRepoForEntityAssociator: true,
+					currentEntityAccounts: 0,
 					observabilityRepoCount: 1,
-				},
+				}`,
 			});
 		});
 	});
@@ -513,7 +520,10 @@ describe("Observability", () => {
 		await waitFor(() => {
 			expect(screen.queryByTestId("observability-label-title")).toHaveTextContent("Observability");
 			expect(mockTrack).toHaveBeenCalledTimes(1);
-			expect(mockTrack).toHaveBeenCalledWith("O11y Rendered", { State: "Not Connected" });
+			expect(mockTrack).toHaveBeenCalledWith("codestream/o11y rendered", {
+				meta_data: "state: Not Connected",
+				event_type: "state_load",
+			});
 		});
 	});
 
@@ -555,11 +565,14 @@ describe("Observability", () => {
 
 		await waitFor(() => {
 			expect(mockTrack).toHaveBeenCalledTimes(2);
-			expect(mockTrack).toHaveBeenNthCalledWith(2, "NR Service Clicked", {
-				"Errors Listed": true,
-				"SLOs Listed": true,
-				"CLM Anomalies Listed": true,
-				"Vulnerabilities Listed": false,
+			expect(mockTrack).toHaveBeenNthCalledWith(2, "codestream/service rendered", {
+				entity_guid: undefined,
+				account_id: undefined,
+				meta_data: `errors_listed: true`,
+				meta_data_2: `slos_listed: true`,
+				meta_data_4: `anomalies_listed: true`,
+				meta_data_3: `vulnerabilities_listed: false`,
+				event_type: "state_load",
 			});
 		});
 	});

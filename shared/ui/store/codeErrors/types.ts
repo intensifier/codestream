@@ -1,6 +1,7 @@
 import { CSCodeError } from "@codestream/protocols/api";
 import { Index } from "@codestream/utils/types";
 import { CSAsyncError, NewRelicErrorGroup } from "@codestream/protocols/agent";
+import { Range } from "vscode-languageserver-protocol";
 
 export enum CodeErrorsActionsTypes {
 	AddCodeErrors = "ADD_CODEERRORS",
@@ -18,12 +19,16 @@ export enum CodeErrorsActionsTypes {
 	ClearProviderError = "@codeErrors/ClearError",
 	SetErrorGroup = "@codeError/SetErrorGroup",
 	IsLoadingErrorGroup = "@codeError/IsLoadingErrorGroup",
+	ResetNrAi = "@codeError/ResetNrAiState",
 }
 
 export type FunctionToEdit = {
 	codeBlock: string;
 	symbol: string;
 	uri: string;
+	range: Range;
+	namespace?: string;
+	language?: string;
 };
 
 export type CodeErrorsState = {

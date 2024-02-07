@@ -1,4 +1,5 @@
 import {
+	CodeBlock,
 	DidChangeObservabilityDataNotificationType,
 	GetNewRelicAssigneesRequestType,
 	NewRelicErrorGroup,
@@ -34,7 +35,7 @@ import {
 	upgradePendingCodeError,
 } from "@codestream/webview/store/codeErrors/thunks";
 import {
-	getGrokPostLength,
+	getNrAiPostLength,
 	getThreadPosts,
 	getPost,
 	isGrokStreamLoading,
@@ -80,6 +81,9 @@ import Timestamp from "../Timestamp";
 import Tooltip from "../Tooltip";
 import { ConditionalNewRelic } from "./ConditionalComponent";
 import { isFeatureEnabled } from "../../store/apiVersioning/reducer";
+import { FunctionToEdit } from "@codestream/webview/store/codeErrors/types";
+import { isEmpty } from "lodash-es";
+import { getNrCapability } from "@codestream/webview/store/nrCapabilities/thunks";
 
 interface SimpleError {
 	/**
@@ -114,6 +118,8 @@ export interface BaseCodeErrorProps extends CardProps {
 	resolutionTip?: any;
 	setGrokRequested: () => void;
 	readOnly: boolean;
+	setCurrentNrAiFile: (file: string) => void;
+	showGrok: boolean;
 }
 
 export interface BaseCodeErrorHeaderProps {
@@ -319,11 +325,11 @@ export const BaseCodeErrorHeader = (props: PropsWithChildren<BaseCodeErrorHeader
 		if (!props.errorGroup) return;
 
 		const _setAssignee = async (type: AssigneeType) => {
-			HostApi.instance.track("Error Assigned", {
-				"Error Group ID": props.errorGroup?.guid,
-				"NR Account ID": props.errorGroup?.accountId,
-				Assignment: props.errorGroup?.assignee ? "Change" : "New",
-				"Assignee Type": type,
+			HostApi.instance.track("codestream/errors/error_group assigned", {
+				meta_data: `error_group_id: ${props.errorGroup?.guid}`,
+				account_id: props.errorGroup?.accountId,
+				entity_guid: props.errorGroup?.entityGuid,
+				event_type: "response",
 			});
 
 			setIsAssigneeChanging(true);
@@ -373,10 +379,10 @@ export const BaseCodeErrorHeader = (props: PropsWithChildren<BaseCodeErrorHeader
 								inviteType: "error",
 							})
 						);
-						HostApi.instance.track("Teammate Invited", {
-							"Invitee Email Address": emailAddress,
-							"Invitation Method": "Error Assignment",
-						});
+						// HostApi.instance.track("Teammate Invited", {
+						// 	"Invitee Email Address": emailAddress,
+						// 	"Invitation Method": "Error Assignment",
+						// });
 
 						// "upgrade" them to an invitee
 						_setAssignee("Invitee");
@@ -436,10 +442,12 @@ export const BaseCodeErrorHeader = (props: PropsWithChildren<BaseCodeErrorHeader
 								notify();
 								setIsStateChanging(false);
 
-								HostApi.instance.track("Error Status Changed", {
-									"Error Group ID": props.errorGroup?.guid,
-									"NR Account ID": props.errorGroup?.accountId,
-									"Error Status": STATES_TO_ACTION_STRINGS[_],
+								HostApi.instance.track("codestream/errors/error_group status_changed", {
+									meta_data: `error_group_id: ${props.errorGroup?.guid}`,
+									account_id: props.errorGroup?.accountId,
+									entity_guid: props.errorGroup?.entityGuid,
+									meta_data_2: `error_status: ${STATES_TO_ACTION_STRINGS[_]}`,
+									event_type: "response",
 								});
 							},
 						};
@@ -618,8 +626,12 @@ export const BaseCodeErrorHeader = (props: PropsWithChildren<BaseCodeErrorHeader
 	const handleEntityLinkClick = (e, url) => {
 		e.preventDefault();
 		e.stopPropagation();
-		HostApi.instance.track("Open Service Summary on NR", {
-			Section: "Error",
+		HostApi.instance.track("codestream/link_to_newrelic clicked", {
+			entity_guid: props.errorGroup?.entityGuid,
+			account_id: props.errorGroup?.accountId,
+			meta_data: "destination: apm_service_summary",
+			meta_data_2: `codestream_section: error`,
+			event_type: "click",
 		});
 		HostApi.instance.send(OpenUrlRequestType, {
 			url,
@@ -918,10 +930,22 @@ export const BaseCodeErrorHeader = (props: PropsWithChildren<BaseCodeErrorHeader
 									{props.errorGroup?.errorGroupUrl && props.codeError.title ? (
 										<span data-testid="code-error-title">
 											<Link
-												href={
-													props.errorGroup.errorGroupUrl! +
-													`&utm_source=codestream&utm_medium=ide-${derivedState.ideName}&utm_campaign=error_group_link`
-												}
+												onClick={e => {
+													e.preventDefault();
+													HostApi.instance.track("codestream/link_to_newrelic clicked", {
+														entity_guid: props.errorGroup?.entityGuid,
+														account_id: props.errorGroup?.accountId,
+														meta_data: "destination: error_group",
+														meta_data_2: `codestream_section: code_level_metrics`,
+														event_type: "click",
+													});
+													HostApi.instance.send(OpenUrlRequestType, {
+														url: `${props.errorGroup
+															?.errorGroupUrl!}&utm_source=codestream&utm_medium=ide-${
+															derivedState.ideName
+														}&utm_campaign=error_group_link`,
+													});
+												}}
 											>
 												{title} <Icon name="link-external" className="open-external"></Icon>
 											</Link>
@@ -1155,11 +1179,15 @@ export const BaseCodeErrorMenu = (props: BaseCodeErrorMenuProps) => {
 	);
 };
 
+type CopyMethodState = "NOT_STARTED" | "IN_PROGRESS" | "DONE" | "FAILED";
+
 const BaseCodeError = (props: BaseCodeErrorProps) => {
 	const dispatch = useAppDispatch();
+
 	const derivedState = useAppSelector((state: CodeStreamState) => {
 		const codeError: CSCodeError = state.codeErrors[props.codeError.id] || props.codeError;
 		const codeAuthorId = (props.codeError.codeAuthorIds || [])[0];
+		const currentCodeErrorData = state.context.currentCodeErrorData;
 
 		return {
 			providers: state.providers,
@@ -1171,12 +1199,11 @@ const BaseCodeError = (props: BaseCodeErrorProps) => {
 			errorGroupIsLoading: codeError.objectId
 				? state.codeErrors.errorGroups[codeError.objectId]?.isLoading
 				: false,
-			currentCodeErrorData: state.context.currentCodeErrorData,
+			currentCodeErrorData,
 			hideCodeErrorInstructions: state.preferences.hideCodeErrorInstructions,
 			replies: props.collapsed
 				? emptyArray
 				: getThreadPosts(state, codeError.streamId, codeError.postId),
-			showGrok: isFeatureEnabled(state, "showGrok"),
 		};
 	}, shallowEqual);
 	const renderedFooter = props.renderFooter && props.renderFooter(CardFooter, ComposeWrapper);
@@ -1189,42 +1216,48 @@ const BaseCodeError = (props: BaseCodeErrorProps) => {
 		derivedState.currentCodeErrorData?.lineIndex || 0
 	);
 	const [didJumpToFirstAvailableLine, setDidJumpToFirstAvailableLine] = useState(false);
-	const [didCopyMethod, setDidCopyMethod] = useState(false);
+	const [copyMethodState, setMethodCopyState] = useState<CopyMethodState>("NOT_STARTED");
 	const [jumpLocation, setJumpLocation] = useState<number | undefined>();
-	const [loadGrokTimeout, setLoadGrokTimeout] = useState<NodeJS.Timeout | undefined>();
 	const [grokRequested, setGrokRequested] = useState(false);
 
 	const functionToEdit = useAppSelector(state => state.codeErrors.functionToEdit);
 	const functionToEditFailed = useAppSelector(state => state.codeErrors.functionToEditFailed);
 	const isGrokLoading = useAppSelector(isGrokStreamLoading);
 	const currentGrokRepliesLength = useAppSelector(state =>
-		getGrokPostLength(state, codeError.streamId, codeError.postId)
+		getNrAiPostLength(state, codeError.streamId, codeError.postId)
 	);
 
-	if (derivedState.showGrok && !props.readOnly) {
-		useEffect(() => {
-			const submitGrok = async (codeBlock?: string) => {
+	// console.log("*** BaseCodeError showGrok", props.showGrok);
+
+	useEffect(() => {
+		if (props.showGrok && !props.readOnly) {
+			const submitNrAi = async (functionToEdit?: FunctionToEdit) => {
 				// console.debug("===--- useEffect startGrokLoading");
 				props.setGrokRequested();
 				setGrokRequested(true);
 				dispatch(startGrokLoading(props.codeError));
-				const actualCodeError = (await dispatch(
-					upgradePendingCodeError(props.codeError.id, "Comment", codeBlock, true)
-				)) as
-					| {
-							codeError: CSCodeError | undefined;
+				const codeBlock: CodeBlock | undefined = functionToEdit
+					? {
+							range: functionToEdit.range,
+							code: functionToEdit.codeBlock,
+							uri: functionToEdit.uri,
 					  }
-					| undefined;
+					: undefined;
+				const actualCodeError = await dispatch(
+					upgradePendingCodeError(
+						props.codeError.id,
+						"Comment",
+						codeBlock,
+						functionToEdit?.language,
+						true
+					)
+				);
 
 				if (!actualCodeError || !actualCodeError.codeError) {
 					return;
 				}
 
 				dispatch(markItemRead(props.codeError.id, actualCodeError.codeError.numReplies + 1));
-
-				// setIsLoading(false);
-				// setText("");
-				// setAttachments([]);
 			};
 			// Case 1 - pending post, will never try to fetch replies
 			if (
@@ -1233,12 +1266,13 @@ const BaseCodeError = (props: BaseCodeErrorProps) => {
 				!grokRequested &&
 				(functionToEdit || functionToEditFailed)
 			) {
-				submitGrok(functionToEdit?.codeBlock).catch(e => {
-					console.error("submitGrok failed", e);
+				console.debug("submitNrAi case 1", functionToEdit, functionToEditFailed);
+				submitNrAi(functionToEdit).catch(e => {
+					console.error("submitNrAi failed", e);
 				});
 				return;
 			}
-			// Case 2 - give a chance for replies to load before deciding to submitGrok
+			// Case 2 - give a chance for replies to load before deciding to submitNrAi
 			if (
 				!isGrokLoading &&
 				isPostThreadsLoading !== undefined && // Hasn't attempted to load yet
@@ -1247,12 +1281,19 @@ const BaseCodeError = (props: BaseCodeErrorProps) => {
 				derivedState.replies.length === 0 && // Has loaded replies and they are empty
 				(functionToEdit || functionToEditFailed)
 			) {
-				submitGrok(functionToEdit?.codeBlock).catch(e => {
-					console.error("submitGrok failed", e);
+				console.debug("submitNrAi case 2", functionToEdit, functionToEditFailed);
+				submitNrAi(functionToEdit).catch(e => {
+					console.error("submitNrAi failed", e);
 				});
 			}
-		}, [functionToEdit, functionToEditFailed, isPostThreadsLoading, derivedState.replies]);
-	}
+		}
+	}, [
+		functionToEdit,
+		functionToEditFailed,
+		isPostThreadsLoading,
+		derivedState.replies,
+		props.showGrok,
+	]);
 
 	const onClickStackLine = async (event, lineIndex) => {
 		event && event.preventDefault();
@@ -1262,14 +1303,15 @@ const BaseCodeError = (props: BaseCodeErrorProps) => {
 		if (stackInfo && stackInfo.lines[lineIndex] && stackInfo.lines[lineIndex].line !== undefined) {
 			setCurrentSelectedLineIndex(lineIndex);
 			dispatch(
-				jumpToStackLine(lineIndex, stackInfo.lines[lineIndex], stackInfo.sha!, stackInfo.repoId!)
+				jumpToStackLine(lineIndex, stackInfo.lines[lineIndex], stackInfo.repoId!, stackInfo.sha)
 			);
 		}
 	};
 
-	const { stackTraces } = codeError as CSCodeError;
-	const stackTrace = stackTraces && stackTraces[0] && stackTraces[0].lines;
-	const stackTraceText = stackTraces && stackTraces[0] && stackTraces[0].text;
+	const { stackTraces } = codeError;
+	const firstStackTrace = stackTraces ? (stackTraces[0] ? stackTraces[0] : undefined) : undefined;
+	const stackTrace = firstStackTrace?.lines;
+	const stackTraceText = firstStackTrace?.text;
 
 	// This can be incredibly complex with nested anonymous inner functions. For the current approach
 	// we rely on the stack trace having a named method for us to latch on to send for error analysis.
@@ -1295,84 +1337,103 @@ const BaseCodeError = (props: BaseCodeErrorProps) => {
 			!props.collapsed &&
 			jumpLocation !== undefined &&
 			didJumpToFirstAvailableLine &&
-			!didCopyMethod
+			copyMethodState === "NOT_STARTED"
 		) {
-			const { stackTraces } = codeError;
-			const stackInfo = stackTraces?.[0];
-			// console.debug(`===--- symbol useEffect`);
-			if (stackInfo?.lines) {
-				// This might be different from the jumpToLine lineIndex if jumpToLine is an anonymous function
-				// This also might not be the best approach, but it's a start
-				const line = extractMethodName(stackInfo.lines);
-				if (line?.fileRelativePath) {
-					const { stackTraces } = codeError;
-					const stackInfo = stackTraces?.[0];
-					// console.debug(`===--- symbol useEffect`, line.method);
-					try {
-						// console.debug(`===--- symbol useEffect calling copySymbolFromIde`);
-						dispatch(copySymbolFromIde(line, stackInfo.repoId, stackInfo.sha));
-					} catch (ex) {
-						console.warn(ex);
-					}
-					setDidCopyMethod(true);
-					setTimeout(() => {
+			const doStuff = async () => {
+				const { stackTraces } = codeError;
+				const stackInfo = stackTraces?.[0];
+				// console.debug(`===--- symbol useEffect`);
+				if (stackInfo?.lines) {
+					// This might be different from the jumpToLine lineIndex if jumpToLine is an anonymous function
+					// This also might not be the best approach, but it's a start
+					const line = extractMethodName(stackInfo.lines);
+					if (line?.fileRelativePath) {
+						const { stackTraces } = codeError;
+						const stackInfo = stackTraces?.[0];
+						// console.debug(`===--- symbol useEffect`, line.method);
 						try {
-							// console.debug(`===--- symbol useEffect calling jumpToStackLine`);
-							dispatch(
-								jumpToStackLine(
-									jumpLocation,
-									stackInfo.lines[jumpLocation],
-									stackInfo.sha!,
-									stackInfo.repoId!
-								)
-							);
+							// Need to call copySymbolFromIde every time to get the codeBlockStartLine
+							// TODO handle the case where the code has changed since the error was created - can't use streaming patch from openai
+							// TODO or store diff / startLineNo in the codeError?
+							setMethodCopyState("IN_PROGRESS");
+							await dispatch(copySymbolFromIde(line, stackInfo.repoId, undefined));
 						} catch (ex) {
-							console.warn(ex);
+							console.warn("symbol useEffect copySymbolFromIde failed", ex);
+							setMethodCopyState("FAILED"); // setFunctionToEditFailed would have been set in preceeding copySymbolFromIde
 						}
-					}, 100);
+						setMethodCopyState("DONE");
+						setTimeout(() => {
+							try {
+								// console.debug(`===--- symbol useEffect calling jumpToStackLine`);
+								const stackLine = stackInfo.lines[jumpLocation];
+								if (stackLine.fileRelativePath && stackInfo.repoId) {
+									console.log("setCurrentNrAiFile", stackLine.fileRelativePath);
+									props.setCurrentNrAiFile(stackLine.fileRelativePath);
+									// Open actual file for NRAI - no ref param
+									dispatch(jumpToStackLine(jumpLocation, stackLine, stackInfo.repoId, undefined));
+								} else {
+									console.warn(
+										"nrai jumpToStackLine missing fileRelativePath, or repoId",
+										stackLine
+									);
+								}
+							} catch (ex) {
+								console.warn(ex);
+							}
+						}, 100);
+					}
 				}
-			}
+			};
+			doStuff();
 		}
 	}, [codeError, jumpLocation, didJumpToFirstAvailableLine]);
 
-	// We keep getting events for resolved stack trace lines, so we have to wait for this to settle down
-	// When there are no more events for 2 seconds, we assume we're done and we can now handle the
-	// edge case when there are no user code lines in the stack trace
+	const { allStackTracePathsResolved, noUserLines } = useMemo(() => {
+		if (!stackTrace) {
+			return {
+				allStackTracePathsResolved: false,
+				noUserLines: false,
+			};
+		}
+		const allStackTracePathsResolved =
+			stackTrace.filter(_ => _.resolved === true || !isEmpty(_.error)).length === stackTrace.length;
+		const noUserLines = stackTrace.filter(_ => !_.resolved).length === stackTrace.length;
+		return { allStackTracePathsResolved, noUserLines };
+	}, [stackTrace]);
+
 	useEffect(() => {
-		if (functionToEdit || functionToEditFailed || currentGrokRepliesLength > 0) {
-			// If any of these are true, we're not in the edge case
-			console.debug("loadGrokTimeout clearing edge case", {
-				functionToEdit,
-				functionToEditFailed,
-				isGrokLoading,
-				currentGrokRepliesLength,
-			});
-			if (loadGrokTimeout) {
-				// console.debug("loadGrokTimeout", loadGrokTimeout);
-				clearTimeout(loadGrokTimeout);
-				setLoadGrokTimeout(undefined);
-			}
-			return;
-		}
-		if (loadGrokTimeout || isGrokLoading) {
-			console.debug("loadGrokTimeout clearing timer 2", loadGrokTimeout);
-			clearTimeout(loadGrokTimeout);
-			setLoadGrokTimeout(undefined);
-		}
-		const timeout = setTimeout(() => {
-			// if (!functionToEdit && !functionToEditFailed && !isGrokLoading && currentGrokRepliesLength === 0) {
-			console.debug("useEffect no user code lines in stack trace setFunctionToEditFailed", {
-				functionToEdit,
-				functionToEditFailed,
-				isGrokLoading,
-				currentGrokRepliesLength,
-			});
+		const params = {
+			allStackTracePathsResolved,
+			functionToEdit,
+			functionToEditFailed,
+			isGrokLoading,
+			currentGrokRepliesLength,
+			noUserLines,
+		};
+		if (
+			allStackTracePathsResolved &&
+			!functionToEdit &&
+			!functionToEditFailed &&
+			!isGrokLoading &&
+			currentGrokRepliesLength === 0 &&
+			noUserLines
+		) {
+			console.debug(
+				"useEffect no user code lines in stack trace => setFunctionToEditFailed",
+				params
+			);
 			dispatch(setFunctionToEditFailed(true));
-			// }
-		}, 3000);
-		setLoadGrokTimeout(timeout);
-		console.debug("loadGrokTimeout timer assigned", timeout);
-	}, [codeError, functionToEdit, functionToEditFailed, isGrokLoading]);
+		} else {
+			console.debug("useEffect no user code not triggered", params);
+		}
+	}, [
+		allStackTracePathsResolved,
+		functionToEdit,
+		functionToEditFailed,
+		isGrokLoading,
+		currentGrokRepliesLength,
+		noUserLines,
+	]);
 
 	useEffect(() => {
 		if (!props.collapsed && !didJumpToFirstAvailableLine) {
@@ -1692,14 +1753,19 @@ const AskGrok = (props: { setText: (text: string) => void; onClose: () => void }
 	);
 };
 
-const ReplyInput = (props: { codeError: CSCodeError; setGrokRequested: () => void }) => {
+export type ReplyInputProps = {
+	codeError: CSCodeError;
+	setGrokRequested: () => void;
+	showGrok: boolean;
+};
+
+const ReplyInput = (props: ReplyInputProps) => {
 	const dispatch = useAppDispatch();
 	const [text, setText] = useState("");
 	const [isAskGrokOpen, setIsAskGrokOpen] = useState(false);
 	const [attachments, setAttachments] = useState<AttachmentField[]>([]);
 	const [isLoading, setIsLoading] = useState(false);
 	const teamMates = useAppSelector((state: CodeStreamState) => getTeamMates(state));
-	const showGrok = useAppSelector(state => isFeatureEnabled(state, "showGrok"));
 
 	const submit = async () => {
 		// don't create empty replies
@@ -1708,15 +1774,16 @@ const ReplyInput = (props: { codeError: CSCodeError; setGrokRequested: () => voi
 		props.setGrokRequested();
 
 		setIsLoading(true);
-		if (showGrok && text.match(/@AI/gim)) {
+		// console.debug("*** ReplyInput showGrok", props.showGrok);
+		if (props.showGrok && text.match(/@AI/gim)) {
 			dispatch(startGrokLoading(props.codeError));
 		}
 
-		const actualCodeError = (await dispatch(
-			upgradePendingCodeError(props.codeError.id, "Comment")
-		)) as {
-			codeError: CSCodeError;
-		};
+		const actualCodeError = await dispatch(upgradePendingCodeError(props.codeError.id, "Comment"));
+		if (!actualCodeError) {
+			setIsLoading(false);
+			return;
+		}
 		dispatch(markItemRead(props.codeError.id, actualCodeError.codeError.numReplies + 1));
 
 		await dispatch(
@@ -1750,7 +1817,7 @@ const ReplyInput = (props: { codeError: CSCodeError; setGrokRequested: () => voi
 				attachments={attachments}
 				attachmentContainerType="reply"
 				setAttachments={setAttachments}
-				suggestGrok={showGrok}
+				suggestGrok={props.showGrok}
 			/>
 			<ButtonRow
 				style={{
@@ -1776,9 +1843,9 @@ const ReplyInput = (props: { codeError: CSCodeError; setGrokRequested: () => voi
 						Comment
 					</Button>
 				</Tooltip>
-				{showGrok && (
+				{props.showGrok && (
 					<Button style={{ marginLeft: 0 }} onClick={() => setIsAskGrokOpen(true)}>
-						<Icon name="grok" />
+						<Icon name="nrai" />
 						<span style={{ paddingLeft: "4px" }}>Ask AI</span>
 					</Button>
 				)}
@@ -1817,6 +1884,7 @@ function isPropsWithId(props: PropsWithId | PropsWithCodeError): props is PropsW
 export type CodeErrorProps = PropsWithId | PropsWithCodeError;
 
 const CodeErrorForCodeError = (props: PropsWithCodeError) => {
+	const dispatch = useAppDispatch();
 	const { codeError, ...baseProps } = props;
 	const derivedState = useAppSelector((state: CodeStreamState) => {
 		const post =
@@ -1838,6 +1906,19 @@ const CodeErrorForCodeError = (props: PropsWithCodeError) => {
 		};
 	}, shallowEqual);
 
+	const grokNraiCapability = useAppSelector(
+		(state: CodeStreamState) => state.nrCapabilities.nrai === true
+	);
+	const grokFeatureEnabled = useAppSelector((state: CodeStreamState) =>
+		isFeatureEnabled(state, "showGrok")
+	);
+
+	const showGrok = useMemo(() => {
+		const result = grokNraiCapability || grokFeatureEnabled;
+		console.debug("grokStates", { grokNraiCapability, grokFeatureEnabled, result });
+		return result;
+	}, [grokNraiCapability, grokFeatureEnabled]);
+
 	const isGrokLoading = useAppSelector(isGrokStreamLoading);
 	const grokError = useAppSelector(state =>
 		state.codeErrors.grokError
@@ -1852,9 +1933,11 @@ const CodeErrorForCodeError = (props: PropsWithCodeError) => {
 		undefined
 	);
 	const [isGrokRequested, setIsGrokRequested] = useState(false);
+	const [currentNrAiFile, setCurrentNrAiFile] = useState<string | undefined>(undefined);
 	const currentGrokRepliesLength = useAppSelector(state =>
-		getGrokPostLength(state, props.codeError.streamId, props.codeError.postId)
+		getNrAiPostLength(state, props.codeError.streamId, props.codeError.postId)
 	);
+	const functionToEdit = useAppSelector(state => state.codeErrors.functionToEdit);
 
 	function scrollToNew() {
 		const target = scrollNewTarget?.current;
@@ -1865,6 +1948,10 @@ const CodeErrorForCodeError = (props: PropsWithCodeError) => {
 			// console.debug("===--- scrollToNew no target", scrollNewTarget);
 		}
 	}
+
+	useDidMount(() => {
+		dispatch(getNrCapability("nrai"));
+	});
 
 	useEffect(() => {
 		if ((isGrokRequested || isGrokLoading) && currentGrokRepliesLength > 0) {
@@ -1913,7 +2000,10 @@ const CodeErrorForCodeError = (props: PropsWithCodeError) => {
 								numReplies={props.codeError.numReplies}
 								scrollNewTargetCallback={scrollNewTargetCallback}
 								codeErrorId={props.codeError.id}
+								errorGroup={props.errorGroup}
 								noReply={true}
+								file={currentNrAiFile}
+								functionToEdit={functionToEdit}
 							/>
 							{grokError && (
 								<DelayedRender>
@@ -1927,7 +2017,11 @@ const CodeErrorForCodeError = (props: PropsWithCodeError) => {
 
 					{InputContainer && !derivedState.isPDIdev && (
 						<InputContainer>
-							<ReplyInput codeError={codeError} setGrokRequested={setGrokRequested} />
+							<ReplyInput
+								codeError={codeError}
+								setGrokRequested={setGrokRequested}
+								showGrok={showGrok}
+							/>
 						</InputContainer>
 					)}
 				</Footer>
@@ -1936,8 +2030,11 @@ const CodeErrorForCodeError = (props: PropsWithCodeError) => {
 
 	const repoInfo = useMemo(() => {
 		const { stackTraces } = codeError;
-		let stackInfo = stackTraces && stackTraces[0]; // TODO deal with multiple stacks
-		if (!stackInfo) stackInfo = (codeError as any).stackInfo; // this is for old code, maybe can remove after a while?
+		let stackInfo = stackTraces ? (stackTraces[0] ? stackTraces[0] : undefined) : undefined; // TODO deal with multiple stacks
+		if (!stackInfo) {
+			console.debug("stackInfo hit old code");
+			stackInfo = (codeError as any).stackInfo; // this is for old code, maybe can remove after a while?
+		}
 		if (stackInfo && stackInfo.repoId) {
 			const repo = derivedState.repos[stackInfo.repoId];
 			if (!repo) return undefined;
@@ -1970,6 +2067,8 @@ const CodeErrorForCodeError = (props: PropsWithCodeError) => {
 				headerError={headerError}
 				setGrokRequested={setGrokRequested}
 				readOnly={props.readOnly === true}
+				setCurrentNrAiFile={setCurrentNrAiFile}
+				showGrok={showGrok}
 			/>
 		</>
 	);

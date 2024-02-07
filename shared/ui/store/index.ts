@@ -31,6 +31,7 @@ import { reduceEditorContext } from "./editorContext/reducer";
 import reduceIde from "./ide/slice";
 import providerPullRequests from "./providerPullRequests/slice";
 import { reduceReviews } from "./reviews/reducer";
+import { reduceNrCapabilities } from "./nrCapabilities/reducer";
 
 const pluginVersion = (state = "", action) => {
 	if (action.type === "@pluginVersion/Set") return action.payload;
@@ -68,6 +69,7 @@ export const store = configureStore({
 		providerPullRequests: providerPullRequests,
 		codeErrors: reduceCodeErrors,
 		dynamicLogging: reduceDynamicLogging,
+		nrCapabilities: reduceNrCapabilities,
 	},
 	middleware: getDefaultMiddleware => getDefaultMiddleware().concat(middleware),
 	enhancers: [batchedSubscribe(debounceToAnimationFrame((notify: Function) => notify()))],

@@ -1,4 +1,9 @@
-import { TelemetryRequestType, GetAnonymousIdRequestType } from "@codestream/protocols/agent";
+import {
+	TelemetryRequestType,
+	GetAnonymousIdRequestType,
+	TelemetryData,
+	TelemetryEventName,
+} from "@codestream/protocols/agent";
 import { URI } from "vscode-uri";
 
 import { NotificationType, RequestType } from "vscode-jsonrpc";
@@ -14,7 +19,7 @@ import {
 	NewReviewNotification,
 	NewReviewNotificationType,
 } from "./ipc/webview.protocol";
-import { AnyObject, Disposable, shortUuid } from "./utils";
+import { Disposable, shortUuid } from "./utils";
 import {
 	IpcHost,
 	isIpcRequestMessage,
@@ -240,39 +245,32 @@ export class RequestApiManager {
 	}
 }
 
-declare function acquireCodestreamHostForSidebar(): IpcHost;
+declare function acquireCodestreamHost(): IpcHost;
 
-let host: IpcHost;
-const findHost = (webview: string): IpcHost => {
+let _host: IpcHost;
+
+const findHost = (): IpcHost => {
 	try {
-		if (webview === "sidebar") {
-			host = acquireCodestreamHostForSidebar();
+		if (!_host) {
+			_host = acquireCodestreamHost();
 		}
+		return _host;
 	} catch (e) {
-		throw new Error("Host needs to provide global `acquireCodestreamHostForSidebar` function");
+		throw new Error("Host needs to provide global `acquireCodestreamHost` function");
 	}
-	return host;
 };
 
 export class HostApi extends EventEmitter {
 	private apiManager = new RequestApiManager();
 	private port: IpcHost;
 
-	private static _sidebarInstance: HostApi;
+	private static _hostApiInstance: HostApi;
 	static get instance(): HostApi {
-		if (this._sidebarInstance === undefined) {
-			this._sidebarInstance = new HostApi(findHost("sidebar"));
+		if (this._hostApiInstance === undefined) {
+			this._hostApiInstance = new HostApi(findHost());
 		}
-		return this._sidebarInstance;
+		return this._hostApiInstance;
 	}
-
-	// private static _editorInstance: HostApi;
-	// static locator(): HostApi {
-	// 	if (this._editorInstance === undefined) {
-	// 		this._editorInstance = new HostApi(findHost("editor"));
-	// 	}
-	// 	return this._editorInstance;
-	// }
 
 	protected constructor(port: any) {
 		super();
@@ -345,7 +343,7 @@ export class HostApi extends EventEmitter {
 		});
 	}
 
-	track(eventName: string, properties?: AnyObject) {
+	track(eventName: TelemetryEventName, properties?: TelemetryData) {
 		this.send(TelemetryRequestType, {
 			eventName,
 			properties,

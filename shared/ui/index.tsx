@@ -30,7 +30,13 @@ import {
 	MatchReposRequestType,
 	GetRepoFileFromAbsolutePathRequestType,
 } from "@codestream/protocols/agent";
-import { CodemarkType, CSCodeError, CSMe, CSRepository } from "@codestream/protocols/api";
+import {
+	CodemarkType,
+	CSCodeError,
+	CSMe,
+	CSRepository,
+	WebviewPanels,
+} from "@codestream/protocols/api";
 import React from "react";
 import * as path from "path-browserify";
 import { render } from "react-dom";
@@ -75,9 +81,13 @@ import {
 	ViewMethodLevelTelemetryNotificationType,
 	WebviewDidInitializeNotificationType,
 	ViewAnomalyNotificationType,
+	InitiateLogSearchNotificationType,
+	OpenEditorViewNotification,
+	OpenEditorViewNotificationType,
+	InitiateNrqlExecutionNotificationType,
+	ViewColumn,
 } from "./ipc/webview.protocol";
-import { WebviewPanels } from "@codestream/protocols/api";
-import { store } from "./store";
+import { CodeStreamState, store } from "./store";
 import { bootstrap, reset } from "./store/actions";
 import {
 	apiCapabilitiesUpdated,
@@ -129,10 +139,12 @@ import { confirmPopup } from "./Stream/Confirm";
 import translations from "./translations/en";
 import { parseProtocol } from "./utilities/urls";
 import { HostApi } from "./webview-api";
+import { parseId } from "./utilities/newRelic";
+
 // import translationsEs from "./translations/es";
 
 export function setupCommunication(host: { postMessage: (message: any) => void }) {
-	Object.defineProperty(window, "acquireCodestreamHostForSidebar", {
+	Object.defineProperty(window, "acquireCodestreamHost", {
 		value() {
 			return host;
 		},
@@ -524,6 +536,7 @@ function listenForEvents(store) {
 
 				if (reposResponse) {
 					HostApi.instance.send(EditorRevealRangeRequestType, {
+						// eslint-disable-next-line import/namespace
 						uri: path.join(reposResponse.repositories![0].path, "main.js"),
 						range: Range.create(0, 0, 0, 0),
 						atTop: true,
@@ -824,6 +837,7 @@ function listenForEvents(store) {
 								}
 							});
 							if (repo) {
+								// eslint-disable-next-line import/namespace
 								const filePath = path.join(repo.path, file);
 								HostApi.instance.send(EditorRevealRangeRequestType, {
 									uri: filePath,
@@ -977,6 +991,58 @@ function listenForEvents(store) {
 				data: params.directives.directives,
 			})
 		);
+	});
+
+	api.on(InitiateLogSearchNotificationType, params => {
+		const { session, users, context, ide } = store.getState() as CodeStreamState;
+		const currentUser = session.userId ? (users[session.userId] as CSMe) : null;
+		const currentRepoId = currentUser?.preferences?.currentO11yRepoId;
+
+		const currentEntityGuid = currentRepoId
+			? (currentUser?.preferences?.activeO11y?.[currentRepoId] as string)
+			: undefined;
+
+		const props: OpenEditorViewNotification = {
+			panelLocation: ViewColumn.Active,
+			entityGuid: currentEntityGuid!,
+			entityAccounts: context.entityAccounts || [],
+			panel: "logs",
+			title: "Logs",
+			query: params.query,
+			entryPoint: params.entryPoint,
+			ide: {
+				name: ide.name,
+			},
+		};
+
+		HostApi.instance.notify(OpenEditorViewNotificationType, props);
+	});
+
+	api.on(InitiateNrqlExecutionNotificationType, params => {
+		const { session, users, context, ide } = store.getState() as CodeStreamState;
+		const currentUser = session.userId ? (users[session.userId] as CSMe) : null;
+		const currentRepoId = currentUser?.preferences?.currentO11yRepoId;
+
+		const currentEntityGuid = currentRepoId
+			? (currentUser?.preferences?.activeO11y?.[currentRepoId] as string)
+			: undefined;
+
+		const props: OpenEditorViewNotification = {
+			panelLocation: ViewColumn.Beside,
+			accountId: parseId(currentEntityGuid || "")?.accountId,
+			entityGuid: currentEntityGuid!,
+			entityAccounts: context.entityAccounts || [],
+			panel: "nrql",
+			title: "NRQL",
+			query: params.query,
+			hash: params.hash,
+			entryPoint: params.entryPoint,
+			ide: {
+				name: ide.name,
+			},
+		};
+
+		HostApi.instance.notify(OpenEditorViewNotificationType, props);
 	});
 }
 

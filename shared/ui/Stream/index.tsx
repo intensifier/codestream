@@ -189,9 +189,9 @@ export class SimpleStream extends PureComponent<Props> {
 
 		this.props.setIsFirstPageview(false);
 
-		if (this.props.activePanel === "main" && this.props.postStreamId != undefined) {
-			HostApi.instance.track("Page Viewed", { "Page Name": "Stream" });
-		}
+		// if (this.props.activePanel === "main" && this.props.postStreamId != undefined) {
+		// 	HostApi.instance.track("Page Viewed", { "Page Name": "Stream" });
+		// }
 		this.disposables.push(
 			HostApi.instance.on(NewCodemarkNotificationType, this.handleNewCodemarkRequest, this)
 		);
@@ -562,6 +562,8 @@ export class SimpleStream extends PureComponent<Props> {
 							{activePanel === WebviewPanels.MethodLevelTelemetry && <MethodLevelTelemetryPanel />}
 							{activePanel === WebviewPanels.TransactionSpan && <TransactionSpanPanel />}
 							{activePanel === WebviewPanels.ObservabilityAnomaly && <ObservabilityAnomalyPanel />}
+							{/** TODO unused?? */}
+							{/* {activePanel === WebviewPanels.APMLoggingSearch && <APMLogSearchPanel />} */}
 							{activePanel === WebviewPanels.Integrations && <IntegrationsPanel />}
 							{activePanel === WebviewPanels.Profile && <ProfilePanel />}
 							{activePanel === WebviewPanels.NewPullRequest && (

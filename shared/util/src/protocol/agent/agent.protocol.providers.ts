@@ -1,15 +1,14 @@
 "use strict";
-import { NotificationType, RequestType } from "vscode-languageserver-protocol";
+import { CompletionItem, NotificationType, RequestType } from "vscode-languageserver-protocol";
 
 import {
 	BitbucketParticipantRole,
 	CrossPostIssueValues,
-	DidResolveStackTraceLineNotification,
 	GitLabMergeRequest,
 } from "./agent.protocol";
 import { CodeErrorPlus } from "./agent.protocol.codeErrors";
 import { CodemarkPlus } from "./agent.protocol.codemarks";
-import { IssueParams, LicenseDependencyIssue, VulnerabilityIssue } from "./agent.protocol.fossa";
+import { LicenseDependencyIssue, VulnerabilityIssue } from "./agent.protocol.fossa";
 import { ReviewPlus } from "./agent.protocol.reviews";
 import { CSRepository, PullRequestQuery } from "./api.protocol.models";
 import { TrunkCheckResults } from "./agent.protocol.trunk";
@@ -1295,6 +1294,10 @@ export const GetNewRelicAssigneesRequestType = new RequestType<
 	void
 >("codestream/newrelic/assignees");
 
+export const GetNewRelicAIEligibilityRequestType = new RequestType<void, boolean, void, void>(
+	"codestream/newrelic/aiEligibility"
+);
+
 export interface NewRelicAccount {
 	id: number;
 	name: string;
@@ -1366,6 +1369,7 @@ export interface ObservabilityError extends ObservabilityErrorCore {
 	count: number;
 	lastOccurrence: number;
 	releaseTag?: number;
+	showAI?: boolean;
 }
 
 export interface ObservabilityRepoError {
@@ -1524,6 +1528,8 @@ export interface EntityAccount {
 	accountName: string;
 	entityGuid: string;
 	entityName: string;
+	entityType?: EntityType;
+	entityTypeDescription?: string;
 	domain?: string;
 	url?: string;
 	tags: {
@@ -1558,7 +1564,13 @@ export interface GetObservabilityEntitiesRequest {
 
 export interface GetObservabilityEntitiesResponse {
 	totalResults: number;
-	entities: { guid: string; name: string; account: string; entityType: EntityType }[];
+	entities: {
+		guid: string;
+		name: string;
+		account: string;
+		entityType: EntityType;
+		entityTypeDescription: string;
+	}[];
 	nextCursor?: string;
 }
 
@@ -1568,6 +1580,25 @@ export const GetObservabilityEntitiesRequestType = new RequestType<
 	void,
 	void
 >("codestream/newrelic/entities");
+
+export interface GetAllAccountsRequest {
+	force?: boolean;
+}
+export interface Account {
+	id: number;
+	name: string;
+}
+
+export interface GetAllAccountsResponse {
+	accounts: Account[];
+}
+
+export const GetAllAccountsRequestType = new RequestType<
+	GetAllAccountsRequest,
+	GetAllAccountsResponse,
+	void,
+	void
+>("codestream/newrelic/accounts/all");
 
 export interface GetObservabilityErrorAssignmentsRequest {}
 
@@ -1989,7 +2020,6 @@ export type EntityType =
 	| "APM_DATABASE_INSTANCE_ENTITY"
 	| "APM_EXTERNAL_SERVICE_ENTITY"
 	| "BROWSER_APPLICATION_ENTITY"
-	| "THIRD_PARTY_SERVICE_ENTITY"
 	| "DASHBOARD_ENTITY"
 	| "EXTERNAL_ENTITY"
 	| "GENERIC_ENTITY"
@@ -2000,9 +2030,31 @@ export type EntityType =
 	| "MOBILE_APPLICATION_ENTITY"
 	| "SECURE_CREDENTIAL_ENTITY"
 	| "SYNTHETIC_MONITOR_ENTITY"
+	| "TEAM"
 	| "THIRD_PARTY_SERVICE_ENTITY"
 	| "UNAVAILABLE_ENTITY"
 	| "WORKLOAD_ENTITY";
+
+export const EntityTypeMap = {
+	APM_APPLICATION_ENTITY: "APM Application",
+	APM_DATABASE_INSTANCE_ENTITY: "APM Database",
+	APM_EXTERNAL_SERVICE_ENTITY: "APM External",
+	BROWSER_APPLICATION_ENTITY: "Browser",
+	DASHBOARD_ENTITY: "Dashboard",
+	EXTERNAL_ENTITY: "External",
+	GENERIC_ENTITY: "Generic",
+	GENERIC_INFRASTRUCTURE_ENTITY: "Generic Infrastructure",
+	INFRASTRUCTURE_AWS_LAMBDA_FUNCTION_ENTITY: "Lambda",
+	INFRASTRUCTURE_HOST_ENTITY: "Infrastructure Host",
+	KEY_TRANSACTION_ENTITY: "Key Transaction",
+	MOBILE_APPLICATION_ENTITY: "Mobile",
+	SECURE_CREDENTIAL_ENTITY: "Secure Credential",
+	SYNTHETIC_MONITOR_ENTITY: "Synthetic Monitor",
+	TEAM: "Team",
+	THIRD_PARTY_SERVICE_ENTITY: "OTEL",
+	UNAVAILABLE_ENTITY: "Unavailable",
+	WORKLOAD_ENTITY: "Workload",
+};
 
 export interface Entity {
 	account?: {
@@ -2511,3 +2563,214 @@ export const DidDetectObservabilityAnomaliesNotificationType = new NotificationT
 	DidDetectObservabilityAnomaliesNotification,
 	void
 >("codestream/didDetectObservabilityAnomalies");
+
+// reusing request/response types - internally we're just omitting a filter
+export const GetLoggingEntitiesRequestType = new RequestType<
+	GetObservabilityEntitiesRequest,
+	GetObservabilityEntitiesResponse,
+	void,
+	void
+>("codestream/newrelic/logs/entities");
+
+export interface GetLogsRequest {
+	entityGuid: string;
+	filterText: string;
+	order: {
+		field: string;
+		direction: string;
+	};
+	since: string;
+	limit: number | "MAX";
+}
+
+export interface LogResult {
+	[key: string]: string;
+}
+
+export interface GetLogsResponse {
+	logs?: LogResult[];
+	messageAttribute?: string;
+	severityAttribute?: string;
+	accountId: number;
+	error?: NRErrorResponse;
+}
+
+export const GetLogsRequestType = new RequestType<GetLogsRequest, GetLogsResponse, void, void>(
+	"codestream/newrelic/logs/search"
+);
+
+export interface GetSurroundingLogsRequest {
+	entityGuid: string;
+	messageId: string;
+	since: number;
+}
+
+export interface GetSurroundingLogsResponse {
+	beforeLogs?: LogResult[];
+	afterLogs?: LogResult[];
+	error?: NRErrorResponse;
+}
+
+export const GetSurroundingLogsRequestType = new RequestType<
+	GetSurroundingLogsRequest,
+	GetSurroundingLogsResponse,
+	void,
+	void
+>("codestream/newrelic/logs/surrounding");
+
+export interface GetLogFieldDefinitionsRequest {
+	entityGuid: string;
+}
+
+export interface LogFieldDefinition {
+	key?: string;
+	type?: "string" | "boolean" | "numeric";
+}
+
+export interface GetLogFieldDefinitionsResponse {
+	logDefinitions?: LogFieldDefinition[];
+	error?: NRErrorResponse;
+}
+
+export const GetLogFieldDefinitionsRequestType = new RequestType<
+	GetLogFieldDefinitionsRequest,
+	GetLogFieldDefinitionsResponse,
+	void,
+	void
+>("codestream/newrelic/logs/fieldDefinitions");
+
+export interface SaveRecentQueryRequest {
+	accountId?: number;
+	query: string;
+}
+
+export interface SaveRecentQueryResponse {
+	createdAt?: number;
+}
+
+export interface GetNRQLRequest {
+	accountId?: number;
+	entityGuid?: string;
+	query: string;
+}
+
+export interface NRQLResult {
+	[key: string]: string;
+}
+
+export interface GetNRQLResponse {
+	results?: NRQLResult[];
+	accountId: number;
+	eventType?: string;
+	since?: string;
+	error?: NRErrorResponse;
+	resultsTypeGuess?: ResultsTypeGuess;
+}
+
+export interface ResultsTypeGuess {
+	selected?: string;
+	enabled?: string[];
+}
+
+export const GetNRQLRequestType = new RequestType<GetNRQLRequest, GetNRQLResponse, void, void>(
+	"codestream/newrelic/nrql/search"
+);
+
+export interface GetNRQLConstantsRequest {}
+
+export interface GetNRQLConstantsResponse {
+	operators: CompletionItem[];
+	keywords: CompletionItem[];
+	functions: CompletionItem[];
+}
+
+export const GetNRQLConstantsRequestType = new RequestType<
+	GetNRQLConstantsRequest,
+	GetNRQLConstantsResponse,
+	void,
+	void
+>("codestream/newrelic/nrql/constants");
+
+export interface GetNRQLCollectionsRequest {}
+export interface GetNRQLCollectionsResponse {
+	list: string[];
+	obj: any;
+}
+export const GetNRQLCollectionsRequestType = new RequestType<
+	GetNRQLCollectionsRequest,
+	GetNRQLCollectionsResponse,
+	void,
+	void
+>("codestream/newrelic/nrql/collections");
+
+export interface GetNRQLColumnsRequest {
+	/**
+	 * The user-entered query (unmodified)
+	 */
+	query?: string;
+	/**
+	 * The name of a specific collection
+	 */
+	collectionName?: string;
+}
+export interface GetNRQLColumnsResponse {
+	columns: string[];
+}
+export const GetNRQLColumnsRequestType = new RequestType<
+	GetNRQLColumnsRequest,
+	GetNRQLColumnsResponse,
+	void,
+	void
+>("codestream/newrelic/nrql/columns");
+
+export interface GetNRQLCompletionItemsRequest {
+	/**
+	 * This may refer to an entire query or a single line in a multi-line or multi-queries in a file
+	 */
+	query?: string;
+}
+
+export interface GetNRQLCompletionItemsResponse {
+	items: CompletionItem[];
+}
+export const GetNRQLCompletionItemsType = new RequestType<
+	GetNRQLCompletionItemsRequest,
+	GetNRQLCompletionItemsResponse,
+	void,
+	void
+>("codestream/newrelic/nrql/completions");
+
+export interface NRQLRecentQuery {
+	/**
+	 * Recent, runnable, query from the current user
+	 */
+	query: string;
+	accountIds: number[];
+	accounts: Account[];
+	createdAt: number;
+	dayString?: string;
+}
+
+export interface GetNRQLRecentQueriesRequest {}
+export interface GetNRQLRecentQueriesResponse {
+	items: NRQLRecentQuery[];
+}
+export const GetNRQLRecentQueriesType = new RequestType<
+	GetNRQLRecentQueriesRequest,
+	GetNRQLRecentQueriesResponse,
+	void,
+	void
+>("codestream/newrelic/nrql/queries/recent");
+
+export type ApplyPatchRequest = {
+	fileUri: string;
+	patch: string;
+};
+
+export type ApplyPatchResponse = {
+	success: boolean;
+};
+
+export const ApplyPatchType = new RequestType<ApplyPatchRequest, ApplyPatchResponse, void, void>(
+	"codestream/newrelic/applyPatch"
+);

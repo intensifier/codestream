@@ -30,8 +30,9 @@ import {
 	ResolveStackTraceRequest,
 	ResolveStackTraceRequestType,
 	ResolveStackTraceResponse,
-	WarningOrError,
 	SourceMapEntry,
+	TelemetryData,
+	WarningOrError,
 } from "@codestream/protocols/agent";
 import { CSStackTraceInfo, CSStackTraceLine } from "@codestream/protocols/api";
 import { structuredPatch } from "diff";
@@ -129,8 +130,10 @@ export class NRManager {
 	@lspHandler(ParseStackTraceRequestType)
 	@log()
 	async parseStackTrace({
+		entityGuid,
 		errorGroupGuid,
 		stackTrace,
+		occurrenceId,
 	}: ParseStackTraceRequest): Promise<ParseStackTraceResponse> {
 		const lines: string[] = typeof stackTrace === "string" ? stackTrace.split("\n") : stackTrace;
 		const whole = lines.join("\n");
@@ -149,13 +152,22 @@ export class NRManager {
 				const telemetry = Container.instance().telemetry;
 				const parsed = parseId(errorGroupGuid || "");
 
+				const properties: TelemetryData = {
+					meta_data: `error_group_id: ${errorGroupGuid!}`,
+					event_type: "response",
+				};
+				if (occurrenceId) {
+					properties.meta_data_2 = `trace_id: ${occurrenceId}`;
+				}
+				if (entityGuid) {
+					properties.entity_guid = entityGuid;
+				}
+				if (parsed?.accountId) {
+					properties.account_id = parsed.accountId;
+				}
 				telemetry.track({
-					eventName: "Error Parsing Trace",
-					properties: {
-						"Error Group ID": errorGroupGuid!,
-						"NR Account ID": parsed?.accountId || 0,
-						Language: lang || "Not Detected",
-					},
+					eventName: "codestream/errors/error_group error_parsing_stack_trace",
+					properties: properties,
 				});
 			} catch (ex) {
 				// ignore
@@ -183,13 +195,13 @@ export class NRManager {
 			return response;
 		}
 	}
-
 	// parses the passed stack, tries to determine if any of the user's open repos match it, and if so,
 	// given the commit hash of the code for which the stack trace was generated, tries to match each line
 	// of the stack trace with a line in the user's repo, given that the user may be on a different commit
 	@lspHandler(ResolveStackTraceRequestType)
 	@log()
 	async resolveStackTrace({
+		entityGuid,
 		errorGroupGuid,
 		stackTrace,
 		repoId,
@@ -266,8 +278,10 @@ export class NRManager {
 		}
 
 		const parsedStackInfo = await this.parseStackTrace({
+			entityGuid,
 			errorGroupGuid,
 			stackTrace,
+			occurrenceId,
 		});
 		if (parsedStackInfo.parseError) {
 			return { error: parsedStackInfo.parseError };

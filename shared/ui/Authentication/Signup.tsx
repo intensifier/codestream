@@ -225,7 +225,7 @@ export const Signup = (props: Props) => {
 	useDidMount(() => {
 		getUserInfo();
 		if (derivedState.webviewFocused) {
-			HostApi.instance.track("Page Viewed", { "Page Name": "Sign In" });
+			HostApi.instance.track("codestream/sign_in page_viewed", { event_type: "page_view" });
 		}
 		if (props.teamId) getTeamAuthInfo(props.teamId);
 	});
@@ -284,12 +284,12 @@ export const Signup = (props: Props) => {
 			const { status, token } = await HostApi.instance.send(RegisterUserRequestType, attributes);
 
 			const sendTelemetry = () => {
-				HostApi.instance.track("Account Created", {
-					email: email,
-					"Auth Provider": "Email",
-					"Git Email Match?": email === scmEmail,
-					Source: derivedState.pendingProtocolHandlerQuerySource,
-				});
+				// HostApi.instance.track("Account Created", {
+				// 	email: email,
+				// 	"Auth Provider": "Email",
+				// 	"Git Email Match?": email === scmEmail,
+				// 	Source: derivedState.pendingProtocolHandlerQuerySource,
+				// });
 			};
 
 			switch (status) {

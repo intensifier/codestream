@@ -42,11 +42,13 @@ import { CSNewRelicProviderInfo } from "@codestream/protocols/api";
 import { customFetch } from "../../../system/fetchCore";
 
 const ALLOWED_ENTITY_ACCOUNT_DOMAINS_FOR_ERRORS = ["APM", "BROWSER", "EXT", "INFRA"];
+import { NraiProvider } from "../nrai/nraiProvider";
 
 @lsp
 export class ObservabilityErrorsProvider {
 	constructor(
 		private reposProvider: ReposProvider,
+		private nraiProvider: NraiProvider,
 		private graphqlClient: NewRelicGraphqlClient,
 		private nrApiConfig: NrApiConfig,
 		private providerInfo: CSNewRelicProviderInfo | undefined
