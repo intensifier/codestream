@@ -60,11 +60,19 @@ function getPostBuildCopy(args: Args): CopyStuff[] {
 				to: nodeModulesDest,
 				options: { ignore: ["**/@newrelic/security-agent/**"] }, // Path too long for windows
 			},
+			{
+				from: path.join(__dirname, "../../WhatsNew.*"),
+				to: outputDir,
+			},
 		];
 	} else {
 		result = [
 			{
 				from: "node_modules/opn/**/xdg-open",
+				to: outputDir,
+			},
+			{
+				from: path.join(__dirname, "../../WhatsNew.*"),
 				to: outputDir,
 			},
 		];

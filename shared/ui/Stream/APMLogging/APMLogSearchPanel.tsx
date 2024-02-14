@@ -3,6 +3,8 @@ import {
 	GetLogFieldDefinitionsRequestType,
 	GetLoggingEntitiesRequestType,
 	GetLogsRequestType,
+	GetObservabilityReposRequestType,
+	GetObservabilityReposResponse,
 	GetSurroundingLogsRequestType,
 	isNRErrorResponse,
 	LogFieldDefinition,
@@ -24,7 +26,7 @@ import Icon from "../Icon";
 import { Link } from "../Link";
 import { TableWindow } from "../TableWindow";
 import { APMLogRow } from "./APMLogRow";
-
+import { PanelHeaderTitleWithLink } from "../PanelHeaderTitleWithLink";
 interface SelectedOption {
 	value: string;
 	label: string;
@@ -134,14 +136,13 @@ const Option = (props: OptionProps) => {
 };
 
 export const APMLogSearchPanel = (props: {
-	entityAccounts: EntityAccount[];
 	entryPoint: string;
 	entityGuid?: string;
 	suppliedQuery?: string;
 	ide?: { name?: IdeNames };
 }) => {
-	const [hasEntityGuid, setHasEntityGuid] = useState<boolean>();
 	const [fieldDefinitions, setFieldDefinitions] = useState<LogFieldDefinition[]>([]);
+	const [isInitializing, setIsInitializing] = useState<boolean>();
 	const [isLoading, setIsLoading] = useState<boolean>(false);
 	const [query, setQuery] = useState<string>("");
 	const [hasSearched, setHasSearched] = useState<boolean>(false);
@@ -165,24 +166,12 @@ export const APMLogSearchPanel = (props: {
 	const trimmedListHeight: number = (height ?? 0) - (height ?? 0) * 0.08;
 
 	useDidMount(() => {
-		if (props.entityGuid) {
-			const parsedId = parseId(props.entityGuid);
-
-			if (parsedId) {
-				trackOpenTelemetry(props.entryPoint, props.entityGuid, parsedId.accountId);
-			} else {
-				trackOpenTelemetry(props.entryPoint);
-			}
-		} else {
-			trackOpenTelemetry(props.entryPoint);
-		}
-
+		setIsInitializing(true);
 		const defaultOption: SelectedOption = {
 			value: "30 MINUTES AGO",
 			label: "30 Minutes Ago",
 		};
 
-		// TODO: Sliding time window selector?
 		const sinceOptions: SelectedOption[] = [
 			defaultOption,
 			{ value: "60 MINUTES AGO", label: "60 Minutes Ago" },
@@ -196,26 +185,47 @@ export const APMLogSearchPanel = (props: {
 		setSelectSinceOptions(sinceOptions);
 		setSelectedSinceOption(defaultOption);
 
-		if (props.entityGuid) {
-			const entityAccount = props.entityAccounts.find(ea => ea.entityGuid === props.entityGuid)!;
-
-			handleSelectDropdownOption({
-				value: entityAccount.entityGuid,
-				label: entityAccount.entityName,
-				accountName: entityAccount.accountName,
-				entityType: entityAccount.entityTypeDescription,
-			});
-
-			setHasEntityGuid(true);
-			fetchFieldDefinitions(props.entityGuid);
-
-			// possible there is no searchTerm
-			if (props.suppliedQuery) {
-				setQuery(props.suppliedQuery);
-			}
-
-			fetchLogs(props.entityGuid, props.suppliedQuery);
+		// possible there is no searchTerm
+		if (props.suppliedQuery) {
+			setQuery(props.suppliedQuery);
 		}
+
+		let entityAccounts: EntityAccount[] = [];
+
+		HostApi.instance
+			.send(GetObservabilityReposRequestType, { force: true })
+			.then((_: GetObservabilityReposResponse) => {
+				entityAccounts = _.repos?.flatMap(r => r.entityAccounts) ?? [];
+
+				const entityAccount = entityAccounts.find(ea => ea.entityGuid === props.entityGuid);
+
+				if (entityAccount) {
+					trackOpenTelemetry(props.entryPoint, entityAccount.entityGuid, entityAccount.accountId);
+				} else {
+					// its possible a race condition could get us here and the entity guid passed in doesn't match any in the list
+					// allow it, so the user can still use the panel - it just won't have a default selection/query/execution.
+					trackOpenTelemetry(props.entryPoint);
+					return;
+				}
+
+				handleSelectDropdownOption({
+					value: entityAccount.entityGuid,
+					label: entityAccount.entityName,
+					accountName: entityAccount.accountName,
+					entityType: entityAccount.entityTypeDescription,
+				});
+
+				fetchFieldDefinitions(entityAccount.entityGuid);
+				fetchLogs(entityAccount.entityGuid, props.suppliedQuery);
+			})
+			.catch(ex => {
+				handleError(
+					"We ran into an error fetching a default service. Please select a service from the list above."
+				);
+			})
+			.finally(() => {
+				setIsInitializing(false);
+			});
 	});
 
 	const handleSelectDropdownOption = entityAccount => {
@@ -491,7 +501,15 @@ export const APMLogSearchPanel = (props: {
 
 	return (
 		<>
-			<PanelHeader title="Logs">
+			<PanelHeader
+				title={
+					<PanelHeaderTitleWithLink
+						text="Learn how to search for specific log lines in your code"
+						href={`https://docs.newrelic.com/docs/codestream/observability/log-search/#context-menu`}
+						title="Logs"
+					/>
+				}
+			>
 				<LogFilterBarContainer>
 					<div className="log-filter-bar-row">
 						<div className="log-filter-bar-service">
@@ -530,6 +548,7 @@ export const APMLogSearchPanel = (props: {
 						<div className="log-filter-bar-query">
 							<Icon name="search" className="search" />
 							<input
+								data-testid="query-text"
 								name="q"
 								value={query}
 								className="input-text control"
@@ -546,6 +565,7 @@ export const APMLogSearchPanel = (props: {
 
 						<div className="log-filter-bar-search">
 							<Button
+								data-testid="query-btn"
 								className="query"
 								onClick={() => fetchLogs(selectedEntityAccount?.value)}
 								loading={isLoading}
@@ -600,25 +620,32 @@ export const APMLogSearchPanel = (props: {
 							TODO: Skeleton loader? Couldn't get it to work when I tried
 						)} */}
 
-					{!logError && !isLoading && results && totalItems > 0 && fieldDefinitions && (
-						<>
-							{ListHeader()}
-							<TableWindow
-								itemData={formatRowResults()}
-								itemCount={results.length}
-								height={trimmedListHeight}
-								width={"100%"}
-							/>
-						</>
-					)}
+					{!logError &&
+						!isLoading &&
+						results &&
+						totalItems > 0 &&
+						fieldDefinitions &&
+						!isInitializing && (
+							<>
+								{ListHeader()}
+								<TableWindow
+									itemData={formatRowResults()}
+									itemCount={results.length}
+									height={trimmedListHeight}
+									width={"100%"}
+								/>
+							</>
+						)}
 
-					{!logError && !totalItems && !isLoading && !hasSearched && (
+					{!logError && !totalItems && !isLoading && !hasSearched && !isInitializing && (
 						<div className="no-matches" style={{ margin: "0", fontStyle: "unset" }}>
-							<span>Enter search criteria above, or just click Query to see recent logs.</span>
+							<span data-testid="default-message">
+								Enter search criteria above, or just click Query to see recent logs.
+							</span>
 						</div>
 					)}
 
-					{!logError && !totalItems && !isLoading && hasSearched && (
+					{!logError && !totalItems && !isLoading && hasSearched && !isInitializing && (
 						<div className="no-matches" style={{ margin: "0", fontStyle: "unset" }}>
 							<h4>No logs found during this time range</h4>
 							<span>

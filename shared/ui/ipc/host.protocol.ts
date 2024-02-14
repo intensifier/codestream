@@ -2,7 +2,6 @@ import {
 	ApiVersionCompatibility,
 	Capabilities,
 	CodeStreamEnvironmentInfo,
-	EntityAccount,
 	ThirdPartyProviders,
 	Unreads,
 	VersionCompatibility,
@@ -319,28 +318,29 @@ export enum ViewColumn {
 }
 
 export interface OpenEditorViewNotification {
-	panel: "logs" | "nrql";
+	panel: "logs" | "nrql" | "whatsnew";
 	title: string;
-	accountId?: number;
-
-	entityAccounts: EntityAccount[];
-	entryPoint:
-		| "global_nav"
+	entryPoint: // logs
+	| "global_nav"
 		| "context_menu"
 		| "tree_view"
-		| "codelens"
 		// nrql
 		| "query_builder"
 		| "recent_queries"
-		| "nrql_file";
+		| "nrql_file"
+		// other
+		| "notification"
+		| "profile";
+	ide: {
+		name?: "VSC" | "VS" | "JETBRAINS";
+		browserEngine?: "JCEF" | "JxBrowser" | "DotNetBrowser" | undefined;
+	};
 
+	accountId?: number;
 	panelLocation?: ViewColumn;
 	entityGuid?: string;
 	query?: string;
 	hash?: string;
-	ide: {
-		name?: "VSC" | "VS" | "JETBRAINS";
-	};
 }
 
 export const OpenEditorViewNotificationType = new NotificationType<

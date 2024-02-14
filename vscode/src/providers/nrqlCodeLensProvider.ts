@@ -44,7 +44,7 @@ export class NrqlCodeLensProvider implements CodeLensProvider {
 			return [
 				new CodeLens(new Range(0, 0, 0, 0), {
 					title: "Sign in to New Relic to run queries",
-					tooltip: "Run this nrql statement",
+					tooltip: "Run NRQL query",
 					command: "codestream.toggle",
 					arguments: [document.uri, "", 0]
 				})
@@ -116,7 +116,7 @@ export class NrqlCodeLensProvider implements CodeLensProvider {
 						?.map(_ => {
 							return new CodeLens(_.range, {
 								title: "Run ▶️",
-								tooltip: "Run this nrql statement",
+								tooltip: "Run NRQL query",
 								command: "codestream.executeNrql",
 								arguments: [document.uri, _.name, _.range.start.line]
 							});

@@ -34,7 +34,11 @@ import {
 	ObservabilityLoadingServiceEntity,
 } from "@codestream/webview/Stream/ObservabilityLoading";
 import { CurrentMethodLevelTelemetry } from "@codestream/webview/store/context/types";
-import { setEntityAccounts, setRefreshAnomalies } from "../store/context/actions";
+import {
+	setCurrentEntityGuid,
+	setEntityAccounts,
+	setRefreshAnomalies,
+} from "../store/context/actions";
 
 import { HealthIcon } from "@codestream/webview/src/components/HealthIcon";
 import {
@@ -231,7 +235,7 @@ export const ErrorRow = (props: {
 							e.stopPropagation();
 							HostApi.instance.track("codestream/link_to_newrelic clicked", {
 								meta_data: "destination: error_group",
-								meta_data_2: `codestream_section: code_level_metrics`,
+								meta_data_2: `codestream_section: error`,
 								event_type: "click",
 							});
 							HostApi.instance.send(OpenUrlRequestType, {
@@ -295,7 +299,7 @@ export const Observability = React.memo((props: Props) => {
 			currentObservabilityAnomalyEntityGuid: state.context.currentObservabilityAnomalyEntityGuid,
 			isO11yPaneOnly,
 			company,
-			showLogSearch: isFeatureEnabled(state, "showLogSearch") && state.ide.name === "VSC",
+			showLogSearch: state.ide.name === "VSC" || state.ide.name === "JETBRAINS",
 		};
 	}, shallowEqual);
 
@@ -349,7 +353,6 @@ export const Observability = React.memo((props: Props) => {
 	const [currentEntityAccounts, setCurrentEntityAccounts] = useState<EntityAccount[] | undefined>(
 		[]
 	);
-	const [allEntityAccounts, setAllEntityAccounts] = useState<EntityAccount[]>([]);
 	const [currentObsRepo, setCurrentObsRepo] = useState<ObservabilityRepo | undefined>();
 	const [recentIssues, setRecentIssues] = useState<GetIssuesResponse | undefined>();
 	const [recentIssuesError, setRecentIssuesError] = useState<string>();
@@ -373,6 +376,7 @@ export const Observability = React.memo((props: Props) => {
 	};
 
 	function setExpandedEntityUserPref(repoId: string, entityGuid: string | undefined) {
+		dispatch(setCurrentEntityGuid(entityGuid!));
 		dispatch(setUserPreference({ prefPath: ["activeO11y", repoId], value: entityGuid }));
 	}
 
@@ -1075,7 +1079,6 @@ export const Observability = React.memo((props: Props) => {
 			return or.entityAccounts;
 		});
 		dispatch(setEntityAccounts(entityAccounts));
-		setAllEntityAccounts(entityAccounts);
 	}, [observabilityRepos]);
 
 	useEffect(() => {
@@ -1402,7 +1405,6 @@ export const Observability = React.memo((props: Props) => {
 																													panel: "logs",
 																													title: "Logs",
 																													entityGuid: ea.entityGuid,
-																													entityAccounts: allEntityAccounts,
 																													entryPoint: "tree_view",
 																													ide: {
 																														name: derivedState.ideName,

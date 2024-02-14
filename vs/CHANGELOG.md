@@ -1,5 +1,11 @@
 # Change Log
 
+## [15.3.0] - 2023-2-14
+
+### Added
+
+- Adds a "What's New" page under username > Help that covers recently added features
+
 ## [15.2.0] - 2023-2-7
 
 ### Changed

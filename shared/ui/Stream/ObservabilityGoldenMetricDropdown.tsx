@@ -42,28 +42,28 @@ export const ObservabilityGoldenMetricDropdown = React.memo((props: Props) => {
 	function getErrorPillsJSX(displayValue, displayUnits) {
 		return (
 			<>
-				<span className={"status"} style={{ opacity: 1, color: "var(--text-color)" }}>
+				<span style={{ opacity: 1, color: "var(--text-color)" }}>
 					<>
 						{displayValue}
 						{displayUnits && <>{displayUnits} </>}
 					</>
 
-					{Number(pillsData?.errorRateData?.percentChange) >= 0 ? (
+					{pillsData?.errorRateData?.percentChange && pillsData.errorRateData.percentChange >= 0 ? (
 						<span
 							style={
-								Number(pillsData?.errorRateData?.percentChange) >= 0 &&
-								Number(pillsData?.errorRateData?.percentChange) <= 5
+								pillsData.errorRateData.percentChange >= 0 &&
+								pillsData.errorRateData.percentChange <= 5
 									? { color: "#FFD23D" }
-									: Number(pillsData?.errorRateData?.percentChange) > 5
+									: pillsData.errorRateData.percentChange > 5
 									? { color: "#DF2D24" }
 									: {}
 							}
 						>
 							<>
-								{Number(pillsData?.errorRateData?.percentChange) === 0 ? (
+								{pillsData.errorRateData.percentChange === 0 ? (
 									<>(+{"<"}1%)</>
 								) : (
-									<>(+{pillsData?.errorRateData?.percentChange}%)</>
+									<>(+{pillsData.errorRateData.percentChange}%)</>
 								)}
 							</>
 						</span>
@@ -71,7 +71,7 @@ export const ObservabilityGoldenMetricDropdown = React.memo((props: Props) => {
 						<></>
 					)}
 				</span>
-				<span>{getGlobeIcon()}</span>
+				{pillsData?.errorRateData?.percentChange ? <>{getGlobeIcon()}</> : <></>}
 			</>
 		);
 	}
@@ -79,28 +79,29 @@ export const ObservabilityGoldenMetricDropdown = React.memo((props: Props) => {
 	function getResponseTimePillsJSX(displayValue, displayUnits) {
 		return (
 			<>
-				<span className={"status"} style={{ opacity: 1, color: "var(--text-color)" }}>
+				<span style={{ opacity: 1, color: "var(--text-color)" }}>
 					<>
 						{displayValue}
 						{displayUnits && <>{displayUnits} </>}
 					</>
 
-					{Number(pillsData?.responseTimeData?.percentChange) >= 0 ? (
+					{pillsData?.responseTimeData?.percentChange &&
+					pillsData.responseTimeData.percentChange >= 0 ? (
 						<span
 							style={
-								Number(pillsData?.responseTimeData?.percentChange) >= 0 &&
-								Number(pillsData?.responseTimeData?.percentChange) <= 5
+								pillsData.responseTimeData.percentChange >= 0 &&
+								pillsData.responseTimeData.percentChange <= 5
 									? { color: "#FFD23D" }
-									: Number(pillsData?.responseTimeData?.percentChange) > 5
+									: pillsData?.responseTimeData?.percentChange > 5
 									? { color: "#DF2D24" }
 									: {}
 							}
 						>
 							<>
-								{Number(pillsData?.responseTimeData?.percentChange) === 0 ? (
+								{pillsData.responseTimeData.percentChange === 0 ? (
 									<>(+{"<"}1%)</>
 								) : (
-									<>(+{pillsData?.responseTimeData?.percentChange}%)</>
+									<>(+{pillsData.responseTimeData.percentChange}%)</>
 								)}
 							</>
 						</span>
@@ -108,7 +109,7 @@ export const ObservabilityGoldenMetricDropdown = React.memo((props: Props) => {
 						<></>
 					)}
 				</span>
-				<span>{getGlobeIcon()}</span>
+				{pillsData?.responseTimeData?.percentChange ? <>{getGlobeIcon()}</> : <></>}
 			</>
 		);
 	}
@@ -121,6 +122,7 @@ export const ObservabilityGoldenMetricDropdown = React.memo((props: Props) => {
 				title="View on New Relic"
 				placement="bottomLeft"
 				delay={1}
+				style={{ padding: "5px 0 0 0" }}
 				onClick={e => {
 					e.preventDefault();
 					e.stopPropagation();
@@ -128,7 +130,7 @@ export const ObservabilityGoldenMetricDropdown = React.memo((props: Props) => {
 						entity_guid: entityGuid,
 						account_id: accountId,
 						meta_data: "destination: change_tracking",
-						meta_data_2: `codestream_section: code_level_metrics`,
+						meta_data_2: `codestream_section: golden_metrics`,
 						event_type: "click",
 					});
 					HostApi.instance.send(OpenUrlRequestType, {
@@ -170,9 +172,9 @@ export const ObservabilityGoldenMetricDropdown = React.memo((props: Props) => {
 										) : gm.name === "responseTimeMs" ? (
 											<> {getResponseTimePillsJSX(gm.displayValue, gm.displayUnit)}</>
 										) : (
-											<span>
+											<>
 												{gm.displayValue} {gm.displayUnit && <>{gm.displayUnit}</>}
-											</span>
+											</>
 										)}
 									</>
 								) : (

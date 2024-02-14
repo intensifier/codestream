@@ -79,6 +79,7 @@ import {
 	VersionCompatibility,
 	DidRefreshAccessTokenNotificationType,
 	ThirdPartyProviders,
+	WhatsNewNotificationType,
 } from "@codestream/protocols/agent";
 import {
 	CSAccessTokenType,
@@ -129,6 +130,7 @@ import {
 } from "./system";
 import { testGroups } from "./testGroups";
 import { ProxyAgent, setGlobalDispatcher } from "undici";
+import * as fs from "fs";
 
 // https://regex101.com/r/Yn5uqi/1
 const envRegex = /https?:\/\/(?:codestream)?-?([a-zA-Z]+)?(?:[0-9])?(?:\.)((\w+)-?(?:\w+)?)?/i;
@@ -703,6 +705,49 @@ export class CodeStreamSession {
 			data,
 		});
 		return data[0];
+	}
+
+	@log()
+	async whatsNewNotification() {
+		try {
+			const currentVersion = this.versionInfo.extension.version;
+			const me = await SessionContainer.instance().users.getMe();
+			const preferences = me.preferences;
+
+			const hasBeenNotified = preferences?.whatsNewNotificationsSent?.find(wnns => {
+				return currentVersion.startsWith(wnns);
+			});
+
+			// already tracked for this version; bail out
+			if (hasBeenNotified) {
+				return;
+			}
+
+			const whatsNewBuffer = fs.readFileSync(path.join(__dirname, "WhatsNew.json"), {
+				encoding: "utf-8",
+			});
+			const whatsNew: { version: string; title: string }[] = JSON.parse(whatsNewBuffer);
+
+			const isFlagged = whatsNew.find(wn => {
+				return currentVersion.startsWith(wn.version);
+			});
+
+			if (isFlagged) {
+				this.agent.sendNotification(WhatsNewNotificationType, {
+					title: isFlagged.title,
+				});
+				const newPreference = {
+					whatsNewNotificationsSent: [
+						...(preferences?.whatsNewNotificationsSent ?? []),
+						isFlagged.version,
+					],
+				};
+				this._api?.updatePreferences({ preferences: newPreference });
+			}
+		} catch (err) {
+			//log it, but bail silently. don't want this interrupting users
+			Logger.error(err, `whatsNewNotification`);
+		}
 	}
 
 	@log()
@@ -1301,6 +1346,7 @@ export class CodeStreamSession {
 
 		setImmediate(() => {
 			this.agent.sendNotification(DidLoginNotificationType, { data: loginResponse });
+			this.whatsNewNotification();
 		});
 
 		if (!response.user.timeZone) {

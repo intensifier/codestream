@@ -11,6 +11,8 @@ import com.codestream.gson
 import com.codestream.protocols.agent.CSUser
 import com.codestream.protocols.agent.ClmParams
 import com.codestream.protocols.agent.ClmResult
+import com.codestream.protocols.agent.ComputeCurrentLocationsRequest
+import com.codestream.protocols.agent.ComputeCurrentLocationsResult
 import com.codestream.protocols.agent.CreatePermalinkParams
 import com.codestream.protocols.agent.CreatePermalinkResult
 import com.codestream.protocols.agent.CreateShareableCodemarkParams
@@ -327,11 +329,14 @@ class AgentService(private val project: Project) : Disposable {
         val agentJsDestFile = File(agentDir, "agent-$agentVersion.js")
         val webJsMap = File(agentDir, "index.js.map")
         val agentJsMap = File(agentDir, "agent.js.map")
+        val whatsNewJson = File(agentDir, "WhatsNew.json")
+
         deleteAllExcept(agentDir, "agent", agentJsDestFile.name)
 
         FileUtils.copyToFile(AgentService::class.java.getResourceAsStream("/agent/agent.js"), agentJsDestFile)
         FileUtils.copyToFile(AgentService::class.java.getResourceAsStream("/agent/agent.js.map"), agentJsMap)
-        FileUtils.copyToFile(AgentService::class.java.getResourceAsStream("/webview/index.js.map"), webJsMap)
+        FileUtils.copyToFile(AgentService::class.java.getResourceAsStream("/agent/WhatsNew.json"), whatsNewJson)
+        FileUtils.copyToFile(AgentService::class.java.getResourceAsStream("/webviews/sidebar/index.js.map"), webJsMap)
 
         val targetDir = userHomeDir.resolve(".codestream").resolve("agent")
         extractExtraLibs(targetDir)
@@ -385,12 +390,15 @@ class AgentService(private val project: Project) : Disposable {
         val agentJs = File(agentDir, "agent.js")
         val agentJsMap = File(agentDir, "agent.js.map")
         val webJsMap = File(agentDir, "index.js.map")
+        val whatsNewJson = File(agentDir, "WhatsNew.json")
 
         if (AGENT_PATH == null) {
             FileUtils.copyToFile(AgentService::class.java.getResourceAsStream("/agent/agent.js"), agentJs)
+            FileUtils.copyToFile(AgentService::class.java.getResourceAsStream("/agent/WhatsNew.json"), whatsNewJson)
+
             try {
                 FileUtils.copyToFile(AgentService::class.java.getResourceAsStream("/agent/agent.js.map"), agentJsMap)
-                FileUtils.copyToFile(AgentService::class.java.getResourceAsStream("/webview/index.js.map"), webJsMap)
+                FileUtils.copyToFile(AgentService::class.java.getResourceAsStream("/webviews/sidebar/index.js.map"), webJsMap)
             } catch (ex: Exception) {
                 logger.warn("Could not extract agent.js.map", ex)
             }
@@ -546,6 +554,14 @@ class AgentService(private val project: Project) : Disposable {
             project.workspaceFolders,
             project.telemetryService?.telemetryOptions?.agentOptions() != null
         )
+    }
+
+    suspend fun computeCurrentLocations(request: ComputeCurrentLocationsRequest): ComputeCurrentLocationsResult {
+        val json = remoteEndpoint
+            .request("codestream/textDocument/currentLocation", request)
+            .await() as JsonObject
+        val result = gson.fromJson<ComputeCurrentLocationsResult>(json)
+        return result
     }
 
     suspend fun documentMarkers(params: DocumentMarkersParams): DocumentMarkersResult {

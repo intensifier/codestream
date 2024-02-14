@@ -9,19 +9,7 @@ import {
 	YAxis,
 	Legend,
 } from "recharts";
-
-const colorHash = {
-	0: "#e6b223",
-	1: "#9558af",
-	2: "#8884d8",
-	3: "#7aa7d2",
-	4: "#84d888",
-	5: "#d2d27a",
-	6: "#d88884",
-	7: "#7ad2a7",
-	8: "#d27aa7",
-	9: "#a77ad2",
-};
+import { ColorsHash, Colors } from "./utils";
 
 const formatXAxisTime = time => {
 	return new Date(time).toLocaleTimeString();
@@ -58,7 +46,7 @@ export const NRQLResultsLine = (props: { results: NRQLResult[] }) => {
 						<YAxis tick={{ fontSize: 11 }} />
 
 						{dataKeys.map((_, index) => {
-							const color = colorHash[index % 10];
+							const color = ColorsHash[index % Colors.length];
 							return <Line dataKey={_} stroke={color} fill={color} dot={false} />;
 						})}
 						<Legend align="center" fontSize={10} />

@@ -47,6 +47,21 @@ export interface HttpErrorResponse {
 	};
 }
 
+interface Timeseries {
+	contents?: { function: string; simple: boolean }[];
+	messages?: {}[];
+}
+
+export interface ResponseMetadata {
+	facet?: string;
+	eventType: string;
+	rawSince: string;
+	contents: {
+		timeSeries: Timeseries;
+	};
+	timeSeries?: Timeseries;
+}
+
 function isHttpErrorResponse(ex: unknown): ex is HttpErrorResponse {
 	const httpErrorResponse = ex as HttpErrorResponse;
 	return (
@@ -574,10 +589,7 @@ export class NewRelicGraphqlClient implements Disposable {
 	): Promise<{
 		results: T[];
 		rawResponse: {
-			metadata: {
-				eventType: string;
-				rawSince: string;
-			};
+			metadata: ResponseMetadata;
 		};
 	}> {
 		const query = `query Nrql($accountId:Int!) {
@@ -596,10 +608,7 @@ export class NewRelicGraphqlClient implements Disposable {
 					nrql: {
 						results: T[];
 						rawResponse: {
-							metadata: {
-								eventType: string;
-								rawSince: string;
-							};
+							metadata: ResponseMetadata;
 						};
 					};
 				};

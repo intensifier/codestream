@@ -66,6 +66,7 @@ export enum ContextActionsType {
 	SetEntityAccounts = "@context/SetEntityAccounts",
 	SetCurrentTransactionSpan = "@context/SetCurrentTransactionSpan",
 	SetCurrentAPMLoggingSearchContext = "@context/SetCurrentObservabilityLogSearchContext",
+	SetCurrentEntityGuid = "@context/SetCurrentEntityGuid",
 }
 
 /**
@@ -147,6 +148,8 @@ export interface ContextState extends WebviewContext {
 	entityAccounts?: EntityAccount[];
 
 	selectedRegion?: string;
+
+	currentEntityGuid?: string;
 }
 
 export type ChatProviderAccess = "strict" | "permissive";
@@ -197,9 +200,11 @@ export interface CurrentTransactionSpan {
 	newRelicEntityGuid?: string;
 	newRelicAccountId?: number;
 	spanId?: string;
+	traceId?: string;
 	spanName?: string;
 	spanHost?: string;
 	url?: string;
+	language?: string;
 	codeNamespace?: string;
 	functionName?: string;
 	filePath?: string;

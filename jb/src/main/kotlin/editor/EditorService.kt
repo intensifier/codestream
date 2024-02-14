@@ -69,17 +69,22 @@ import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.ui.JBColor
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.future.await
 import kotlinx.coroutines.launch
 import org.eclipse.lsp4j.DidChangeTextDocumentParams
 import org.eclipse.lsp4j.DidCloseTextDocumentParams
 import org.eclipse.lsp4j.DidOpenTextDocumentParams
 import org.eclipse.lsp4j.DidSaveTextDocumentParams
+import org.eclipse.lsp4j.DocumentSymbol
+import org.eclipse.lsp4j.DocumentSymbolParams
 import org.eclipse.lsp4j.Position
 import org.eclipse.lsp4j.Range
+import org.eclipse.lsp4j.SymbolInformation
 import org.eclipse.lsp4j.TextDocumentContentChangeEvent
 import org.eclipse.lsp4j.TextDocumentItem
 import org.eclipse.lsp4j.TextDocumentSyncKind
 import org.eclipse.lsp4j.VersionedTextDocumentIdentifier
+import org.eclipse.lsp4j.jsonrpc.messages.Either
 import java.awt.Font
 import java.io.File
 import java.net.URI
@@ -104,6 +109,7 @@ class EditorService(val project: Project) {
     private val managedEditors = mutableSetOf<Editor>()
     private val rangeHighlighters = mutableMapOf<Editor, MutableSet<RangeHighlighter>>()
     private val markerHighlighters = mutableMapOf<Editor, List<RangeHighlighter>>()
+    private val nrqlHighlighters = mutableMapOf<Editor, List<RangeHighlighter>>()
     private val documentMarkers = mutableMapOf<Document, List<DocumentMarker>>()
     private var spatialViewActive = project.settingsService?.webViewContext?.spatialViewVisible ?: false
     private var codeStreamVisible = project.codeStream?.isVisible ?: false
@@ -289,6 +295,8 @@ class EditorService(val project: Project) {
         appDispatcher.launch {
             val markers = getDocumentMarkers(document)
             visibleEditors.forEach { it.renderMarkers(markers) }
+            val documentSymbols = getDocumentSymbols(document)
+            visibleEditors.forEach { it.renderDocumentSymbols(documentSymbols) }
         }
     }
 
@@ -306,6 +314,16 @@ class EditorService(val project: Project) {
 
         documentMarkers[document] = markers
         return markers
+    }
+
+    private suspend fun getDocumentSymbols(document: Document): List<Either<SymbolInformation, DocumentSymbol>>? {
+        try {
+            val agent = project.agentService ?: return emptyList()
+            val identifier = document.textDocumentIdentifier ?: return emptyList()
+            return agent.agent.textDocumentService.documentSymbol(DocumentSymbolParams(identifier)).await()
+        } catch (ex: Exception) {
+            return emptyList()
+        }
     }
 
     private val showGutterIcons: Boolean
@@ -355,7 +373,14 @@ class EditorService(val project: Project) {
         }
 
     private val Document.textDocumentItem: TextDocumentItem?
-        get() = TextDocumentItem(uri, "", nextVersion, text)
+        get() {
+            val extension = this.file?.extension?.lowercase() ?: ""
+            val languageId = when(extension) {
+                "nrql" -> "nrql"
+                else -> ""
+            }
+            return TextDocumentItem(uri, languageId, nextVersion, text)
+        }
 
     private val Document.versionedTextDocumentIdentifier: VersionedTextDocumentIdentifier
         get() {
@@ -410,6 +435,41 @@ class EditorService(val project: Project) {
                 it.isThinErrorStripeMark = true
                 it.errorStripeMarkColor = if (marker.type == "prcomment") gray else (marker.codemark?.color() ?: green)
                 it.errorStripeTooltip = marker.summary
+                it.putUserData(CODESTREAM_HIGHLIGHTER, true)
+            }
+        }
+    }
+
+    private fun Editor.renderDocumentSymbols(documentSymbols: List<Either<SymbolInformation, DocumentSymbol>>?) = ApplicationManager.getApplication().invokeLater {
+        if (isDisposed) return@invokeLater
+        if (documentSymbols == null) return@invokeLater
+        if (document.file?.extension?.lowercase() != "nrql") return@invokeLater
+
+        nrqlHighlighters[this]?.let { highlighters ->
+            highlighters.forEach { highlighter ->
+                markupModel.removeHighlighter(highlighter)
+            }
+        }
+
+        nrqlHighlighters[this] = documentSymbols.filter { either ->
+            either.isRight && either.right.range.start.line >= 0
+        }.map { either ->
+            val documentSymbol = either.right
+            val start = getOffset(documentSymbol.range.start)
+            val end = getOffset(documentSymbol.range.end)
+
+            markupModel.addRangeHighlighter(
+                Math.min(start, end),
+                Math.max(start, end),
+                HighlighterLayer.LAST,
+                null,
+                HighlighterTargetArea.EXACT_RANGE
+            ).also {
+                if (showGutterIcons) {
+                    it.gutterIconRenderer = NrqlGutterIconRendererImpl(this, documentSymbol.range.start.line, documentSymbol.name)
+                }
+                it.isThinErrorStripeMark = true
+                it.errorStripeMarkColor = green
                 it.putUserData(CODESTREAM_HIGHLIGHTER, true)
             }
         }

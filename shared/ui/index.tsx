@@ -25,16 +25,11 @@ import {
 	GetObservabilityErrorGroupMetadataRequestType,
 	GetObservabilityErrorGroupMetadataResponse,
 	CSAsyncGrokError,
-	RelatedRepository,
-	MatchReposResponse,
-	MatchReposRequestType,
-	GetRepoFileFromAbsolutePathRequestType,
 } from "@codestream/protocols/agent";
 import {
 	CodemarkType,
 	CSCodeError,
 	CSMe,
-	CSRepository,
 	WebviewPanels,
 } from "@codestream/protocols/api";
 import React from "react";
@@ -134,14 +129,20 @@ import { setMaintenanceMode } from "./store/session/actions";
 import { updateUnreads } from "./store/unreads/actions";
 import { upgradeRecommended, upgradeRequired } from "./store/versioning/actions";
 import { fetchCodemarks, openPanel } from "./Stream/actions";
-import { highlightRange, moveCursorToLine } from "./Stream/api-functions";
+import { moveCursorToLine } from "./Stream/api-functions";
 import { confirmPopup } from "./Stream/Confirm";
 import translations from "./translations/en";
 import { parseProtocol } from "./utilities/urls";
 import { HostApi } from "./webview-api";
 import { parseId } from "./utilities/newRelic";
+import { SessionState } from "./store/session/types";
+import { UsersState } from "./store/users/types";
 
 // import translationsEs from "./translations/es";
+
+export interface SourceOptions {
+	source: "source_file" | "activity_feed" | "search" | "related_list";
+}
 
 export function setupCommunication(host: { postMessage: (message: any) => void }) {
 	Object.defineProperty(window, "acquireCodestreamHost", {
@@ -417,10 +418,15 @@ function listenForEvents(store) {
 			codemarks,
 			context,
 			editorContext,
+			session,
+			users,
 		}: {
 			codemarks: CodemarksState;
 			context: ContextState;
 			editorContext: EditorContextState;
+			session: SessionState;
+			users: UsersState;
+			source: SourceOptions;
 		} = store.getState();
 
 		if (Object.keys(codemarks).length === 0) {
@@ -428,7 +434,18 @@ function listenForEvents(store) {
 			codemarks = store.getState().codemarks;
 		}
 
+		const currentUser = session.userId || users[session.userId!].id;
+		const sourceLocation = e.source;
+
 		const codemark = getCodemark(codemarks, e.codemarkId);
+		HostApi.instance.track("codestream/codemarks/codemark displayed", {
+			meta_data: `codemark_location: ${sourceLocation}`,
+			meta_data_2: `codemark_type: ${
+				codemark?.type === "issue" ? "issue" : codemark?.type === "comment" ? "comment" : ""
+			}`,
+			meta_data_3: `following: ${(codemark?.followerIds || []).includes(currentUser.toString())}`,
+			event_type: "modal_display",
+		});
 		if (codemark == null) return;
 
 		store.dispatch(setCurrentCodemark(codemark.id));
@@ -678,21 +695,23 @@ function listenForEvents(store) {
 
 						const definedQuery = route as RouteWithQuery<{
 							accountId?: string;
+							spanId?: string;
 							spanName?: string;
 							spanHost?: string;
 							entityId?: string;
 							src?: string;
 							env?: string;
+							language?: string;
 							filepath?: string;
 							function?: string;
 							namespace?: string;
 							lineno?: string;
 							commitSha?: string;
 							releaseTag?: string;
+							traceId?: string;
 						}>;
 
-						const spanId = route.id;
-						if (!spanId || !definedQuery.query.accountId) break;
+						if (!definedQuery.query.spanId || !definedQuery.query.accountId) break;
 
 						// if the user isn't logged in we'll queue this url
 						// up for post-login processing
@@ -712,88 +731,24 @@ function listenForEvents(store) {
 							break;
 						}
 
-						if (!definedQuery.query.entityId) break;
-						const metadataResponse = await HostApi.instance.send(
-							GetObservabilityErrorGroupMetadataRequestType,
-							{
-								entityGuid: definedQuery.query.entityId,
-							}
-						);
-						const relatedRepos = metadataResponse?.relatedRepos as RelatedRepository[];
-
-						const repoUrls = (
-							await Promise.all(
-								relatedRepos.map(_ =>
-									_.url ? HostApi.instance.send(NormalizeUrlRequestType, { url: _.url }) : undefined
-								)
-							)
-						)
-							.filter(Boolean)
-							.map(_ => _!.normalizedUrl);
-
-						const repoResponse = (await HostApi.instance.send(MatchReposRequestType, {
-							repos: [
-								{
-									remotes: repoUrls,
-									knownCommitHashes: definedQuery.query.commitSha
-										? [definedQuery.query.commitSha]
-										: [],
-								},
-							],
-						})) as MatchReposResponse;
-
-						let repo: CSRepository;
-						if (repoResponse.repos.length === 1 && definedQuery.query.filepath) {
-							repo = repoResponse.repos[0];
-							const { uri, error } = await HostApi.instance.send(
-								GetRepoFileFromAbsolutePathRequestType,
-								{
-									repo,
-									absoluteFilePath: definedQuery.query.filepath,
-								}
-							);
-							if (uri) {
-								highlightRange({
-									uri,
-									//ref: definedQuery.query.commitSha || definedQuery.query.releaseTag,
-									range: Range.create(
-										parseInt(definedQuery.query.lineno || "0"),
-										0,
-										parseInt(definedQuery.query.lineno || "0"),
-										9999
-									),
-									highlight: true,
-								});
-								/*HostApi.instance.send(EditorRevealRangeRequestType, {
-									uri,
-									range: Range.create(
-										parseInt(definedQuery.query.lineno || "0"),
-										0,
-										parseInt(definedQuery.query.lineno || "0"),
-										9999
-									),
-									atTop: true,
-								});*/
-							}
-						}
-
 						store.dispatch(
 							setCurrentTransactionSpan({
-								spanId,
+								spanId: definedQuery.query.spanId,
 								newRelicAccountId: parseInt(definedQuery.query.accountId),
 								newRelicEntityGuid: definedQuery.query.entityId,
 								spanName: definedQuery.query.spanName,
 								spanHost: definedQuery.query.spanHost,
+								language: definedQuery.query.language,
 								codeNamespace: definedQuery.query.namespace,
 								functionName: definedQuery.query.function,
 								filePath: definedQuery.query.filepath,
 								lineNumber: definedQuery.query.lineno,
 								commitSha: definedQuery.query.commitSha,
 								releaseTag: definedQuery.query.releaseTag,
+								traceId: definedQuery.query.traceId,
 							})
 						);
 
-						store.dispatch();
 						break;
 					}
 
@@ -993,8 +948,12 @@ function listenForEvents(store) {
 		);
 	});
 
+	api.on(OpenEditorViewNotificationType, params => {
+		HostApi.instance.notify(OpenEditorViewNotificationType, params);
+	});
+
 	api.on(InitiateLogSearchNotificationType, params => {
-		const { session, users, context, ide } = store.getState() as CodeStreamState;
+		const { session, users, ide } = store.getState() as CodeStreamState;
 		const currentUser = session.userId ? (users[session.userId] as CSMe) : null;
 		const currentRepoId = currentUser?.preferences?.currentO11yRepoId;
 
@@ -1005,7 +964,6 @@ function listenForEvents(store) {
 		const props: OpenEditorViewNotification = {
 			panelLocation: ViewColumn.Active,
 			entityGuid: currentEntityGuid!,
-			entityAccounts: context.entityAccounts || [],
 			panel: "logs",
 			title: "Logs",
 			query: params.query,
@@ -1019,7 +977,7 @@ function listenForEvents(store) {
 	});
 
 	api.on(InitiateNrqlExecutionNotificationType, params => {
-		const { session, users, context, ide } = store.getState() as CodeStreamState;
+		const { session, users, ide } = store.getState() as CodeStreamState;
 		const currentUser = session.userId ? (users[session.userId] as CSMe) : null;
 		const currentRepoId = currentUser?.preferences?.currentO11yRepoId;
 
@@ -1031,7 +989,6 @@ function listenForEvents(store) {
 			panelLocation: ViewColumn.Beside,
 			accountId: parseId(currentEntityGuid || "")?.accountId,
 			entityGuid: currentEntityGuid!,
-			entityAccounts: context.entityAccounts || [],
 			panel: "nrql",
 			title: "NRQL",
 			query: params.query,

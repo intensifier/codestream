@@ -98,15 +98,12 @@ import {
 	FetchTeamsRequestType,
 	FetchUnreadStreamsRequestType,
 	FetchUsersRequestType,
-	FileLevelTelemetryRequestOptions,
-	FunctionLocator,
 	GetDocumentFromKeyBindingRequestType,
 	GetDocumentFromKeyBindingResponse,
 	GetDocumentFromMarkerRequestType,
 	GetDocumentFromMarkerResponse,
 	GetFileContentsAtRevisionRequestType,
 	GetFileContentsAtRevisionResponse,
-	GetFileLevelTelemetryRequestType,
 	GetFileScmInfoRequestType,
 	GetFileStreamRequestType,
 	GetFileStreamResponse,
@@ -153,7 +150,9 @@ import {
 	UserDidCommitNotificationType,
 	DidEncounterInvalidRefreshTokenNotificationType,
 	TelemetryEventName,
-	TelemetryData
+	TelemetryData,
+	WhatsNewNotificationType,
+	WhatsNewNotification
 } from "@codestream/protocols/agent";
 import {
 	ChannelServiceType,
@@ -173,6 +172,7 @@ import { Functions, log } from "../system";
 import { getInitializationOptions } from "../extension";
 import { Editor } from "../extensions";
 import { resolveStackTracePaths } from "./resolveStackTracePathsHandler";
+import { ViewColumn } from "@codestream/protocols/webview";
 
 export { BaseAgentOptions };
 
@@ -316,6 +316,7 @@ export class CodeStreamAgentConnection implements Disposable {
 	private _restartCount = 0;
 	private _outputChannel: OutputChannel | undefined;
 	private _logsOutputChannel: OutputChannel | undefined;
+	private _context: ExtensionContext;
 
 	constructor(context: ExtensionContext, options: BaseAgentOptions) {
 		const env = process.env;
@@ -326,6 +327,8 @@ export class CodeStreamAgentConnection implements Disposable {
 			NODE_TLS_REJECT_UNAUTHORIZED: options.disableStrictSSL ? 0 : 1,
 			NODE_EXTRA_CA_CERTS: options.extraCerts
 		};
+
+		this._context = context;
 
 		this._serverOptions = {
 			run: {
@@ -419,10 +422,9 @@ export class CodeStreamAgentConnection implements Disposable {
 		if (this._outputChannel) {
 			this._outputChannel.dispose();
 		}
-		if (this._logsOutputChannel) {
-			this._logsOutputChannel.dispose();
-		}
+
 		this._disposable && this._disposable.dispose();
+
 		if (this._clientReadyCancellation !== undefined) {
 			this._clientReadyCancellation.dispose();
 			this._clientReadyCancellation = undefined;
@@ -1012,29 +1014,6 @@ export class CodeStreamAgentConnection implements Disposable {
 		}
 	})(this);
 
-	get observability() {
-		return this._observability;
-	}
-	private readonly _observability = new (class {
-		constructor(private readonly _connection: CodeStreamAgentConnection) {}
-
-		getFileLevelTelemetry(
-			fileUri: string,
-			languageId: string,
-			resetCache: boolean,
-			locator?: FunctionLocator,
-			options?: FileLevelTelemetryRequestOptions
-		) {
-			return this._connection.sendRequest(GetFileLevelTelemetryRequestType, {
-				fileUri,
-				languageId,
-				resetCache,
-				locator,
-				options
-			});
-		}
-	})(this);
-
 	@log({
 		prefix: (context, e: DidChangeConnectionStatusNotification) => `${context.prefix}(${e.status})`
 	})
@@ -1120,6 +1099,29 @@ export class CodeStreamAgentConnection implements Disposable {
 	@log()
 	private async onProcessBufferNotificationChanged(e: DidChangeProcessBufferNotification) {
 		await Container.sidebar.onProcessBufferChanged(e);
+	}
+
+	@log()
+	private async onWhatsNew(e: WhatsNewNotification) {
+		window
+			.showInformationMessage(
+				e.title,
+				{ title: "See What's New", isCloseAffordance: false },
+				{ title: "Dismiss", isCloseAffordance: true }
+			)
+			.then(selection => {
+				if (selection?.title === "See What's New") {
+					Container.panel.initializeOrShowEditor({
+						panelLocation: ViewColumn.Active,
+						panel: "whatsnew",
+						title: "What's New",
+						entryPoint: "notification",
+						ide: {
+							name: "VSC"
+						}
+					});
+				}
+			});
 	}
 
 	@started
@@ -1235,8 +1237,6 @@ export class CodeStreamAgentConnection implements Disposable {
 		this._clientOptions.outputChannel = this._outputChannel =
 			window.createOutputChannel("CodeStream (Agent)");
 		this._clientOptions.revealOutputChannelOn = RevealOutputChannelOn.Never;
-
-		this._logsOutputChannel = window.createOutputChannel("New Relic Logs");
 
 		const initializationOptions = getInitializationOptions({
 			...this._clientOptions.initializationOptions
@@ -1392,6 +1392,9 @@ export class CodeStreamAgentConnection implements Disposable {
 		this._client.onNotification(DidChangeCodelensesNotificationType, e =>
 			this._onDidChangeCodelenses.fire(e)
 		);
+		this._client.onNotification(WhatsNewNotificationType, e => {
+			this.onWhatsNew(e);
+		});
 		this._client.onRequest(AgentOpenUrlRequestType, e => this._onOpenUrl.fire(e));
 
 		this._client.onRequest(AgentValidateLanguageExtensionRequestType, async request => {
@@ -1455,10 +1458,6 @@ export class CodeStreamAgentConnection implements Disposable {
 
 		if (this._outputChannel) {
 			this._outputChannel.dispose();
-		}
-
-		if (this._logsOutputChannel) {
-			this._logsOutputChannel.dispose();
 		}
 
 		if (this._client === undefined) return;

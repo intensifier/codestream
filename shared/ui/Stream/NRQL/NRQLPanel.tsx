@@ -6,16 +6,10 @@ import {
 	ResultsTypeGuess,
 	isNRErrorResponse,
 } from "@codestream/protocols/agent";
-import {
-	IdeNames,
-	OpenEditorViewNotificationType,
-	OpenInBufferRequestType,
-} from "@codestream/protocols/webview";
-import { InlineMenu } from "@codestream/webview/src/components/controls/InlineMenu";
+import { IdeNames, OpenEditorViewNotificationType } from "@codestream/protocols/webview";
 import { parseId } from "@codestream/webview/utilities/newRelic";
 import { Disposable } from "@codestream/webview/utils";
-import { stringify } from "csv-stringify/browser/esm/sync";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useResizeDetector } from "react-resize-detector";
 import { OptionProps, components } from "react-select";
 import { AsyncPaginate } from "react-select-async-paginate";
@@ -23,20 +17,22 @@ import styled from "styled-components";
 import { PanelHeader } from "../../src/components/PanelHeader";
 import { HostApi } from "../../webview-api";
 import Button from "../Button";
-import { default as Icon } from "../Icon";
 import { fuzzyTimeAgoinWords } from "../Timestamp";
+import ExportResults from "./ExportResults";
 import { NRQLEditor } from "./NRQLEditor";
+import { NRQLResultsArea } from "./NRQLResultsArea";
 import { NRQLResultsBar } from "./NRQLResultsBar";
 import { NRQLResultsBillboard } from "./NRQLResultsBillboard";
 import { NRQLResultsJSON } from "./NRQLResultsJSON";
 import { NRQLResultsLine } from "./NRQLResultsLine";
+import { NRQLResultsPie } from "./NRQLResultsPie";
 import { NRQLResultsTable } from "./NRQLResultsTable";
 import { NRQLVisualizationDropdown } from "./NRQLVisualizationDropdown";
 import { RecentQueries } from "./RecentQueries";
+import { PanelHeaderTitleWithLink } from "../PanelHeaderTitleWithLink";
 
 const QueryWrapper = styled.div`
 	width: 100%;
-	max-height: 200px;
 	padding: 0px;
 `;
 
@@ -90,6 +86,26 @@ const OptionName = styled.div`
 	overflow: hidden;
 `;
 
+const ResultsContainer = styled.div`
+	padding: 0px 20px 13px 20px;
+	width: 100%;
+	overflow: hidden;
+`;
+
+const ResizeEditorContainer = styled.div`
+	resize: vertical;
+	overflow: auto;
+	min-height: 120px;
+	max-height: 40vh;
+	border: var(--base-border-color) solid 1px;
+	padding: 8px;
+`;
+
+const CodeText = styled.span`
+	font-family: Menlo, Consolas, "DejaVu Sans Mono", monospace;
+	color: var(--text-color);
+`;
+
 const Option = (props: OptionProps) => {
 	const children = (
 		<>
@@ -115,7 +131,7 @@ export const NRQLPanel = (props: {
 }) => {
 	const supports = { export: props.ide?.name === "VSC" };
 
-	const accountId = props.accountId
+	const initialAccountId = props.accountId
 		? props.accountId
 		: props.entityGuid
 		? parseId(props.entityGuid)?.accountId
@@ -139,45 +155,62 @@ export const NRQLPanel = (props: {
 		number | undefined
 	>(undefined);
 	const nrqlEditorRef = useRef<any>(null);
+	const { height: editorHeight, ref: editorRef } = useResizeDetector();
 	const { width, height, ref } = useResizeDetector();
 	const trimmedHeight: number = (height ?? 0) - (height ?? 0) * 0.05;
 
 	const disposables: Disposable[] = [];
+
 	let accountsPromise;
+
+	const accountId = useMemo(() => {
+		return (selectedAccount?.value || initialAccountId)!;
+	}, [selectedAccount]);
 
 	useEffect(() => {
 		HostApi.instance.track("codestream/nrql/webview opened", {
 			event_type: "click",
 			meta_data: `entry_point: ${props.entryPoint}`,
 		});
+
 		disposables.push(
 			HostApi.instance.on(OpenEditorViewNotificationType, e => {
 				if (nrqlEditorRef?.current) {
 					nrqlEditorRef.current!.setValue(e.query);
 					setUserQuery(e.query!);
-					executeNRQL(selectedAccount?.value || accountId, props.entityGuid!, e.query);
+					executeNRQL(accountId, e.query!);
 				}
 			})
 		);
 
-		accountsPromise = HostApi.instance.send(GetAllAccountsRequestType, {}).then(result => {
-			setAccounts(result.accounts);
-			if (result?.accounts?.length) {
-				if (accountId) {
-					const foundAccount = result.accounts.find(_ => _.id === accountId);
+		accountsPromise = HostApi.instance
+			.send(GetAllAccountsRequestType, {})
+			.then(result => {
+				setAccounts(result.accounts);
+				let foundAccount: Account | undefined = undefined;
+				if (result?.accounts?.length) {
+					if (initialAccountId) {
+						foundAccount = result.accounts.find(_ => _.id === initialAccountId);
+					}
+					if (!foundAccount) {
+						foundAccount = result.accounts[0];
+					}
 					if (foundAccount) {
 						setSelectedAccount(formatSelectedAccount(foundAccount));
 					}
-				} else if (result.accounts.length === 1) {
-					setSelectedAccount(formatSelectedAccount(result.accounts[0]));
 				}
-			}
-
-			if (props.query) {
-				setUserQuery(props.query);
-				executeNRQL(selectedAccount?.value || accountId, props.entityGuid!, props.query);
-			}
-		});
+				if (!foundAccount) {
+					handleError("Missing account");
+				} else {
+					if (props.query) {
+						setUserQuery(props.query);
+						executeNRQL(foundAccount.id, props.query);
+					}
+				}
+			})
+			.catch(ex => {
+				handleError(ex?.message || "Error fetching accounts");
+			});
 		return () => {
 			disposables && disposables.forEach(_ => _.dispose());
 		};
@@ -189,15 +222,21 @@ export const NRQLPanel = (props: {
 	};
 
 	const executeNRQL = async (
-		accountId: number | undefined,
-		entityGuid: string,
-		suppliedQuery?: string
+		accountId: number,
+		nrqlQuery: string,
+		options: { isRecent: boolean } = { isRecent: false }
 	) => {
 		try {
-			const nrqlQuery = suppliedQuery || userQuery;
-
+			if (!accountId) {
+				handleError("Please provide an account");
+				return;
+			}
 			if (!nrqlQuery) {
-				handleError("Please provide a query to execute");
+				handleError("Please provide a query to run");
+				return;
+			}
+			if (nrqlQuery === DEFAULT_QUERY) {
+				handleError("Please provide a query to run");
 				return;
 			}
 
@@ -211,13 +250,10 @@ export const NRQLPanel = (props: {
 			const response = await HostApi.instance.send(GetNRQLRequestType, {
 				accountId,
 				query: nrqlQuery.replace(/[\n\r]/g, " "),
-				entityGuid,
 			});
 
 			if (!response) {
-				handleError(
-					"An unexpected error occurred while fetching log information; please contact support."
-				);
+				handleError("An unexpected error occurred while running query; please contact support.");
 				return;
 			}
 
@@ -231,9 +267,8 @@ export const NRQLPanel = (props: {
 				HostApi.instance.track("codestream/nrql/query submitted", {
 					account_id: response.accountId,
 					event_type: "response",
-					meta_data: `default_visualization: ${response.resultsTypeGuess}`,
-					// TODO add recent queries
-					meta_data_2: `recent_query: false`,
+					meta_data: `default_visualization: ${response.resultsTypeGuess?.selected}`,
+					meta_data_2: `recent_query: ${options.isRecent}`,
 				});
 
 				setResults(response.results);
@@ -246,12 +281,7 @@ export const NRQLPanel = (props: {
 						setSince(response.since.toLowerCase());
 					}
 				}
-				if (shouldRefetchRecentQueriesTimestamp == null) {
-					// first time, set to 0 (don't trigger an update)
-					setShouldRefetchRecentQueriesTimestamp(0);
-				} else if (!isNaN(shouldRefetchRecentQueriesTimestamp)) {
-					setShouldRefetchRecentQueriesTimestamp(new Date().getTime());
-				}
+				setShouldRefetchRecentQueriesTimestamp(new Date().getTime());
 			}
 		} catch (ex) {
 			handleError(ex);
@@ -289,7 +319,19 @@ export const NRQLPanel = (props: {
 	return (
 		<>
 			<div id="modal-root"></div>
-			<PanelHeader title="Query Your Data">
+			<PanelHeader
+				title={
+					<PanelHeaderTitleWithLink
+						text={
+							<span>
+								Save and share queries with <CodeText>.nrql</CodeText> files
+							</span>
+						}
+						href={`https://docs.newrelic.com/docs/codestream/observability/query-builder/#nrql-files`}
+						title="Query Your Data"
+					/>
+				}
+			>
 				<QueryWrapper>
 					<div className="search-input">
 						<div style={{ marginBottom: "10px" }}>
@@ -344,65 +386,55 @@ export const NRQLPanel = (props: {
 												nrqlEditorRef.current!.setValue(value);
 											}
 											setUserQuery(value!);
-											executeNRQL(
-												newAccount?.value || selectedAccount?.value,
-												props.entityGuid!,
-												value!
-											);
+											executeNRQL((newAccount?.value || accountId)!, value!, {
+												isRecent: true,
+											});
 										}}
 									/>
 								</RecentContainer>
 							</AccountRecentContainer>
 						</div>
-
-						<div style={{ border: "var(--base-border-color) solid 1px", padding: "8px" }}>
+						<ResizeEditorContainer ref={editorRef}>
 							<NRQLEditor
 								className="input-text control"
 								defaultValue={props.query || DEFAULT_QUERY}
-								height="10vh"
+								height={`${editorHeight}px`}
 								onChange={e => {
 									setUserQuery(e.value || "");
 								}}
 								onSubmit={e => {
 									setUserQuery(e.value!);
-									executeNRQL(selectedAccount?.value, props.entityGuid!, e.value!);
+									executeNRQL(accountId, e.value!);
 								}}
 								ref={nrqlEditorRef}
 							/>
-						</div>
+						</ResizeEditorContainer>
+						<ActionRow>
+							<DropdownContainer></DropdownContainer>
+							<ButtonContainer>
+								<Button
+									style={{ padding: "0 10px", marginRight: "5px" }}
+									isSecondary={true}
+									onClick={() => {
+										resetQuery();
+									}}
+								>
+									Clear
+								</Button>
+								<Button
+									data-testid="run"
+									style={{ padding: "0 10px" }}
+									onClick={() => executeNRQL(accountId, userQuery)}
+									loading={isLoading}
+								>
+									Run
+								</Button>
+							</ButtonContainer>
+						</ActionRow>
 					</div>
 				</QueryWrapper>
-				<ActionRow>
-					<DropdownContainer></DropdownContainer>
-					<ButtonContainer>
-						<Button
-							style={{ padding: "0 10px", marginRight: "5px" }}
-							isSecondary={true}
-							onClick={() => {
-								resetQuery();
-							}}
-						>
-							Clear
-						</Button>
-						<Button
-							style={{ padding: "0 10px" }}
-							onClick={() => executeNRQL(selectedAccount?.value, props.entityGuid!)}
-							loading={isLoading}
-						>
-							Run
-						</Button>
-					</ButtonContainer>
-				</ActionRow>
 			</PanelHeader>
-			<div
-				ref={ref}
-				style={{
-					padding: "0px 20px 0px 20px",
-					marginBottom: "20px",
-					width: "100%",
-					height: "100%",
-				}}
-			>
+			<ResultsContainer ref={ref}>
 				<ResultsRow>
 					{since && (
 						<SinceContainer>
@@ -412,6 +444,7 @@ export const NRQLPanel = (props: {
 
 							<div style={{ marginLeft: "auto", marginRight: "8px", fontSize: "11px" }}>
 								<NRQLVisualizationDropdown
+									accountId={accountId}
 									onSelectCallback={handleVisualizationDropdownCallback}
 									resultsTypeGuess={resultsTypeGuess}
 								/>
@@ -419,82 +452,31 @@ export const NRQLPanel = (props: {
 
 							{supports.export && (
 								<div style={{ paddingTop: "2px" }}>
-									<InlineMenu
-										title="Export"
-										noFocusOnSelect
-										noChevronDown={true}
-										items={Object.values(["JSON", "CSV"]).map((_: any) => ({
-											label: `Export ${_}`,
-											key: _,
-											checked: false,
-											action: () => {
-												let handled;
-												if (_ === "JSON") {
-													handled = JSON.stringify(results, null, 4);
-												} else if (_ === "CSV") {
-													handled = stringify(results, {
-														header: true,
-													});
-												}
-												if (handled) {
-													HostApi.instance.track("codestream/nrql/export downloaded", {
-														account_id: selectedAccount?.value || accountId,
-														event_type: "submit",
-														meta_data: `format: ${_.toLowerCase()}`,
-													});
-
-													HostApi.instance.send(OpenInBufferRequestType, {
-														contentType: _.toLowerCase(),
-														data: handled,
-													});
-												}
-											},
-										}))}
-										align="bottomRight"
-										className="dropdown"
-									>
-										<span>
-											<Icon name="download" title="Export Results" />
-										</span>
-									</InlineMenu>
+									<ExportResults results={results} accountId={accountId} />
 								</div>
 							)}
 						</SinceContainer>
 					)}
 					<div>
-						{!nrqlError &&
-							!isLoading &&
-							results &&
-							results.length > 0 &&
-							resultsTypeGuess.selected === "table" && (
-								<NRQLResultsTable
-									width={width || "100%"}
-									height={trimmedHeight}
-									results={results}
-								/>
-							)}
-						{!nrqlError &&
-							!isLoading &&
-							results &&
-							results.length > 0 &&
-							resultsTypeGuess.selected === "billboard" && (
-								<NRQLResultsBillboard results={results} eventType={eventType} />
-							)}
-						{!nrqlError &&
-							!isLoading &&
-							results &&
-							results.length > 0 &&
-							resultsTypeGuess.selected === "line" && <NRQLResultsLine results={results} />}
-						{!nrqlError &&
-							!isLoading &&
-							results &&
-							results.length > 0 &&
-							resultsTypeGuess.selected === "json" && <NRQLResultsJSON results={results} />}
-						{!nrqlError &&
-							!isLoading &&
-							results &&
-							results.length > 0 &&
-							resultsTypeGuess.selected === "bar" && <NRQLResultsBar results={results} />}
+						{!nrqlError && !isLoading && results && results.length > 0 && (
+							<>
+								{resultsTypeGuess.selected === "table" && (
+									<NRQLResultsTable
+										width={width || "100%"}
+										height={trimmedHeight}
+										results={results}
+									/>
+								)}
+								{resultsTypeGuess.selected === "billboard" && (
+									<NRQLResultsBillboard results={results} eventType={eventType} />
+								)}
+								{resultsTypeGuess.selected === "area" && <NRQLResultsArea results={results} />}
+								{resultsTypeGuess.selected === "line" && <NRQLResultsLine results={results} />}
+								{resultsTypeGuess.selected === "json" && <NRQLResultsJSON results={results} />}
+								{resultsTypeGuess.selected === "bar" && <NRQLResultsBar results={results} />}
+								{resultsTypeGuess.selected === "pie" && <NRQLResultsPie results={results} />}
+							</>
+						)}
 						{noResults && <div style={{ textAlign: "center" }}>No results found</div>}
 						{nrqlError && (
 							<div className="no-matches" style={{ margin: "0", fontStyle: "unset" }}>
@@ -503,7 +485,7 @@ export const NRQLPanel = (props: {
 						)}
 					</div>
 				</ResultsRow>
-			</div>
+			</ResultsContainer>
 		</>
 	);
 };

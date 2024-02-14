@@ -26,7 +26,7 @@ import { gate } from "../../../system/decorators/gate";
 import { log } from "../../../system/decorators/log";
 import { lsp, lspHandler } from "../../../system/decorators/lsp";
 import { ContextLogger } from "../../contextLogger";
-import { NewRelicGraphqlClient } from "../newRelicGraphqlClient";
+import { NewRelicGraphqlClient, ResponseMetadata } from "../newRelicGraphqlClient";
 import { mapNRErrorResponse, parseId } from "../utils";
 import { nrItemsToDocSelector, nrqlFunctions, nrqlKeywords, nrqlOperators } from "./constants";
 
@@ -57,17 +57,10 @@ export class NrNRQLProvider {
 	@lspHandler(GetNRQLRequestType)
 	@log()
 	public async executeNRQL(request: GetNRQLRequest): Promise<GetNRQLResponse> {
-		let accountId;
-		if (request.accountId) {
-			accountId = request.accountId;
-		} else {
-			const entityGuid = request.entityGuid;
-			if (entityGuid) {
-				accountId = parseId(entityGuid)!.accountId;
-			}
-		}
+		const accountId = request.accountId;
+
 		if (!accountId) {
-			throw new Error("Missing accountId or entityGuid");
+			throw new Error("Missing accountId");
 		}
 
 		try {
@@ -81,7 +74,10 @@ export class NrNRQLProvider {
 				results: response.results,
 				eventType: response?.rawResponse?.metadata?.eventType,
 				since: response?.rawResponse?.metadata?.rawSince,
-				resultsTypeGuess: this.getResultsType(query, response.results) as ResultsTypeGuess,
+				resultsTypeGuess: this.getResultsType(
+					response.results,
+					response?.rawResponse?.metadata
+				) as ResultsTypeGuess,
 			};
 		} catch (ex) {
 			ContextLogger.warn("executeNRQL failure", {
@@ -403,8 +399,8 @@ export class NrNRQLProvider {
 		return 0;
 	}
 
-	private getResultsType(query: string, results: any[]) {
-		const ALL_RESULT_TYPES = ["table", "json", "billboard", "line", "bar"];
+	private getResultsType(results: any[], metadata: ResponseMetadata) {
+		const ALL_RESULT_TYPES = ["table", "json", "billboard", "line", "bar", "area", "pie"];
 		if (!results || !results.length) return { selected: "table", enabled: ALL_RESULT_TYPES };
 
 		if (results.length === 1) {
@@ -422,9 +418,14 @@ export class NrNRQLProvider {
 				return { selected: "billboard", enabled: ["billboard", "json"] };
 			}
 		}
+		const isTimeseries = metadata?.timeSeries || metadata?.contents?.timeSeries;
+		const isFacet = metadata?.facet;
+		if (isTimeseries && isFacet) {
+			// TODO stacked bar!
+			return { selected: "table", enabled: ["table", "json"] };
+		}
 
-		query = query.toUpperCase();
-		if (query.indexOf("TIMESERIES") > -1) {
+		if (isTimeseries) {
 			const dataKeys = Object.keys(results[0] || {}).filter(
 				_ => _ !== "beginTimeSeconds" && _ !== "endTimeSeconds"
 			);
@@ -437,10 +438,10 @@ export class NrNRQLProvider {
 				return { selected: "json", enabled: ["json"] };
 			}
 			// easy timeseries data like a TIMESERIES of a count
-			return { selected: "line", enabled: ["table", "json", "line", "bar"] };
+			return { selected: "line", enabled: ["table", "json", "line", "area"] };
 		}
-		if (query.indexOf("FACET") > -1) {
-			return { selected: "json", enabled: ["json"] }; // should be "bar"??
+		if (isFacet) {
+			return { selected: "bar", enabled: ["bar", "json", "pie", "table", "json"] };
 		}
 		return { selected: "table", enabled: ["table", "json"] };
 	}

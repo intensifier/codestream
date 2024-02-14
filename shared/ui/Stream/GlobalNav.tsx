@@ -5,7 +5,7 @@ import {
 } from "@codestream/protocols/webview";
 import { useAppDispatch, useAppSelector } from "@codestream/webview/utilities/hooks";
 import cx from "classnames";
-import React from "react";
+import React, { useCallback } from "react";
 import { WebviewPanels } from "@codestream/protocols/api";
 import { HeadshotName } from "../src/components/HeadshotName";
 import { CodeStreamState } from "../store";
@@ -23,14 +23,13 @@ import { Link } from "./Link";
 import { PlusMenu } from "./PlusMenu";
 import Tooltip, { placeArrowTopRight, TipTitle } from "./Tooltip";
 import { parseId } from "../utilities/newRelic";
-import { isFeatureEnabled } from "../store/apiVersioning/reducer";
 
 const sum = (total, num) => total + Math.round(num);
 
 export function GlobalNav() {
 	const dispatch = useAppDispatch();
 	const derivedState = useAppSelector((state: CodeStreamState) => {
-		const { users, umis, preferences } = state;
+		const { users, umis } = state;
 		const user = users[state.session.userId!];
 		const eligibleJoinCompanies = user?.eligibleJoinCompanies;
 		let inviteCount: number = 0;
@@ -41,7 +40,6 @@ export function GlobalNav() {
 				}
 			});
 		}
-		const currentRepoId = user?.preferences?.currentO11yRepoId;
 
 		return {
 			currentUserId: state.session.userId,
@@ -55,16 +53,13 @@ export function GlobalNav() {
 			currentPullRequestId: state.context.currentPullRequest
 				? state.context.currentPullRequest.id
 				: undefined,
-			currentEntityGuid: currentRepoId
-				? (user?.preferences?.activeO11y?.[currentRepoId] as string)
-				: undefined,
-			entityAccounts: state.context.entityAccounts || [],
+			currentEntityGuid: state.context.currentEntityGuid,
 			eligibleJoinCompanies,
 			inviteCount,
 			isVsCode: state.ide.name === "VSC",
 			ideName: state.ide.name,
-			showNrqlBuilder: isFeatureEnabled(state, "showNrqlBuilder") && state.ide.name === "VSC",
-			showLogSearch: isFeatureEnabled(state, "showLogSearch") && state.ide.name === "VSC",
+			showNrqlBuilder: state.ide.name === "VSC" || state.ide.name === "JETBRAINS",
+			showLogSearch: state.ide.name === "VSC" || state.ide.name === "JETBRAINS",
 		};
 	});
 
@@ -102,32 +97,30 @@ export function GlobalNav() {
 		setPlusMenuOpen(plusMenuOpen ? undefined : event.target.closest("label"));
 	};
 
-	const launchNrqlEditor = () => {
+	const launchNrqlEditor = useCallback(() => {
 		HostApi.instance.notify(OpenEditorViewNotificationType, {
 			panel: "nrql",
 			title: "NRQL",
 			entryPoint: "global_nav",
 			accountId: parseId(derivedState.currentEntityGuid || "")?.accountId,
 			entityGuid: derivedState.currentEntityGuid!,
-			entityAccounts: derivedState.entityAccounts,
 			ide: {
 				name: derivedState.ideName,
 			},
 		});
-	};
+	}, [derivedState.currentEntityGuid]);
 
-	const launchLogSearch = () => {
+	const launchLogSearch = useCallback(() => {
 		HostApi.instance.notify(OpenEditorViewNotificationType, {
 			panel: "logs",
 			title: "Logs",
 			entryPoint: "global_nav",
-			entityAccounts: derivedState.entityAccounts,
 			entityGuid: derivedState.currentEntityGuid,
 			ide: {
 				name: derivedState.ideName,
 			},
 		});
-	};
+	}, [derivedState.currentEntityGuid]);
 
 	const go = panel => {
 		close();
@@ -330,6 +323,7 @@ export function GlobalNav() {
 		totalUnread,
 		totalMentions,
 		derivedState.composeCodemarkActive,
+		derivedState.currentEntityGuid,
 		currentReviewId,
 		currentCodeErrorId,
 		currentPullRequestId,

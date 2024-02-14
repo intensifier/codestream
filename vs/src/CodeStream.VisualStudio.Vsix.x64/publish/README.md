@@ -13,7 +13,7 @@ Shift left by making code performance part of the earliest stages of the develop
 
 ### Requirements
 
-- This version of CodeStream requires Visual Studio 2022 or later. For Visual Studio 2019, [check here](https://marketplace.visualstudio.com/items?itemName=CodeStream.codestream-vs). CodeStream is also available for [JetBrains](https://plugins.jetbrains.com/plugin/12206-codestream) or [VS Code](https://marketplace.visualstudio.com/items?itemName=CodeStream.codestream).
+- This version of CodeStream requires Visual Studio 2022, version 17.2 or later. For Visual Studio 2019, [check here](https://marketplace.visualstudio.com/items?itemName=CodeStream.codestream-vs). CodeStream is also available for [JetBrains](https://plugins.jetbrains.com/plugin/12206-codestream) or [VS Code](https://marketplace.visualstudio.com/items?itemName=CodeStream.codestream).
 - Your repository must be managed by Git, or a Git hosting service like GitHub.
 - For Windows users, CodeStream now requires a 64-bit version of the OS.
 
@@ -23,17 +23,17 @@ See performance data, at the method level, right in your editor. Always-on view 
 
 ![Code-Level Metrics](https://raw.githubusercontent.com/TeamCodeStream/CodeStream/develop/images/marketplace-vs-clm.png)
 
-# Investigate Errors
+# Error Investigation
 
 Discover errors happening in the code you’re responsible for. Quickly step through the stack trace, with CodeStream automatically taking you to the correct file and line number, then bring relevant teammates into the discussion so that you can resolve the issue as quickly as possible.
 
 ![Investigate Errors](https://raw.githubusercontent.com/TeamCodeStream/CodeStream/develop/images/marketplace-vs-error.png)
 
-# Application Performance Monitoring (APM)
+# Performance Monitoring
 
 Get an in-IDE view of how the services built from your code are performing, in any environment. Golden metrics, service-level objectives and related services give you the big picture at a glance.
 
-![Application Performance Monitoring](https://raw.githubusercontent.com/TeamCodeStream/CodeStream/develop/images/marketplace-vsc-slt.png)
+![Performance Monitoring](https://images.codestream.com/misc/marketplace-o11y.png)
 
 # Don't have New Relic? 
 

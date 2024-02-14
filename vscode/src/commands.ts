@@ -89,6 +89,7 @@ export interface OpenCodemarkCommandArgs {
 	codemarkId: string;
 	onlyWhenVisible?: boolean;
 	sourceUri?: Uri;
+	source?: string;
 }
 
 export interface OpenPullRequestCommandArgs {
@@ -506,15 +507,8 @@ export class Commands implements Disposable {
 	async openCodemark(args: OpenCodemarkCommandArgs): Promise<void> {
 		if (args === undefined) return;
 
-		Container.agent.telemetry.track("codestream/codemarks/codemark displayed", {
-			meta_data: `codemark_location: source_file`,
-			meta_data_2: "codemark_type: comment",
-			meta_data_3: `following: false`,
-			event_type: "modal_display"
-		});
-
 		const { codemarkId: _codemarkId, ...options } = args;
-		return Container.sidebar.openCodemark(args.codemarkId, options);
+		return Container.sidebar.openCodemark(args.codemarkId, { source: "source_file", ...options });
 	}
 
 	@command("openPullRequest", { showErrorMessage: "Unable to open pull request" })
@@ -663,7 +657,6 @@ export class Commands implements Disposable {
 				// UI can get the accountId based on the entityGuid (parsed)
 				accountId: undefined,
 				entityGuid: currentEntityGuid!,
-				entityAccounts: [],
 				panel: "nrql",
 				title: "NRQL",
 				query: nrqlQuery,
@@ -700,9 +693,25 @@ export class Commands implements Disposable {
 				"We were unable to determine the search criteria from your selection or line of code.",
 				"Dismiss"
 			);
-		} else {
-			await Container.sidebar.logSearch({ query: searchTerm, entryPoint: "context_menu" });
+			return;
 		}
+
+		const currentRepoId = Container.session.user?.preferences?.currentO11yRepoId;
+		const currentEntityGuid = currentRepoId
+			? (Container.session?.user?.preferences?.activeO11y?.[currentRepoId] as string)
+			: undefined;
+
+		Container.panel.initializeOrShowEditor({
+			panelLocation: ViewColumn.Active,
+			entityGuid: currentEntityGuid!,
+			panel: "logs",
+			title: "Logs",
+			query: searchTerm,
+			entryPoint: "context_menu",
+			ide: {
+				name: "VSC"
+			}
+		});
 	}
 
 	private extractStringsFromLine(document: TextDocument, lineNumber: number): string {

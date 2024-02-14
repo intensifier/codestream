@@ -1,5 +1,15 @@
 # Change Log
 
+## [15.3.0] - 2023-2-14
+
+### Added
+
+- Adds the ability to search logs, with initial support for logs collected via APM or OTel
+- Adds the ability to run NRQL queries, with support for multiple visualizations and the ability to export to CSV and JSON
+- Adds the ability to save and share NRQL queries via `.nrql` files
+- Adds code-level metrics support for Node anonymous functions, which require you to send build SHA information either via New Relic's change tracking or via environment variable in your build pipeline
+- Adds a "What's New" page under username > Help that covers recently added features
+
 ## [15.2.0] - 2023-2-7
 
 ### Added

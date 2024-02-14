@@ -174,7 +174,7 @@ export const ObservabilityAnomaliesWrapper = React.memo((props: Props) => {
 					{!derivedState.anomaliesDropdownIsExpanded && <Icon name="chevron-right-thin" />}
 				</span>
 				<div className="label">
-					<span style={{ margin: "0px 5px 0px 2px" }}>Code-Level Metrics</span>
+					<span style={{ margin: "0px 5px 0px 2px" }}>Transaction Performance</span>
 					{showWarningIcon && (
 						<Icon
 							name="alert"

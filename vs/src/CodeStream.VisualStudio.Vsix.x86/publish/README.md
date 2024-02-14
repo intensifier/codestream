@@ -23,17 +23,17 @@ See performance data, at the method level, right in your editor. Always-on view 
 
 ![Code-Level Metrics](https://raw.githubusercontent.com/TeamCodeStream/CodeStream/develop/images/marketplace-vs-clm.png)
 
-# Investigate Errors
+# Error Investigation
 
 Discover errors happening in the code you’re responsible for. Quickly step through the stack trace, with CodeStream automatically taking you to the correct file and line number, then bring relevant teammates into the discussion so that you can resolve the issue as quickly as possible.
 
 ![Investigate Errors](https://raw.githubusercontent.com/TeamCodeStream/CodeStream/develop/images/marketplace-vs-error.png)
 
-# Application Performance Monitoring (APM)
+# Performance Monitoring
 
 Get an in-IDE view of how the services built from your code are performing, in any environment. Golden metrics, service-level objectives and related services give you the big picture at a glance.
 
-![Application Performance Monitoring](https://raw.githubusercontent.com/TeamCodeStream/CodeStream/develop/images/marketplace-vsc-slt.png)
+![Performance Monitoring](https://images.codestream.com/misc/marketplace-o11y.png)
 
 # Don't have New Relic? 
 
