@@ -3,6 +3,7 @@ import {
 	DidChangeDataNotificationType,
 	DidChangeObservabilityDataNotificationType,
 	GetReposScmRequestType,
+	RelatedRepository,
 	ReposScm,
 } from "@codestream/protocols/agent";
 import { CSCodeError } from "@codestream/protocols/api";
@@ -30,7 +31,7 @@ const ListItemCustom = styled.div`
 	margin: 5px;
 `;
 
-interface EnhancedRepoScm {
+export type EnhancedRepoScm = ReposScm & {
 	/**
 	 * name of the repo
 	 */
@@ -45,17 +46,19 @@ interface EnhancedRepoScm {
 
 	/** label for the repo -- may include the remote */
 	label: string;
-}
+};
 
 export function RepositoryAssociator(props: {
 	error: { title: string; description: string };
 	disableEmitDidChangeObservabilityDataNotification?: boolean;
 	buttonText?: string;
-	onSelected?: Function;
-	onSubmit: Function;
-	onCancelled: Function;
-	isLoadingCallback?: Function;
+	onSelected?: (r: EnhancedRepoScm) => void;
+	onSubmit: (r: EnhancedRepoScm, skipTracking?: boolean) => void;
+	onCancelled: (e?: React.MouseEvent) => void;
+	isLoadingCallback?: (b: boolean) => void;
 	isLoadingParent?: boolean;
+	noSingleItemDropdownSkip?: boolean;
+	relatedRepos?: RelatedRepository[];
 }) {
 	const derivedState = useSelector((state: CodeStreamState) => {
 		const codeError = state.context.currentCodeErrorId
@@ -65,15 +68,15 @@ export function RepositoryAssociator(props: {
 		return {
 			codeError: codeError,
 			repos: state.repos,
-			relatedRepos: state.context.currentCodeErrorData?.relatedRepos,
+			relatedRepos: props.relatedRepos || state.context.currentCodeErrorData?.relatedRepos,
 		};
 	});
 	const { error: repositoryError } = props;
 
-	const [openRepositories, setOpenRepositories] = React.useState<
-		(ReposScm & EnhancedRepoScm)[] | undefined
-	>(undefined);
-	const [selected, setSelected] = React.useState<any>(undefined);
+	const [openRepositories, setOpenRepositories] = React.useState<EnhancedRepoScm[] | undefined>(
+		undefined
+	);
+	const [selected, setSelected] = React.useState<EnhancedRepoScm | undefined>(undefined);
 	const [multiRemoteRepository, setMultiRemoteRepository] = React.useState(false);
 	const [isLoading, setIsLoading] = React.useState(false);
 	const [hasFetchedRepos, setHasFetchedRepos] = React.useState(false);
@@ -88,7 +91,7 @@ export function RepositoryAssociator(props: {
 			.then(_ => {
 				if (!_.repositories) return;
 
-				const results: (ReposScm & EnhancedRepoScm)[] = [];
+				const results: EnhancedRepoScm[] = [];
 				for (const repo of _.repositories) {
 					if (repo.remotes) {
 						for (const e of repo.remotes) {
@@ -113,7 +116,7 @@ export function RepositoryAssociator(props: {
 				}
 				//take repos in users IDE, and filter them with a list of
 				//related repos to service entity the error originates from
-				let filteredResults;
+				let filteredResults: EnhancedRepoScm[];
 				if (!_isEmpty(derivedState.relatedRepos)) {
 					filteredResults = results.filter(_ => {
 						return derivedState.relatedRepos?.some(repo => {
@@ -127,7 +130,7 @@ export function RepositoryAssociator(props: {
 					// instead of "repo not found" error
 					filteredResults = results;
 				}
-				if (filteredResults.length === 1) {
+				if (filteredResults.length === 1 && !props.noSingleItemDropdownSkip) {
 					setSelected(filteredResults[0]);
 					setSkipRender(true);
 					//no dropdown required, just go to error and auto select the single result
@@ -230,7 +233,7 @@ export function RepositoryAssociator(props: {
 							setIsLoading(true);
 							e.preventDefault();
 
-							await props.onSubmit(selected);
+							await props.onSubmit(selected!);
 							if (!props.disableEmitDidChangeObservabilityDataNotification) {
 								HostApi.instance.emit(DidChangeObservabilityDataNotificationType.method, {
 									type: "RepositoryAssociation",
@@ -270,7 +273,7 @@ export function RepositoryAssociator(props: {
 									};
 								}) || []
 						}
-						selectedKey={selected ? selected.id : null}
+						selectedKey={selected ? selected.id : undefined}
 						variant={selected ? "secondary" : "primary"}
 						wrap
 					>

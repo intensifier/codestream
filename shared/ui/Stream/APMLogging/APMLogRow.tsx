@@ -1,10 +1,10 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import styled from "styled-components";
 import Timestamp from "../Timestamp";
 import Icon from "@codestream/webview/Stream/Icon";
 import { isEmpty as _isEmpty } from "lodash-es";
 import { HostApi } from "@codestream/webview/webview-api";
-import { LogResult } from "@codestream/protocols/agent";
+import { LogResult, LogResultSpecialColumns } from "@codestream/protocols/agent";
 import copy from "copy-to-clipboard";
 import Tooltip from "../Tooltip";
 
@@ -38,18 +38,44 @@ const TimestampData = styled.div`
 `;
 
 const MessageData = styled.div`
-	width: 80%;
+	width: 78%;
 	font-family: "Menlo", "Consolas", monospace;
 `;
 
 const RowContainer = styled.div`
 	display: flex;
+	padding: 1em;
+	border-right: 1px solid var(--base-border-color);
 `;
 
 const ShowMoreContainer = styled.div`
 	display: flex;
 	align-items: center;
 	justify-content: center;
+`;
+
+const ShowSurroundingHeader = styled.div`
+	background-color: var(--button-background-color);
+	color: var(--text-color-highlight);
+	padding: 0.5em;
+	display: flex;
+	justify-content: space-between;
+`;
+
+const ActionContainer = styled.div`
+	display: flex;
+	border: 1px solid var(--base-border-color);
+	border-radius: 4px;
+	padding: 0.4em;
+`;
+
+const HoverContainer = styled.div`
+	cursor: pointer;
+	position: absolute;
+	top: 4px;
+	right: 6px;
+	background-color: var(--app-background-color-hover);
+	box-shadow: 0 5px 10px rgba(0, 0, 0, 0.2);
 `;
 
 const DetailViewTable = styled.div`
@@ -96,7 +122,12 @@ const DetailViewTable = styled.div`
 	}
 `;
 
-const hiddenColumns = ["log_summary", "expandedContent"];
+const hiddenColumns = [
+	"expandedContent",
+	LogResultSpecialColumns.message,
+	LogResultSpecialColumns.severity,
+	LogResultSpecialColumns.summary,
+];
 
 export const APMLogRow = (props: {
 	timestamp: string;
@@ -106,11 +137,23 @@ export const APMLogRow = (props: {
 	entityGuid?: string;
 	logRowData: LogResult;
 	showMore?: boolean;
-	updateData: Function;
+	updateExpandedContent: Function;
+	updateShowSurrounding: Function;
+	isShowSurrounding: string;
 	index: number;
 	expandedContent: any;
+	enableShowSurrounding: boolean;
 }) => {
-	const [isExpanded, setIsExpanded] = useState(false);
+	const elementRef = useRef(null);
+
+	const [isHovered, setIsHovered] = useState(false);
+	const handleMouseEnter = () => {
+		setIsHovered(true);
+	};
+
+	const handleMouseLeave = () => {
+		setIsHovered(false);
+	};
 
 	if (props.showMore) {
 		return (
@@ -166,30 +209,114 @@ export const APMLogRow = (props: {
 			updatedJsx = undefined;
 		}
 
-		props.updateData(props.index, updatedJsx);
+		props.updateExpandedContent(props.index, updatedJsx);
+	};
+
+	const handleClickShowSurrounding = () => {
+		props.updateShowSurrounding(props.index, "show");
+	};
+
+	const handleClickCloseSurrounding = () => {
+		props.updateShowSurrounding(props.index, "reset");
+	};
+
+	const handkeClickCopyJson = () => {
+		if (props.logRowData) {
+			copy(JSON.stringify(props.logRowData, null, 2));
+		}
 	};
 
 	return (
 		<>
-			<RowContainer>
-				<TimestampData>
-					<Icon
-						onClick={handleClickExpand}
-						name={props.expandedContent ? "chevron-down-thin" : "chevron-right-thin"}
-						style={{ cursor: "pointer", marginRight: "2px" }}
-					/>
-					<Tooltip content={props?.severity?.toLowerCase()} delay={0.5}>
-						<LogSeverity
-							style={{
-								backgroundColor: logSeverityToColor[props?.severity?.toLowerCase()] || "#0c74df",
-							}}
+			{props.isShowSurrounding === "true" && (
+				<>
+					<ShowSurroundingHeader>
+						<span style={{ marginRight: "4px" }}> Selected Log</span>
+						<span style={{ cursor: "pointer" }}>
+							<Icon
+								onClick={handleClickCloseSurrounding}
+								name="x"
+								style={{ cursor: "pointer" }}
+								title="Close"
+							/>
+						</span>
+					</ShowSurroundingHeader>
+
+					<RowContainer
+						style={{ backgroundColor: "var(--app-background-color-hover" }}
+						onMouseEnter={handleMouseEnter}
+						onMouseLeave={handleMouseLeave}
+					>
+						<TimestampData>
+							<Icon
+								onClick={handleClickExpand}
+								name={props.expandedContent ? "chevron-down-thin" : "chevron-right-thin"}
+								style={{ cursor: "pointer", marginRight: "2px" }}
+							/>
+							<Tooltip content={props?.severity?.toLowerCase()} delay={0.5}>
+								<LogSeverity
+									style={{
+										backgroundColor:
+											logSeverityToColor[props?.severity?.toLowerCase()] || "#0c74df",
+									}}
+								/>
+							</Tooltip>
+							<Timestamp time={props.timestamp} expandedTime={true} />
+						</TimestampData>
+						<MessageData>{props.expandedContent || props.message}</MessageData>
+					</RowContainer>
+				</>
+			)}
+
+			{props.isShowSurrounding !== "true" && (
+				<RowContainer onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
+					<TimestampData>
+						<Icon
+							onClick={handleClickExpand}
+							name={props.expandedContent ? "chevron-down-thin" : "chevron-right-thin"}
+							style={{ cursor: "pointer", marginRight: "2px" }}
 						/>
-					</Tooltip>
-					<Timestamp time={props.timestamp} expandedTime={true} />
-				</TimestampData>
-				{!props.expandedContent && <MessageData>{props.message}</MessageData>}
-				{props.expandedContent && <MessageData>{props.expandedContent}</MessageData>}
-			</RowContainer>
+						<Tooltip content={props?.severity?.toLowerCase()} delay={0.5}>
+							<LogSeverity
+								style={{
+									backgroundColor: logSeverityToColor[props?.severity?.toLowerCase()] || "#0c74df",
+								}}
+							/>
+						</Tooltip>
+						<Timestamp time={props.timestamp} expandedTime={true} />
+					</TimestampData>
+					<MessageData>{props.expandedContent || props.message}</MessageData>
+
+					{isHovered && (
+						<HoverContainer>
+							<ActionContainer>
+								<div>
+									<Icon
+										onClick={handkeClickCopyJson}
+										name="copy"
+										style={{ cursor: "pointer" }}
+										title="Copy JSON"
+										delay={1}
+										className="clickable"
+									/>
+								</div>
+								{props.enableShowSurrounding && (
+									<div style={{ marginLeft: "8px" }}>
+										<Icon
+											onClick={handleClickShowSurrounding}
+											name="resize-vertical-rounded"
+											style={{ cursor: "pointer" }}
+											title="Show Surrounding Logs"
+											delay={1}
+											className="clickable"
+										/>
+									</div>
+								)}
+							</ActionContainer>
+						</HoverContainer>
+					)}
+				</RowContainer>
+			)}
 		</>
 	);
 };

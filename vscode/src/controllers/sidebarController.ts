@@ -16,6 +16,8 @@ import {
 	DidChangeProcessBufferNotificationType,
 	DidChangeServerUrlNotification,
 	DidChangeServerUrlNotificationType,
+	DidChangeSessionTokenStatusNotification,
+	DidChangeSessionTokenStatusNotificationType,
 	DidChangeVersionCompatibilityNotification,
 	DidChangeVersionCompatibilityNotificationType,
 	DidEncounterMaintenanceModeNotificationType,
@@ -94,7 +96,8 @@ import {
 	WebviewIpcMessage,
 	WebviewIpcNotificationMessage,
 	WebviewIpcRequestMessage,
-	IdeNames
+	IdeNames,
+	LogoutReason
 } from "@codestream/protocols/webview";
 import {
 	authentication,
@@ -616,6 +619,11 @@ export class SidebarController implements Disposable {
 				(...args) => this.onConnectionStatusChanged(webview, ...args),
 				this
 			),
+			Container.agent.onDidChangeSessionTokenStatus(
+				(...args) => this.onSessionTokenStatusChanged(webview, ...args),
+				this
+			),
+
 			Container.agent.onDidChangeData((...args) => this.onDataChanged(webview, ...args), this),
 			Container.agent.onDidChangeDocumentMarkers(
 				(...args) => this.onDocumentMarkersChanged(webview, ...args),
@@ -743,6 +751,13 @@ export class SidebarController implements Disposable {
 				webview.notify(DidChangeConnectionStatusNotificationType, e);
 				break;
 		}
+	}
+
+	private async onSessionTokenStatusChanged(
+		webview: WebviewLike,
+		e: DidChangeSessionTokenStatusNotification
+	) {
+		webview.notify(DidChangeSessionTokenStatusNotificationType, e);
 	}
 
 	private onConfigurationChanged(webview: WebviewLike, e: ConfigurationChangeEvent) {
@@ -1036,8 +1051,14 @@ export class SidebarController implements Disposable {
 			}
 			case LogoutRequestType.method: {
 				webview.onIpcRequest(LogoutRequestType, e, async (_type, _params) => {
+					let logoutReason = SessionSignedOutReason.UserSignedOutFromWebview;
+
+					if (_params.reason === LogoutReason.InvalidRefreshToken) {
+						logoutReason = SessionSignedOutReason.InvalidRefreshToken;
+					}
+
 					await Container.commands.signOut(
-						SessionSignedOutReason.UserSignedOutFromWebview,
+						logoutReason,
 						_params.newServerUrl,
 						_params.newEnvironment
 					);

@@ -9,9 +9,10 @@ import {
 	isNRErrorResponse,
 	LogFieldDefinition,
 	LogResult,
+	LogResultSpecialColumns,
 	TelemetryData,
 } from "@codestream/protocols/agent";
-import { IdeNames } from "@codestream/protocols/webview";
+import { IdeNames, OpenEditorViewNotificationType } from "@codestream/protocols/webview";
 import { parseId } from "@codestream/webview/utilities/newRelic";
 import React, { useState } from "react";
 import { useResizeDetector } from "react-resize-detector";
@@ -24,9 +25,13 @@ import { HostApi } from "../../webview-api";
 import Button from "../Button";
 import Icon from "../Icon";
 import { Link } from "../Link";
-import { TableWindow } from "../TableWindow";
 import { APMLogRow } from "./APMLogRow";
 import { PanelHeaderTitleWithLink } from "../PanelHeaderTitleWithLink";
+import { Disposable } from "@codestream/webview/utils";
+import { isEmpty as _isEmpty } from "lodash";
+import { APMLogTableLoading } from "./APMLogTableLoading";
+import { TableWindow } from "../TableWindow";
+
 interface SelectedOption {
 	value: string;
 	label: string;
@@ -153,20 +158,33 @@ export const APMLogSearchPanel = (props: {
 	const [selectedEntityAccount, setSelectedEntityAccount] = useState<OptionProps | undefined>(
 		undefined
 	);
-	const [results, setResults] = useState<LogResult[]>([]);
-	const [severityAttribute, setSeverityAttribute] = useState<string>();
-	const [messageAttribute, setMessageAttribute] = useState<string>();
-	const [displayColumns, setDisplayColumns] = useState<string[]>([]);
-	const [beforeLogs, setBeforeLogs] = useState<LogResult[]>([]);
-	const [afterLogs, setAfterLogs] = useState<LogResult[]>([]);
-	const [surroundingLogsLoading, setSurroundingLogsLoading] = useState<boolean>();
+
+	const [originalSearchResults, setOriginalSearchResults] = useState<LogResult[]>([]);
+	const [searchResults, setSearchResults] = useState<LogResult[]>([]);
+
+	const [currentShowSurroundingIndex, setCurrentShowSurroundingIndex] = useState<
+		number | undefined
+	>(undefined);
+	const [queriedWithNonEmptyString, setQueriedWithNonEmptyString] = useState<boolean>(false);
 	const [totalItems, setTotalItems] = useState<number>(0);
 	const [logError, setLogError] = useState<string | undefined>("");
 	const { height, ref } = useResizeDetector();
 	const trimmedListHeight: number = (height ?? 0) - (height ?? 0) * 0.08;
+	const disposables: Disposable[] = [];
 
 	useDidMount(() => {
 		setIsInitializing(true);
+
+		disposables.push(
+			// only utilized for code searches so we can re-use search windows
+			HostApi.instance.on(OpenEditorViewNotificationType, e => {
+				if (e.query && e.query !== query) {
+					setQuery(e.query!);
+					fetchLogs(e.entityGuid, e.query);
+				}
+			})
+		);
+
 		const defaultOption: SelectedOption = {
 			value: "30 MINUTES AGO",
 			label: "30 Minutes Ago",
@@ -226,6 +244,10 @@ export const APMLogSearchPanel = (props: {
 			.finally(() => {
 				setIsInitializing(false);
 			});
+
+		return () => {
+			disposables && disposables.forEach(_ => _.dispose());
+		};
 	});
 
 	const handleSelectDropdownOption = entityAccount => {
@@ -292,10 +314,8 @@ export const APMLogSearchPanel = (props: {
 	 */
 	const fetchSurroundingLogs = async (entityGuid: string, messageId: string, since: number) => {
 		try {
-			setSurroundingLogsLoading(true);
-			setBeforeLogs([]);
-			setAfterLogs([]);
-
+			setSearchResults([]);
+			setIsLoading(true);
 			const response = await HostApi.instance.send(GetSurroundingLogsRequestType, {
 				entityGuid,
 				messageId,
@@ -314,17 +334,42 @@ export const APMLogSearchPanel = (props: {
 				return;
 			}
 
+			const surroundingLogs: LogResult[] = [];
+
 			if (response.beforeLogs && response.beforeLogs.length > 0) {
-				setResults(response.beforeLogs);
+				surroundingLogs.push(...response.beforeLogs);
 			}
 
+			const originalLog = searchResults.find(r => {
+				return r.messageId === messageId;
+			});
+
+			//this should ALWAYS be true, if not, bigger issue
+			surroundingLogs.push(originalLog!);
+
 			if (response.afterLogs && response.afterLogs.length > 0) {
-				setResults(response.afterLogs);
+				surroundingLogs.push(...response.afterLogs);
 			}
+
+			const logToPinIndex = surroundingLogs.findIndex(r => {
+				return r.messageId === messageId;
+			});
+			surroundingLogs[logToPinIndex] = {
+				...surroundingLogs[logToPinIndex],
+				isShowSurrounding: "true",
+			};
+			setCurrentShowSurroundingIndex(logToPinIndex);
+			setSearchResults(surroundingLogs);
+
+			HostApi.instance.track("codestream/logs/show_surrounding_button clicked", {
+				entity_guid: `${entityGuid}`,
+				account_id: parseId(entityGuid)?.accountId,
+				event_type: "click",
+			});
 		} catch (ex) {
 			handleError(ex);
 		} finally {
-			setSurroundingLogsLoading(false);
+			setIsLoading(false);
 		}
 	};
 
@@ -333,10 +378,10 @@ export const APMLogSearchPanel = (props: {
 			setLogError(undefined);
 			setHasSearched(true);
 			setIsLoading(true);
-			setResults([]);
-			setSeverityAttribute(undefined);
-			setMessageAttribute(undefined);
+			setSearchResults([]);
+			setOriginalSearchResults([]);
 			setTotalItems(0);
+			setCurrentShowSurroundingIndex(undefined);
 
 			const filterText = suppliedQuery || query;
 
@@ -355,6 +400,8 @@ export const APMLogSearchPanel = (props: {
 					direction: "DESC",
 				},
 			});
+
+			setQueriedWithNonEmptyString(!_isEmpty(filterText));
 
 			if (!response) {
 				handleError(
@@ -375,13 +422,9 @@ export const APMLogSearchPanel = (props: {
 			}
 
 			if (response.logs && response.logs.length > 0) {
-				setResults(response.logs);
+				setSearchResults(response.logs);
+				setOriginalSearchResults(response.logs);
 				setTotalItems(response.logs.length);
-				setMessageAttribute(response.messageAttribute!);
-				setSeverityAttribute(response.severityAttribute!);
-
-				// TODO: Instead of this, utilize a preference with a list of columns
-				setDisplayColumns(["timestamp", response.severityAttribute!, response.messageAttribute!]);
 			}
 
 			trackSearchTelemetry(entityGuid, response.accountId, (response?.logs?.length ?? 0) > 0);
@@ -397,7 +440,7 @@ export const APMLogSearchPanel = (props: {
 		accountId: number,
 		resultsReturned: boolean
 	) => {
-		HostApi.instance.track("codestream/logs searched", {
+		HostApi.instance.track("codestream/logs/search succeeded", {
 			entity_guid: `${entityGuid}`,
 			account_id: accountId,
 			event_type: "response",
@@ -419,7 +462,7 @@ export const APMLogSearchPanel = (props: {
 			payload["account_id"] = accountId;
 		}
 
-		HostApi.instance.track("codestream/logs/webview opened", payload);
+		HostApi.instance.track("codestream/logs/webview displayed", payload);
 	};
 
 	async function loadEntities(search: string, _loadedOptions, additional?: AdditionalType) {
@@ -459,27 +502,51 @@ export const APMLogSearchPanel = (props: {
 		);
 	};
 
-	const updateResults = (index, updatedJsx) => {
-		const newResults = [...results];
+	const updateExpandedContent = (index, updatedJsx) => {
+		const newResults = [...searchResults];
 		newResults[index] = { ...newResults[index], expandedContent: updatedJsx };
-		setResults(newResults);
+		setSearchResults(newResults);
+	};
+
+	const updateShowSurrounding = async (index: number, task: string) => {
+		if (task === "reset") {
+			const modifiedSearchResults = originalSearchResults.map(
+				({ isShowSurrounding, ...keepAttrs }) => keepAttrs
+			);
+
+			setSearchResults(modifiedSearchResults);
+			setOriginalSearchResults(modifiedSearchResults);
+			setCurrentShowSurroundingIndex(undefined);
+		} else {
+			const pinnedLog = searchResults[index];
+			await fetchSurroundingLogs(
+				selectedEntityAccount?.value,
+				pinnedLog.messageId,
+				parseInt(pinnedLog.timestamp)
+			);
+		}
 	};
 
 	const formatRowResults = () => {
-		if (results) {
-			let _results: LogResult[] = results;
+		if (searchResults) {
+			let _results: LogResult[] = searchResults;
 			// @TODO: eventually hook up "Show More"
 			// if (_results[_results.length - 1]?.showMore !== "true") {
 			// 	_results.push({ showMore: "true" });
 			// }
 			return _results.map((r, index) => {
+				const messageField = r[LogResultSpecialColumns.message];
+				const severityField = r[LogResultSpecialColumns.severity];
+
 				const timestamp = r?.timestamp;
-				const message = messageAttribute ? r[messageAttribute] : "";
-				const severity = severityAttribute ? r[severityAttribute] : "";
+				const message = r[messageField] ?? "";
+				const severity = r[severityField] ?? "";
 				const showMore = r?.showMore ? true : false;
 				const expandedContent = r?.expandedContent ?? undefined;
+				const isShowSurrounding = r?.isShowSurrounding ?? false;
 				const entityGuid = selectedEntityAccount?.value;
 				const accountId = parseId(entityGuid);
+				const enableShowSurrounding = queriedWithNonEmptyString && !currentShowSurroundingIndex;
 
 				return (
 					<APMLogRow
@@ -491,8 +558,11 @@ export const APMLogSearchPanel = (props: {
 						entityGuid={entityGuid}
 						logRowData={r}
 						showMore={showMore}
-						updateData={updateResults}
+						isShowSurrounding={isShowSurrounding}
+						updateExpandedContent={updateExpandedContent}
+						updateShowSurrounding={updateShowSurrounding}
 						expandedContent={expandedContent}
+						enableShowSurrounding={enableShowSurrounding}
 					/>
 				);
 			});
@@ -616,13 +686,11 @@ export const APMLogSearchPanel = (props: {
 				)} */}
 
 				<div>
-					{/* {isLoading && (
-							TODO: Skeleton loader? Couldn't get it to work when I tried
-						)} */}
+					{isLoading && <APMLogTableLoading height={height} />}
 
 					{!logError &&
 						!isLoading &&
-						results &&
+						searchResults &&
 						totalItems > 0 &&
 						fieldDefinitions &&
 						!isInitializing && (
@@ -630,9 +698,10 @@ export const APMLogSearchPanel = (props: {
 								{ListHeader()}
 								<TableWindow
 									itemData={formatRowResults()}
-									itemCount={results.length}
+									itemCount={searchResults.length}
 									height={trimmedListHeight}
 									width={"100%"}
+									currentShowSurroundingIndex={currentShowSurroundingIndex}
 								/>
 							</>
 						)}

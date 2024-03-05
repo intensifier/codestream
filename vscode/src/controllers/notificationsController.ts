@@ -82,7 +82,7 @@ export class NotificationsController implements Disposable {
 
 		Container.agent.telemetry.track("codestream/toast displayed", {
 			meta_data: `content: anomaly`,
-			event_type: "state_load"
+			event_type: "modal_display"
 		});
     const count = duration.length + errorRate.length;
     const title = count === 1 ? "Performance issue found" : `${count} performance issues found`;
@@ -130,7 +130,7 @@ export class NotificationsController implements Disposable {
 
 		Container.agent.telemetry.track("codestream/toast displayed", {
 			meta_data: `content: ${toastContentType === "Codemark" ? "codemark" : ""}`,
-			event_type: "state_load"
+			event_type: "modal_display"
 		});
 
     const result = await window.showInformationMessage(

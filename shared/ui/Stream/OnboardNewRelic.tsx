@@ -222,7 +222,7 @@ export const OnboardNewRelic = React.memo(function OnboardNewRelic() {
 			}
 		})();
 
-		HostApi.instance.track("codestream/instrumentation_wizard displayed", {
+		HostApi.instance.track("codestream/instrumentation_wizard/intro displayed", {
 			event_type: "modal_display",
 		});
 	});
@@ -261,14 +261,14 @@ export const OnboardNewRelic = React.memo(function OnboardNewRelic() {
 
 	const setStep = (step: number, options?: { appName?: string }) => {
 		if (step === NUM_STEPS - 1) {
-			HostApi.instance.track("codestream/instrumentation_wizard completed", {
+			HostApi.instance.track("codestream/instrumentation_wizard/finish displayed", {
 				meta_data: `selected_language: ${projectType}`,
 				event_type: "modal_display",
 			});
 		}
 
 		if (step === 1) {
-			HostApi.instance.track("codestream/instrumentation_wizard started", {
+			HostApi.instance.track("codestream/instrumentation_wizard/start_button clicked", {
 				meta_data: `detected_language: ${derivedState.wantNewRelicOptions?.projectType}`,
 				target: "get_started",
 				target_text: "Get Started",
@@ -1169,7 +1169,7 @@ const ProviderButtons = (props: { providerIds: string[]; setShowNextMessagingSte
 										url: "https://docs.newrelic.com/docs/codestream/code-discussion/msteams-integration/",
 									});
 									HostApi.instance.send(TelemetryRequestType, {
-										eventName: "codestream/integration connected",
+										eventName: "codestream/integration/connection succeeded",
 										properties: {
 											meta_data: `service: ${provider.name}`,
 											meta_data_2: `connection_location: onboard`,

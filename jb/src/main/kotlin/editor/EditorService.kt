@@ -2,6 +2,7 @@ package com.codestream.editor
 
 import com.codestream.agentService
 import com.codestream.appDispatcher
+import com.codestream.clm.CLMCustomRenderer
 import com.codestream.codeStream
 import com.codestream.extensions.displayPath
 import com.codestream.extensions.file
@@ -39,6 +40,8 @@ import com.codestream.system.isSameUri
 import com.codestream.system.sanitizeURI
 import com.codestream.system.toFile
 import com.codestream.webViewService
+import com.codestream.workaround.HintsPresentationWorkaround
+import com.intellij.codeInsight.hints.InlayPresentationFactory
 import com.intellij.diff.DiffContentFactory
 import com.intellij.diff.DiffManager
 import com.intellij.diff.requests.SimpleDiffRequest
@@ -50,7 +53,9 @@ import com.intellij.openapi.components.ServiceManager
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.Editor
+import com.intellij.openapi.editor.EditorCustomElementRenderer
 import com.intellij.openapi.editor.EditorFactory
+import com.intellij.openapi.editor.Inlay
 import com.intellij.openapi.editor.LogicalPosition
 import com.intellij.openapi.editor.event.DocumentEvent
 import com.intellij.openapi.editor.event.DocumentListener
@@ -86,6 +91,8 @@ import org.eclipse.lsp4j.TextDocumentSyncKind
 import org.eclipse.lsp4j.VersionedTextDocumentIdentifier
 import org.eclipse.lsp4j.jsonrpc.messages.Either
 import java.awt.Font
+import java.awt.Point
+import java.awt.event.MouseEvent
 import java.io.File
 import java.net.URI
 
@@ -111,6 +118,7 @@ class EditorService(val project: Project) {
     private val markerHighlighters = mutableMapOf<Editor, List<RangeHighlighter>>()
     private val nrqlHighlighters = mutableMapOf<Editor, List<RangeHighlighter>>()
     private val documentMarkers = mutableMapOf<Document, List<DocumentMarker>>()
+    private val firstLineInlay = mutableMapOf<Editor, Inlay<out EditorCustomElementRenderer>>()
     private var spatialViewActive = project.settingsService?.webViewContext?.spatialViewVisible ?: false
     private var codeStreamVisible = project.codeStream?.isVisible ?: false
     private val inlineTextFieldManagers = mutableMapOf<Editor, InlineTextFieldManager>()
@@ -320,6 +328,9 @@ class EditorService(val project: Project) {
         try {
             val agent = project.agentService ?: return emptyList()
             val identifier = document.textDocumentIdentifier ?: return emptyList()
+            val session = project.sessionService ?: return emptyList()
+            if (session.userLoggedIn == null) return emptyList()
+
             return agent.agent.textDocumentService.documentSymbol(DocumentSymbolParams(identifier)).await()
         } catch (ex: Exception) {
             return emptyList()
@@ -445,6 +456,8 @@ class EditorService(val project: Project) {
         if (documentSymbols == null) return@invokeLater
         if (document.file?.extension?.lowercase() != "nrql") return@invokeLater
 
+        firstLineInlay[this]?.dispose()
+
         nrqlHighlighters[this]?.let { highlighters ->
             highlighters.forEach { highlighter ->
                 markupModel.removeHighlighter(highlighter)
@@ -471,6 +484,21 @@ class EditorService(val project: Project) {
                 it.isThinErrorStripeMark = true
                 it.errorStripeMarkColor = green
                 it.putUserData(CODESTREAM_HIGHLIGHTER, true)
+            }
+        }
+
+        project?.agentService?.onDidStart {
+            ApplicationManager.getApplication().invokeLater {
+                if (documentSymbols.isEmpty() && project?.sessionService?.userLoggedIn == null && this is EditorImpl) {
+                    val presentationFactory = HintsPresentationWorkaround.newPresentationFactory(this)
+                    val text = "Sign in to New Relic to run queries"
+                    val textPresentation = presentationFactory.text(text)
+                    val referenceOnHoverPresentation =
+                        presentationFactory.referenceOnHover(textPresentation) { event, translated -> project?.codeStream?.show() }
+                    val renderer = CLMCustomRenderer(referenceOnHoverPresentation)
+                    val inlay = this.inlayModel.addBlockElement(0, false, true, 1, renderer)
+                    firstLineInlay[this] = inlay
+                }
             }
         }
     }

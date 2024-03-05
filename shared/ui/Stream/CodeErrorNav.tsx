@@ -59,6 +59,7 @@ import Icon from "./Icon";
 import { ClearModal, ComposeArea, Step, Subtext, Tip } from "./ReviewNav";
 import ScrollBox from "./ScrollBox";
 import { WarningBox } from "./WarningBox";
+import { isEmpty as _isEmpty } from "lodash";
 
 const NavHeader = styled.div`
 	// flex-grow: 0;
@@ -307,9 +308,7 @@ export function CodeErrorNav(props: Props) {
 		}
 
 		setIsLoading(true);
-		dispatch(fetchErrorGroup(derivedState.codeError)).then(_ => {
-			setIsLoading(false);
-		});
+		dispatch(fetchErrorGroup(derivedState.codeError)).then(_ => {});
 	}, [derivedState.codeError, derivedState.isConnectedToNewRelic, errorGroup]);
 
 	const onConnected = async (
@@ -351,7 +350,9 @@ export function CodeErrorNav(props: Props) {
 				occurrenceIdToUse = existingStackTrace.occurrenceId;
 				refToUse = existingStackTrace.sha;
 			}
-			entityIdToUse = codeError?.objectInfo?.entityId;
+			if (typeof codeError?.objectInfo?.entityId === "string") {
+				entityIdToUse = codeError?.objectInfo?.entityId;
+			}
 		}
 		if (!errorGroupGuidToUse) {
 			console.error("missing error group guid");
@@ -425,26 +426,35 @@ export function CodeErrorNav(props: Props) {
 				}
 
 				targetRemote = newRemote || remote;
+				const entityName =
+					codeError?.objectInfo?.entityName || errorGroup?.entityName || "selected";
+
 				if (multipleRepos && !targetRemote && derivedState.isConnectedToNewRelic) {
 					setMultiRepoDetectedError({
 						title: "Select a Repository",
-						description: `The ${
-							errorGroup ? errorGroup.entityName + " " : "selected "
-						}stack trace is associated with multiple repositories. Please select the one required for investigating this error.`,
+						description: `The ${entityName} service is associated with multiple repositories. Please select one to continue.`,
 					});
 					return;
 				}
 
+				// Set target remote if entity is associated with one repo
 				if (errorGroupResult?.errorGroup?.entity?.relatedRepos?.length === 1 && !multipleRepos) {
 					targetRemote = errorGroupResult?.errorGroup?.entity?.relatedRepos[0]?.url!;
-				} else if (codeError?.objectInfo?.remote) {
+				} else if (
+					// Attempt to set remote from codeError object as long as we know there is a repo associated
+					codeError?.objectInfo?.remote &&
+					(!_isEmpty(derivedState.currentCodeErrorData.relatedRepos) ||
+						codeError?.objectInfo?.hasRelatedRepos)
+				) {
 					targetRemote = codeError?.objectInfo?.remote;
 				}
+
+				// Kick off repo association screen
 				if (!targetRemote) {
 					if (derivedState.isConnectedToNewRelic) {
 						setRepoAssociationError({
 							title: "Which Repository?",
-							description: `Select the repository that this error is associated with so that we can take you to the code. If the repository doesn't appear in the list, open it in your IDE.`,
+							description: `Select the repository that the ${entityName} service is associated with so that we can take you to the code. If the repository doesn't appear in the list, open it in your IDE.`,
 						});
 
 						return;
@@ -508,6 +518,7 @@ export function CodeErrorNav(props: Props) {
 							? codeError.stackTraces[0].repoId
 							: "";
 				}
+
 				// YUCK
 				const stack =
 					errorGroupResult?.errorGroup?.errorTrace?.stackTrace?.map(_ => _.formatted) ||
@@ -580,6 +591,7 @@ export function CodeErrorNav(props: Props) {
 									accountId: errorGroupResult.accountId.toString(),
 									entityId: errorGroupResult?.errorGroup?.entityGuid || "",
 									entityName: errorGroupResult?.errorGroup?.entityName || "",
+									hasRelatedRepos: !_isEmpty(derivedState.currentCodeErrorData.relatedRepos),
 								},
 							},
 						])
@@ -812,6 +824,7 @@ export function CodeErrorNav(props: Props) {
 				}}
 				isLoadingCallback={setIsLoading}
 				isLoadingParent={isLoading}
+				noSingleItemDropdownSkip={false}
 				onSubmit={(r, skipTracking: boolean = false) => {
 					setIsLoading(true);
 					return new Promise((resolve, reject) => {
@@ -840,6 +853,7 @@ export function CodeErrorNav(props: Props) {
 				}}
 				isLoadingCallback={setIsLoading}
 				isLoadingParent={isLoading}
+				noSingleItemDropdownSkip={true}
 				onSubmit={r => {
 					return new Promise((resolve, reject) => {
 						const payload = {

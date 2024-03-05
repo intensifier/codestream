@@ -80,6 +80,8 @@ import {
 	DidRefreshAccessTokenNotificationType,
 	ThirdPartyProviders,
 	WhatsNewNotificationType,
+	SessionTokenStatus,
+	DidChangeSessionTokenStatusNotificationType,
 } from "@codestream/protocols/agent";
 import {
 	CSAccessTokenType,
@@ -522,6 +524,11 @@ export class CodeStreamSession {
 			refreshToken,
 			tokenType,
 		});
+	}
+
+	onSessionTokenStatusChanged(status: SessionTokenStatus) {
+		Logger.log(`Session token status changed: ${status}`);
+		this.agent.sendNotification(DidChangeSessionTokenStatusNotificationType, { status });
 	}
 
 	private _didEncounterMaintenanceMode() {
@@ -1190,7 +1197,7 @@ export class CodeStreamSession {
 					let error = loginApiErrorMappings[ex.info.code] || LoginResult.Unknown;
 					if (error === LoginResult.ProviderConnectFailed) {
 						Container.instance().telemetry.track({
-							eventName: "codestream/user login_failed",
+							eventName: "codestream/user/login failed",
 							properties: {
 								meta_data: `error: ${ex.info && ex.info.error}`,
 								event_type: "response",

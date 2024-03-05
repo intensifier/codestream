@@ -121,6 +121,7 @@ export class CodeStreamWebviewPanel implements WebviewLike, Disposable {
 		}).then(data => {
 			this._panel.webview.html = data
 				.replace(/{{root}}/g, pathToExt)
+				.replace(/{{panel}}/g, parameters.panel)
 				// here's some magic for inserting default data onload
 				.replace(
 					"</head>",

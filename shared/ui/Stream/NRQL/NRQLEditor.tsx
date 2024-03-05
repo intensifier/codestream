@@ -1,15 +1,18 @@
+import { isDarkTheme } from "@codestream/webview/src/themes";
 import { HostApi } from "@codestream/webview/webview-api";
 import { Monaco } from "@monaco-editor/react";
-import React, { useContext, useRef } from "react";
+import type monaco from "monaco-editor";
+import React, { useContext, useRef, useState } from "react";
+import { ThemeContext } from "styled-components";
 import {
 	GetNRQLCompletionItemsType,
 	GetNRQLConstantsRequestType,
 } from "../../../util/src/protocol/agent/agent.protocol.providers";
-import { isDarkTheme } from "@codestream/webview/src/themes";
-import type monaco from "monaco-editor";
-import { ThemeContext } from "styled-components";
-// transient dependency
 import { MonacoEditor } from "./MonacoEditor";
+
+export interface NRQLEditorApi {
+	setValue: (value: string) => void;
+}
 
 export const NRQLEditor = React.forwardRef(
 	(
@@ -21,20 +24,58 @@ export const NRQLEditor = React.forwardRef(
 			onSubmit?: (e: { value: string | undefined }) => void;
 			setValue?: (e: { value: string | undefined }) => void;
 			isReadonly?: boolean;
+			// if true, editor will fallback to a simple <textarea>
+			useSimpleEditor?: boolean;
 		},
 		ref
 	) => {
-		// Expose the ref and various functions to the parent component
-		React.useImperativeHandle(ref, () => ({
-			setValue: value => {
-				editorRef.current && editorRef.current.setValue(value);
-			},
-		}));
-
-		const themeContext = useContext(ThemeContext);
-		const theme = isDarkTheme(themeContext) ? "vs-dark" : "light";
 		let monacoRef = useRef<any>(null);
 		let editorRef = useRef<any>(null);
+		const [textAreaValue, setTextAreaValue] = useState<string>(props.defaultValue || "");
+		// Expose the ref and various functions to the parent component
+		React.useImperativeHandle(
+			ref,
+			() =>
+				({
+					setValue: value => {
+						if (editorRef.current) {
+							editorRef.current.setValue(value);
+						} else {
+							setTextAreaValue(value);
+						}
+					},
+				}) as NRQLEditorApi
+		);
+
+		if (props.useSimpleEditor) {
+			return (
+				<textarea
+					style={{ height: "120px", width: "100%" }}
+					disabled={props.isReadonly}
+					className={props.className}
+					value={textAreaValue}
+					onKeyDown={
+						props.onSubmit
+							? event => {
+									if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+										props.onSubmit && props.onSubmit({ value: textAreaValue });
+									}
+							  }
+							: undefined
+					}
+					onChange={e => {
+						const value = e.target.value;
+						setTextAreaValue(value);
+						if (props.onChange) {
+							props.onChange({ value: value });
+						}
+					}}
+				></textarea>
+			);
+		}
+
+		const themeContext = useContext(ThemeContext);
+		const theme = isDarkTheme(themeContext) ? "vs-dark" : "vs";
 
 		const handleEditorDidMount = async (
 			editor: monaco.editor.IStandaloneCodeEditor,
@@ -88,19 +129,35 @@ export const NRQLEditor = React.forwardRef(
 				},
 			});
 
-			// sample...
-			// monaco.editor.defineTheme("nrql", {
-			// 	base: "vs-dark",
-			// 	inherit: true,
-			// 	rules: [
-			// 		{
-			// 			token: "keyword.nrql",
-			// 			foreground: "ff0000",
-			// 		},
-			// 	],
-			// 	colors: {},
-			// });
-			// monaco.editor.setTheme("nrql");
+			monaco.editor.defineTheme("nrql", {
+				base: theme,
+				inherit: true,
+				rules: [
+					{
+						token: "keyword.nrql",
+						foreground: "#da66ed",
+					},
+					{
+						token: "keyword.operator.nrql",
+						foreground: "#52a7f7",
+					},
+					{
+						token: "support.function.nrql",
+						foreground: "#52a7f7",
+					},
+					{
+						token: "comment",
+						foreground: "#8a939a",
+					},
+					{
+						token: "string",
+						foreground: "#6cb505",
+					},
+					{ token: "comment.nrql", foreground: "#8a939a" },
+				],
+				colors: {},
+			});
+			monaco.editor.setTheme("nrql");
 
 			monaco.languages.setLanguageConfiguration("nrql", {
 				autoClosingPairs: [
@@ -108,12 +165,23 @@ export const NRQLEditor = React.forwardRef(
 					{ open: "[", close: "]" },
 					{ open: "(", close: ")" },
 				],
+				comments: {
+					lineComment: "--",
+					blockComment: ["/*", "*/"],
+				},
 			});
 
 			monaco.languages.setMonarchTokensProvider("nrql", {
 				ignoreCase: true,
 				tokenizer: {
 					root: [
+						// Single-line comment rule
+						[/(\/\/).*$/, "comment"],
+
+						// Multiline comment rules
+						[/\/\*/, "comment", "@comment"],
+						[/\*\//, "comment", "@pop"],
+						[/.*\*\//, "comment"],
 						[
 							new RegExp(`\\b(${response.keywords.map(_ => _.label).join("|")})\\b`, "i"),
 							"keyword.nrql",
@@ -132,6 +200,12 @@ export const NRQLEditor = React.forwardRef(
 							"support.function.nrql",
 						],
 						[/'.*?'/, "string"],
+					],
+					comment: [
+						[/[^*/]+/, "comment"],
+						[/\/\*/, "comment", "@push"],
+						[/\*\//, "comment", "@pop"],
+						[/./, "comment"],
 					],
 				},
 			});

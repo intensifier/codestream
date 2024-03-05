@@ -13,7 +13,19 @@ const BillboardValue = styled.div`
 	line-height: 1;
 `;
 
-export const NRQLResultsBillboard = (props: { results: NRQLResult[]; eventType?: string }) => {
+const BillboardValueType = styled.div`
+	font-size: 8vw;
+`;
+
+interface Props {
+	results: NRQLResult[];
+	/**
+	 * Name of the collection
+	 */
+	eventType?: string;
+}
+
+export const NRQLResultsBillboard = (props: Props) => {
 	let firstResult = props.results[0];
 	let onlyKey = Object.keys(firstResult)[0];
 	const value = firstResult[onlyKey];
@@ -44,7 +56,12 @@ export const NRQLResultsBillboard = (props: { results: NRQLResult[]; eventType?:
 			<BillboardValue title={value}>
 				{typeof value === "number" ? formatLargeNumber(value) : value}
 			</BillboardValue>
-			{props.eventType && <div>{props.eventType.replace(/_/g, " ")}</div>}
+			{props.eventType && (
+				<BillboardValueType>
+					{props.eventType.replace(/_/g, " ")}
+					{typeof value === "number" && value > 1 && <>s</>}
+				</BillboardValueType>
+			)}
 		</BillboardValueWrapper>
 	);
 };

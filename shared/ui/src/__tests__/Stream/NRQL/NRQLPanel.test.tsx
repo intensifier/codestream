@@ -40,7 +40,13 @@ const mockHostApi = {
 	send: async (a: { method: string }, b, c) => {
 		if (a.method === "codestream/newrelic/nrql/queries/recent") {
 			return {
-				items: [{ query: "SELECT * FROM FOO", accountIds: [1], createdAt: new Date().getTime() }],
+				items: [
+					{
+						query: "SELECT * FROM FOO",
+						accounts: [{ id: 1, name: "foo" }],
+						createdAt: new Date().getTime(),
+					},
+				],
 			} as GetNRQLRecentQueriesResponse;
 		}
 		if (a.method === "codestream/newrelic/accounts/all") {
@@ -88,7 +94,7 @@ describe("NRQL Panel UI", () => {
 			expect(screen.queryByTestId("run")).toHaveTextContent("Run");
 
 			expect(mockTrack).toHaveBeenCalledTimes(2);
-			expect(mockTrack).toHaveBeenCalledWith("codestream/nrql/webview opened", {
+			expect(mockTrack).toHaveBeenCalledWith("codestream/nrql/webview displayed", {
 				event_type: "click",
 				meta_data: `entry_point: ${props.entryPoint}`,
 			});

@@ -20,7 +20,7 @@ import { getLanguageSupport, LanguageSupport } from "./clm/languageSupport";
 import { flatten } from "lodash";
 import { DeploymentsProvider } from "./deployments/deploymentsProvider";
 import { parseId } from "./utils";
-import { NewRelicGraphqlClient } from "./newRelicGraphqlClient";
+import { NewRelicGraphqlClient, escapeNrql } from "./newRelicGraphqlClient";
 import { ReposProvider } from "./repos/reposProvider";
 
 export class AnomalyDetectorDrillDown {
@@ -157,7 +157,7 @@ export class AnomalyDetectorDrillDown {
 				event_type: "state_load",
 			};
 			telemetry?.track({
-				eventName: "codestream/anomalies calculated",
+				eventName: "codestream/transaction_anomaly_async_calculation succeeded",
 				properties: event,
 			});
 		} catch (e) {
@@ -184,6 +184,7 @@ export class AnomalyDetectorDrillDown {
 			isSupported: true,
 		};
 	}
+
 	private async executeCore(
 		languageSupport: LanguageSupport,
 		benchmarkSpans: SpanWithCodeAttrs[],
@@ -275,7 +276,7 @@ export class AnomalyDetectorDrillDown {
 		minimumSampleRate: number,
 		minimumRatio: number
 	): Promise<{ comparisons: Comparison[]; metricTimesliceNames: string[] }> {
-		const metricFilter = this.getMetricFilter(languageSupport, scope);
+		const metricFilter = this.getMetricFilter(scope);
 		const data = await this.getDurationMetric(this._dataTimeFrame, metricFilter);
 		const dataFiltered = languageSupport.filterMetrics(data, benchmarkSpans);
 
@@ -313,7 +314,7 @@ export class AnomalyDetectorDrillDown {
 		comparisons: Comparison[];
 		metricTimesliceNames: string[];
 	}> {
-		const metricFilter = this.getMetricFilter(languageSupport, scope);
+		const metricFilter = this.getMetricFilter(scope);
 		const errorCountLookup = `metricTimesliceName LIKE 'Errors/%'`;
 		const dataErrorCount = await this.getErrorCountMetric(errorCountLookup, this._dataTimeFrame);
 		const dataErrorCountFiltered = languageSupport.filterMetrics(dataErrorCount, benchmarkSpans);
@@ -561,9 +562,9 @@ export class AnomalyDetectorDrillDown {
 		return this.runNrql<NameValue>(query);
 	}
 
-	private getMetricFilter(languageSupport: LanguageSupport, scope: string | undefined) {
+	getMetricFilter(scope: string | undefined) {
 		if (scope) {
-			return `scope = '${scope}'`;
+			return `scope = '${escapeNrql(scope)}'`;
 		} else {
 			return "metricTimesliceName LIKE 'WebTransaction/%' OR metricTimesliceName LIKE 'OtherTransaction/%'";
 		}

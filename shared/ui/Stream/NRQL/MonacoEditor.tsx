@@ -8,11 +8,11 @@ export function MonacoEditor(props: {
 	className?: string;
 	defaultLanguage?: string;
 	defaultValue?: string;
-	// TODO this any
-	onMount?: any;
+	onMount?: (editor: monaco.editor.IStandaloneCodeEditor, monaco: Monaco) => void;
 	height?: string;
-	onValidate?: (markers: any[]) => {};
-	theme?: "vs-dark" | "light";
+	onValidate?: (markers: monaco.editor.IMarker[]) => void;
+	// "vs" is light
+	theme?: "vs-dark" | "vs";
 	options?: any;
 }) {
 	const handleEditorDidMount = async (

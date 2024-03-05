@@ -81,8 +81,7 @@ function useInnerElementType(Cell, columnWidth, rowHeight) {
 							height: rowHeight(0),
 							position: "sticky",
 							top: 0,
-							// left: 0,
-							zIndex: 4,
+							zIndex: 3,
 							backgroundColor: "var(--app-background-color-hover)",
 						},
 					})
@@ -125,7 +124,7 @@ function useInnerElementType(Cell, columnWidth, rowHeight) {
 					const width = columnWidth(columnIndex);
 					const height = rowHeight(rowIndex);
 
-					const marginTop = i === 1 ? sumRowsHeights(rowIndex) : undefined;
+					const marginTop = i === 1 ? sumRowsHeights(rowIndex) - 5 : undefined;
 
 					children.push(
 						React.createElement(Cell, {
@@ -137,9 +136,6 @@ function useInnerElementType(Cell, columnWidth, rowHeight) {
 								width,
 								height,
 								backgroundColor: "var(--app-background-color)",
-								// position: "sticky",
-								// left: 0,
-								// zIndex: 2,
 							},
 						})
 					);

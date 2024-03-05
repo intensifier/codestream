@@ -29,6 +29,7 @@ export interface Collaborator {
 }
 
 export type IdeNames = "VSC" | "VS" | "JETBRAINS";
+export type BrowserEngines = "JCEF" | "JxBrowser" | "DotNetBrowser";
 
 export interface BootstrapInHostResponse {
 	capabilities: Capabilities;
@@ -71,6 +72,7 @@ export interface SignedInBootstrapData extends BootstrapInHostResponse {
 export enum LogoutReason {
 	Unknown = "unknown",
 	ReAuthenticating = "reAuthenticating",
+	InvalidRefreshToken = "InvalidRefreshToken",
 }
 
 export interface LogoutRequest {
@@ -330,10 +332,11 @@ export interface OpenEditorViewNotification {
 		| "nrql_file"
 		// other
 		| "notification"
+		| "golden_metrics"
 		| "profile";
 	ide: {
-		name?: "VSC" | "VS" | "JETBRAINS";
-		browserEngine?: "JCEF" | "JxBrowser" | "DotNetBrowser" | undefined;
+		name?: IdeNames;
+		browserEngine?: BrowserEngines;
 	};
 
 	accountId?: number;

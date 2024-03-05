@@ -18,3 +18,5 @@ temp.json
 .gradle
 .DS_Store
 stats.json
+idea-flex.skeleton
+jflex-*.jar

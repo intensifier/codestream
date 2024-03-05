@@ -93,7 +93,7 @@ export const ObservabilityAnomaliesGroup = React.memo((props: Props) => {
 
 		console.debug("CLM Anomaly Clicked", event);
 
-		HostApi.instance.track("codestream/anomaly clicked", event);
+		HostApi.instance.track("codestream/anomaly_link clicked", event);
 	};
 
 	const handleClick = (anomaly: ObservabilityAnomaly) => {
@@ -195,6 +195,7 @@ export const ObservabilityAnomaliesGroup = React.memo((props: Props) => {
 													style={{ paddingTop: "2px", paddingLeft: "0px" }}
 													className="subtle"
 													name="anomaly"
+													data-testid={`anomaly-index-${index}`}
 												/>
 											</TransactionIconSpan>
 											<Tooltip title={tooltipContent(anomaly)} placement="topRight" delay={1}>

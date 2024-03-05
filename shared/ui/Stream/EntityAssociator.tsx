@@ -16,6 +16,7 @@ import { Button } from "../src/components/Button";
 import { NoContent } from "../src/components/Pane";
 import { useAppDispatch } from "../utilities/hooks";
 import { WarningBox } from "./WarningBox";
+import { isEmpty as _isEmpty } from "lodash";
 
 interface EntityAssociatorProps {
 	title?: string;
@@ -66,11 +67,14 @@ export const EntityAssociator = React.memo((props: PropsWithChildren<EntityAssoc
 	const [warningOrErrors, setWarningOrErrors] = useState<WarningOrError[] | undefined>(undefined);
 
 	async function loadEntities(search: string, _loadedOptions, additional?: AdditionalType) {
+		const { servicesToExcludeFromSearch } = props;
+
 		const result = await HostApi.instance.send(GetObservabilityEntitiesRequestType, {
 			searchCharacters: search,
 			nextCursor: additional?.nextCursor,
 		});
-		const options = result.entities.map(e => {
+
+		let options = result.entities.map(e => {
 			const typeLabel = (t: EntityType) => {
 				switch (t) {
 					case "BROWSER_APPLICATION_ENTITY":
@@ -92,6 +96,16 @@ export const EntityAssociator = React.memo((props: PropsWithChildren<EntityAssoc
 				labelAppend: typeLabel(e.entityType),
 			};
 		});
+
+		if (servicesToExcludeFromSearch && !_isEmpty(servicesToExcludeFromSearch)) {
+			options = options.filter(
+				option =>
+					!servicesToExcludeFromSearch.some(exclude => {
+						return exclude.entityGuid === option.value;
+					})
+			);
+		}
+
 		return {
 			options,
 			hasMore: !!result.nextCursor,

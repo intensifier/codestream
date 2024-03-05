@@ -87,6 +87,9 @@
         <iconProvider implementation="com.codestream.webview.WebViewEditorIconProvider"/>
         <editorTabTitleProvider implementation="com.codestream.webview.WebViewEditorTabTitleProvider"/>
 
+        <fileType name="NRQL File" language="NRQL" extensions="nrql" implementationClass="com.codestream.language.NrqlFileType" fieldName="INSTANCE" />
+        <lang.syntaxHighlighterFactory language="NRQL" implementationClass="com.codestream.language.NrqlSyntaxHighlighterFactory" />
+
         <notificationGroup id="codestream.notifications" displayType="BALLOON" isLogByDefault="false" />
     </extensions>
 

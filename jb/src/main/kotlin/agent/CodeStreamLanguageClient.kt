@@ -88,6 +88,11 @@ class CodeStreamLanguageClient(private val project: Project) : LanguageClient {
         }
     }
 
+    @JsonNotification("codestream/didChangeSessionTokenStatus")
+    fun didChangeSessionTokenStatus(json: JsonElement) {
+        project.webViewService?.postNotification("codestream/didChangeSessionTokenStatus", json)
+    }
+
     @JsonNotification("codestream/didChangeConnectionStatus")
     fun didChangeConnectionStatus(json: JsonElement) {
         project.webViewService?.postNotification("codestream/didChangeConnectionStatus", json)
@@ -135,13 +140,6 @@ class CodeStreamLanguageClient(private val project: Project) : LanguageClient {
 
     @JsonNotification("codestream/didFailLogin")
     fun didFailLogin(json: JsonElement?) {}
-
-    @JsonNotification("codestream/didEncounterInvalidRefreshToken")
-    fun didEncounterInvalidRefreshToken(json: JsonElement?) {
-        appDispatcher.launch {
-            project.authenticationService?.onDidEncounterInvalidRefreshToken();
-        }
-    }
 
     @JsonNotification("codestream/didLogin")
     fun didLogin(json: JsonElement) {

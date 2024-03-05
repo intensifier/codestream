@@ -7,6 +7,7 @@ interface TableWindowProps {
 	itemData?: JSX.Element[];
 	width?: string | number;
 	height?: string | number;
+	currentShowSurroundingIndex?: number;
 }
 
 export const TableWindow = (props: TableWindowProps) => {
@@ -35,6 +36,9 @@ export const TableWindow = (props: TableWindowProps) => {
 				}
 				let tableHeightInt = parseInt(tableHeightString, 10);
 				setHasVerticalScrollbar(tableHeightInt > containerHeight);
+				if (props.currentShowSurroundingIndex) {
+					(element as any).scrollToItem(props.currentShowSurroundingIndex - 2, "start");
+				}
 			}
 		}, 50);
 
@@ -68,7 +72,6 @@ const Row = ({ data, index, setSize, windowWidth }) => {
 	}, [setSize, index, windowWidth]);
 
 	const StyledRow = styled.div`
-		padding: 1em;
 		box-sizing: border-box;
 		border-left: 1px solid var(--base-border-color);
 		border-right: 1px solid var(--base-border-color);

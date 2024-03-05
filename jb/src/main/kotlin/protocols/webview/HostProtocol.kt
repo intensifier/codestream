@@ -220,3 +220,8 @@ class CompareLocalFilesRequest(
     val baseBranch: String,
     val context: CodeStreamDiffUriContext?
 )
+
+class BufferOpenRequest(
+    val contentType: String,
+    val data: String
+)

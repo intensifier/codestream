@@ -52,6 +52,8 @@ let nrColumnsByAccountByCollectionName: NrColumnsByAccountByCollectionName = {};
 
 @lsp
 export class NrNRQLProvider {
+	static ALL_RESULT_TYPES = ["table", "json", "billboard", "line", "bar", "area", "pie"];
+
 	constructor(private graphqlClient: NewRelicGraphqlClient) {}
 
 	@lspHandler(GetNRQLRequestType)
@@ -64,16 +66,30 @@ export class NrNRQLProvider {
 		}
 
 		try {
-			const query = escapeNrql(request.query).trim();
+			const query = this.transformQuery(request.query);
+			if (!query) {
+				return {
+					results: [],
+					accountId,
+					resultsTypeGuess: { selected: "table", enabled: [] },
+				};
+			}
+
 			const response = await this.graphqlClient.runNrqlWithMetadata<any>(accountId, query, 400);
 
 			void this.saveRecentQuery(request);
 
+			const facet = response?.rawResponse?.metadata?.facet;
 			return {
 				accountId,
 				results: response.results,
-				eventType: response?.rawResponse?.metadata?.eventType,
-				since: response?.rawResponse?.metadata?.rawSince,
+
+				metadata: {
+					eventType: response?.rawResponse?.metadata?.eventType,
+					since: response?.rawResponse?.metadata?.rawSince,
+					// facet is an array or string, normalize to array
+					facet: facet ? (Array.isArray(facet) ? facet : [facet]) : undefined,
+				},
 				resultsTypeGuess: this.getResultsType(
 					response.results,
 					response?.rawResponse?.metadata
@@ -90,6 +106,36 @@ export class NrNRQLProvider {
 				resultsTypeGuess: { selected: "table", enabled: [] },
 			};
 		}
+	}
+
+	/**
+ * Removes comments from the end of a string
+ * 
+ * FROM Collection
+ * SELECT foo -- that's the foo
+  WHERE queryTypes = 'bar' /* that's the bar
+  on two lines *\/
+  AND status = 'baz' // baz is here
+
+  becomes:
+
+  FROM Collection
+  SELECT foo
+  WHERE queryTypes = 'bar
+  AND status = 'baz'
+ * 
+ * @param nrql 
+ * @returns 
+ */
+	private removeNrqlComments(nrql: string) {
+		return nrql.replace(/(\-\-|\/\/|\/*\*[\s\S]*?\*\/).*$/gm, "");
+	}
+
+	transformQuery(nrql: string) {
+		let query = this.removeNrqlComments(nrql);
+		query = escapeNrql(query);
+		query = query.replace(/[\n\r]/g, " ").trim();
+		return query;
 	}
 
 	@log()
@@ -325,16 +371,19 @@ export class NrNRQLProvider {
 					});
 					const uniqueList = Object.values(uniqueObjects) as {
 						query: string;
-						accountIds: number[];
+						accountIds?: number[];
 						createdAt: number;
 					}[];
 					return {
 						items: uniqueList.map(_ => {
-							return {
+							const result = {
 								..._,
 								dayString: this.toDayString(_.createdAt),
 								accounts: accounts.filter(obj => (_.accountIds || []).includes(obj.id)),
 							};
+							// do not need this in the response
+							delete result.accountIds;
+							return result;
 						}),
 					};
 				}
@@ -399,9 +448,9 @@ export class NrNRQLProvider {
 		return 0;
 	}
 
-	private getResultsType(results: any[], metadata: ResponseMetadata) {
-		const ALL_RESULT_TYPES = ["table", "json", "billboard", "line", "bar", "area", "pie"];
-		if (!results || !results.length) return { selected: "table", enabled: ALL_RESULT_TYPES };
+	getResultsType(results: any[], metadata: ResponseMetadata) {
+		if (!results || !results.length)
+			return { selected: "table", enabled: NrNRQLProvider.ALL_RESULT_TYPES };
 
 		if (results.length === 1) {
 			const value = results[0];
@@ -421,8 +470,8 @@ export class NrNRQLProvider {
 		const isTimeseries = metadata?.timeSeries || metadata?.contents?.timeSeries;
 		const isFacet = metadata?.facet;
 		if (isTimeseries && isFacet) {
-			// TODO stacked bar!
-			return { selected: "table", enabled: ["table", "json"] };
+			// TODO stacked bar and line and area
+			return { selected: "line", enabled: ["table", "json", "line"] };
 		}
 
 		if (isTimeseries) {
@@ -441,7 +490,7 @@ export class NrNRQLProvider {
 			return { selected: "line", enabled: ["table", "json", "line", "area"] };
 		}
 		if (isFacet) {
-			return { selected: "bar", enabled: ["bar", "json", "pie", "table", "json"] };
+			return { selected: "bar", enabled: ["bar", "json", "pie", "table"] };
 		}
 		return { selected: "table", enabled: ["table", "json"] };
 	}

@@ -25,13 +25,9 @@ import {
 	GetObservabilityErrorGroupMetadataRequestType,
 	GetObservabilityErrorGroupMetadataResponse,
 	CSAsyncGrokError,
+	DidChangeSessionTokenStatusNotificationType,
 } from "@codestream/protocols/agent";
-import {
-	CodemarkType,
-	CSCodeError,
-	CSMe,
-	WebviewPanels,
-} from "@codestream/protocols/api";
+import { CodemarkType, CSCodeError, CSMe, WebviewPanels } from "@codestream/protocols/api";
 import React from "react";
 import * as path from "path-browserify";
 import { render } from "react-dom";
@@ -125,7 +121,7 @@ import { handleDirectives } from "./store/providerPullRequests/slice";
 import { openPullRequestByUrl } from "./store/providerPullRequests/thunks";
 import { configureProvider, updateProviders } from "./store/providers/actions";
 import { getReview } from "./store/reviews/reducer";
-import { setMaintenanceMode } from "./store/session/actions";
+import { setMaintenanceMode, setSessionTokenStatus } from "./store/session/actions";
 import { updateUnreads } from "./store/unreads/actions";
 import { upgradeRecommended, upgradeRequired } from "./store/versioning/actions";
 import { fetchCodemarks, openPanel } from "./Stream/actions";
@@ -232,6 +228,10 @@ function listenForEvents(store) {
 
 	api.on(RefreshMaintenancePollNotificationType, async e => {
 		store.dispatch(setMaintenanceMode(e.isMaintenanceMode, e));
+	});
+
+	api.on(DidChangeSessionTokenStatusNotificationType, async e => {
+		store.dispatch(setSessionTokenStatus(e.status));
 	});
 
 	api.on(DidChangeConnectionStatusNotificationType, e => {
@@ -633,11 +633,17 @@ function listenForEvents(store) {
 							tag?: string;
 							ide?: string;
 							timestamp?: number;
-							multipleRepos?: number;
+							multipleRepos?: number | string | boolean;
 							env?: string;
 						}>;
 						definedQuery.query.occurrenceId =
 							definedQuery.query.occurrenceId || definedQuery.query.traceId;
+
+						if (definedQuery.query.multipleRepos === "true") {
+							definedQuery.query.multipleRepos = true;
+						} else if (definedQuery.query.multipleRepos === "false") {
+							definedQuery.query.multipleRepos = false;
+						}
 
 						// if the user isn't logged in we'll queue this url
 						// up for post-login processing
@@ -699,6 +705,7 @@ function listenForEvents(store) {
 							spanName?: string;
 							spanHost?: string;
 							entityId?: string;
+							entityName?: string;
 							src?: string;
 							env?: string;
 							language?: string;
@@ -738,6 +745,7 @@ function listenForEvents(store) {
 								newRelicEntityGuid: definedQuery.query.entityId,
 								spanName: definedQuery.query.spanName,
 								spanHost: definedQuery.query.spanHost,
+								entityName: definedQuery.query.entityName,
 								language: definedQuery.query.language,
 								codeNamespace: definedQuery.query.namespace,
 								functionName: definedQuery.query.function,

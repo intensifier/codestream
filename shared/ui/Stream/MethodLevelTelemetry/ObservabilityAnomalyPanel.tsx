@@ -343,7 +343,9 @@ export const ObservabilityAnomalyPanel = () => {
 			);
 		}
 
-		return <span>{derivedState.currentObservabilityAnomaly.name}</span>;
+		return (
+			<span data-testid={`anomaly-title`}>{derivedState.currentObservabilityAnomaly.name}</span>
+		);
 	};
 
 	return (
@@ -392,6 +394,20 @@ export const ObservabilityAnomalyPanel = () => {
 								</>
 							) : (
 								<div>
+									{derivedState.currentObservabilityAnomaly.scope && (
+										<DataRow>
+											<DataLabel>Transaction:</DataLabel>
+											<DataValue>{derivedState.currentObservabilityAnomaly.scope}</DataValue>
+										</DataRow>
+									)}
+									{derivedState.currentObservabilityAnomalyEntityName && (
+										<DataRow>
+											<DataLabel>Service:</DataLabel>
+											<DataValue data-testid={`service-label`}>
+												{derivedState.currentObservabilityAnomalyEntityName}
+											</DataValue>
+										</DataRow>
+									)}
 									{telemetryResponse?.errors && telemetryResponse.errors.length > 0 && (
 										<div>
 											<br />
@@ -442,18 +458,6 @@ export const ObservabilityAnomalyPanel = () => {
 											</div>
 										</div>
 									)}
-									{derivedState.currentObservabilityAnomaly.scope && (
-										<DataRow>
-											<DataLabel>Transaction:</DataLabel>
-											<DataValue>{derivedState.currentObservabilityAnomaly.scope}</DataValue>
-										</DataRow>
-									)}
-									{derivedState.currentObservabilityAnomalyEntityName && (
-										<DataRow>
-											<DataLabel>Service:</DataLabel>
-											<DataValue>{derivedState.currentObservabilityAnomalyEntityName}</DataValue>
-										</DataRow>
-									)}
 
 									<div>
 										<br />
@@ -476,8 +480,15 @@ export const ObservabilityAnomalyPanel = () => {
 															key={"chart-" + index}
 															style={{ marginLeft: "0px", marginBottom: "20px" }}
 														>
-															<MetaLabel>{title}</MetaLabel>
-															<div style={{ color: "red" }}>{redHeaderText}</div>
+															<MetaLabel data-testid={`anomaly-transaction-title-index-${index}`}>
+																{title}
+															</MetaLabel>
+															<div
+																data-testid={`anomaly-transaction-redcolor-index-${index}`}
+																style={{ color: "red" }}
+															>
+																{redHeaderText}
+															</div>
 															<ResponsiveContainer width="100%" height={300} debounce={1}>
 																<LineChart
 																	width={500}

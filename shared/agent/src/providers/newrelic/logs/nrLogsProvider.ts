@@ -16,6 +16,7 @@ import {
 	GetSurroundingLogsResponse,
 	LogFieldDefinition,
 	LogResult,
+	LogResultSpecialColumns,
 } from "@codestream/protocols/agent";
 import { log } from "../../../system/decorators/log";
 import { NewRelicGraphqlClient } from "../newRelicGraphqlClient";
@@ -151,40 +152,35 @@ export class NrLogsProvider {
 
 			const logs = await this.graphqlClient.runNrql<LogResult>(accountId, query, 400);
 
-			let messageAttribute: string = "message";
-			const hasMessageAttribute = logs.some(lr => Object.keys(lr).includes("message"));
-			if (!hasMessageAttribute) {
-				messageAttribute = "log_summary";
-			}
-
-			logs.map(lr => {
-				const json = JSON.stringify(lr);
-				lr["log_summary"] = json;
-			});
-
-			const possibleSeverityAttributes: string[] = [
+			const possibleSeverityAttributes: Set<string> = new Set([
 				`log_severity`,
 				`level`,
 				`log.level`,
 				`loglevel`,
 				`log_level`,
-			];
+			]);
 
-			let severityAttribute: string = "";
+			logs.map(lr => {
+				const myKeys = Object.keys(lr);
 
-			// should have at least (and no more) than one of these
-			possibleSeverityAttributes.map(psa => {
-				const hasAttribute = logs.some(lr => Object.keys(lr).includes(psa));
+				const json = JSON.stringify(lr);
+				lr[LogResultSpecialColumns.summary] = json;
 
-				if (hasAttribute) {
-					severityAttribute = psa;
+				if (myKeys.includes("message")) {
+					lr[LogResultSpecialColumns.message] = "message";
+				} else {
+					lr[LogResultSpecialColumns.message] = "log_summary";
+				}
+
+				for (let psa of possibleSeverityAttributes) {
+					if (myKeys.includes(psa) && typeof lr[psa] === "string") {
+						lr[LogResultSpecialColumns.severity] = psa;
+					}
 				}
 			});
 
 			return {
 				logs,
-				messageAttribute,
-				severityAttribute,
 				accountId,
 			};
 		} catch (ex) {
@@ -208,15 +204,22 @@ export class NrLogsProvider {
 
 			const parsedId = parseId(entityGuid)!;
 
-			const queryWhere = `WHERE entity.guid = '${entityGuid}' AND messageId != '${messageId}`;
+			const ONE_SECOND = 1000;
+			const ONE_MINUTE = ONE_SECOND * 60;
+			const TEN_MINUTES = ONE_MINUTE * 10;
+
+			const beforeTime = since - TEN_MINUTES;
+			const afterTime = since + TEN_MINUTES;
+
+			const queryWhere = `WHERE entity.guid = '${entityGuid}' AND messageId != '${messageId}'`;
 			const queryOrder = `ORDER BY timestamp ASC`;
 
-			const beforeQuerySince = `SINCE ${since} - 10 MINUTES`;
+			const beforeQuerySince = `SINCE ${beforeTime}`;
 			const beforeQueryUntil = `UNTIL ${since}`;
 			const beforeQuery = `SELECT * FROM Log ${queryWhere} ${beforeQuerySince} ${beforeQueryUntil} ${queryOrder}`;
 
 			const afterQuerySince = `SINCE ${since}`;
-			const afterQueryUntil = `UNTIL ${since} + 10 MINUTES`;
+			const afterQueryUntil = `UNTIL ${afterTime}`;
 			const afterQuery = `SELECT * FROM Log ${queryWhere} ${afterQuerySince} ${afterQueryUntil} ${queryOrder}`;
 
 			ContextLogger.log(`getSurroundingLogs beforeQuery: ${beforeQuery}`);

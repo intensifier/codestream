@@ -1,5 +1,23 @@
 # Change Log
 
+## [15.4.0] - 2023-3-5
+
+### Added
+
+- Ability to show surrounding logs when viewing log search results
+- Extension support for "Open in IDE" from a span in distributed tracing on New Relic
+
+### Changed
+
+- Updated UX for when a user's auth token expires and can't be refreshed
+- When associating a repo with a service on New Relic, services already associated with the repo are no longer listed
+- All sections of the CodeStream pane are now collapsed by default for new users
+
+### Fixed
+
+- Fixes an issue where creating an issue on Shortcut would result in duplicate issues
+- Addresses [#1869](https://github.com/TeamCodeStream/codestream/issues/1869) &mdash; OTel service not recognized
+
 ## [15.3.0] - 2023-2-14
 
 ### Added

@@ -7,8 +7,10 @@ import com.codestream.authenticationService
 import com.codestream.clmService
 import com.codestream.editorService
 import com.codestream.gson
+import com.codestream.language.NrqlLanguage
 import com.codestream.protocols.agent.SetServerUrlParams
 import com.codestream.protocols.webview.ActiveEditorContextResponse
+import com.codestream.protocols.webview.BufferOpenRequest
 import com.codestream.protocols.webview.CompareLocalFilesRequest
 import com.codestream.protocols.webview.EditorCopySymbolRequest
 import com.codestream.protocols.webview.EditorCopySymbolResponse
@@ -52,18 +54,28 @@ import com.intellij.ide.BrowserUtil
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.ServiceManager
 import com.intellij.openapi.diagnostic.Logger
+import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.fileChooser.FileChooser
 import com.intellij.openapi.fileChooser.FileChooserDescriptor
 import com.intellij.openapi.fileEditor.FileEditorManager
+import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.fileEditor.TextEditor
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.openapi.vfs.VirtualFileManager
+import com.intellij.psi.PsiDocumentManager
+import com.intellij.psi.PsiFileFactory
+import com.intellij.testFramework.LightVirtualFile
 import com.teamdev.jxbrowser.js.JsAccessible
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.launch
 import org.eclipse.lsp4j.jsonrpc.ResponseErrorException
 import org.eclipse.lsp4j.jsonrpc.messages.ResponseError
+import org.jetbrains.kotlin.idea.scratch.ScratchFile
+import java.io.File
 import java.util.concurrent.CompletableFuture
+import kotlin.io.path.Path
+import kotlin.io.path.createTempDirectory
 
 class WebViewRouter(val project: Project) {
     var webView: WebView? = null
@@ -117,6 +129,7 @@ class WebViewRouter(val project: Project) {
 
         val response = when (message.method) {
             "host/bootstrap" -> authentication.bootstrap()
+            "host/buffer/open" -> bufferOpen(message)
             "host/didInitialize" -> {
                 _isReady = true
                 initialization.complete(Unit)
@@ -387,6 +400,23 @@ class WebViewRouter(val project: Project) {
     private fun localFilesDiffClose(message: WebViewMessage) {
         val reviewService = project.reviewService ?: return
         reviewService.closeDiff()
+    }
+
+    private fun bufferOpen(message: WebViewMessage) {
+        val request = gson.fromJson<BufferOpenRequest>(message.params!!)
+        val tempDir = createTempDirectory("codestream").toFile().also { it.deleteOnExit() }
+        val tempFile = File(tempDir, "temp.${request.contentType}")
+        tempFile.writeText(request.data, Charsets.UTF_8)
+        val vFile = VirtualFileManager.getInstance().findFileByNioPath(Path(tempFile.path))
+        ApplicationManager.getApplication().invokeLater {
+            try {
+                vFile?.let {
+                    FileEditorManager.getInstance(project).openFile(it, true)
+                }
+            } catch (ex: Exception) {
+                ex.printStackTrace()
+            }
+        }
     }
 
     private fun parse(json: String): WebViewMessage {

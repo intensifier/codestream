@@ -6,7 +6,11 @@ import {
 	ResultsTypeGuess,
 	isNRErrorResponse,
 } from "@codestream/protocols/agent";
-import { IdeNames, OpenEditorViewNotificationType } from "@codestream/protocols/webview";
+import {
+	BrowserEngines,
+	IdeNames,
+	OpenEditorViewNotificationType,
+} from "@codestream/protocols/webview";
 import { parseId } from "@codestream/webview/utilities/newRelic";
 import { Disposable } from "@codestream/webview/utils";
 import React, { useEffect, useMemo, useRef, useState } from "react";
@@ -19,7 +23,7 @@ import { HostApi } from "../../webview-api";
 import Button from "../Button";
 import { fuzzyTimeAgoinWords } from "../Timestamp";
 import ExportResults from "./ExportResults";
-import { NRQLEditor } from "./NRQLEditor";
+import { NRQLEditorApi, NRQLEditor } from "./NRQLEditor";
 import { NRQLResultsArea } from "./NRQLResultsArea";
 import { NRQLResultsBar } from "./NRQLResultsBar";
 import { NRQLResultsBillboard } from "./NRQLResultsBillboard";
@@ -87,8 +91,9 @@ const OptionName = styled.div`
 `;
 
 const ResultsContainer = styled.div`
-	padding: 0px 20px 13px 20px;
+	padding: 0px 20px 14px 20px;
 	width: 100%;
+	height: 100%;
 	overflow: hidden;
 `;
 
@@ -118,8 +123,8 @@ const Option = (props: OptionProps) => {
 const DEFAULT_QUERY = "FROM ";
 
 export const DEFAULT_VISUALIZATION_GUESS = {
-	selected: "table",
-	enabled: ["json", "billboard", "line", "bar", "table"],
+	selected: "",
+	enabled: [],
 };
 
 export const NRQLPanel = (props: {
@@ -127,9 +132,13 @@ export const NRQLPanel = (props: {
 	entryPoint: string;
 	entityGuid?: string;
 	query?: string;
-	ide?: { name?: IdeNames };
+	ide?: { name?: IdeNames; browserEngine?: BrowserEngines };
 }) => {
-	const supports = { export: props.ide?.name === "VSC" };
+	const supports = {
+		export: props.ide?.name === "VSC" || props.ide?.name === "JETBRAINS",
+		// default to true! currently JsBrowser works!
+		enhancedEditor: true, // !props.ide || props?.ide?.browserEngine !== "JxBrowser",
+	};
 
 	const initialAccountId = props.accountId
 		? props.accountId
@@ -141,6 +150,7 @@ export const NRQLPanel = (props: {
 	const [results, setResults] = useState<NRQLResult[]>([]);
 	const [noResults, setNoResults] = useState<boolean>(false);
 	const [eventType, setEventType] = useState<string>();
+	const [facet, setFacet] = useState<string[] | undefined>(undefined);
 	const [since, setSince] = useState<string>();
 	const [selectedAccount, setSelectedAccount] = useState<
 		{ label: string; value: number } | undefined
@@ -154,7 +164,7 @@ export const NRQLPanel = (props: {
 	const [shouldRefetchRecentQueriesTimestamp, setShouldRefetchRecentQueriesTimestamp] = useState<
 		number | undefined
 	>(undefined);
-	const nrqlEditorRef = useRef<any>(null);
+	const nrqlEditorRef = useRef<NRQLEditorApi>(null);
 	const { height: editorHeight, ref: editorRef } = useResizeDetector();
 	const { width, height, ref } = useResizeDetector();
 	const trimmedHeight: number = (height ?? 0) - (height ?? 0) * 0.05;
@@ -168,20 +178,26 @@ export const NRQLPanel = (props: {
 	}, [selectedAccount]);
 
 	useEffect(() => {
-		HostApi.instance.track("codestream/nrql/webview opened", {
+		disposables.push(
+			HostApi.instance.on(OpenEditorViewNotificationType, e => {
+				if (!nrqlEditorRef?.current) return;
+
+				const value = e.query || "";
+				nrqlEditorRef.current!.setValue(value);
+				setUserQuery(value);
+				executeNRQL(accountId, value);
+			})
+		);
+		return () => {
+			disposables && disposables.forEach(_ => _.dispose());
+		};
+	}, [accountId]);
+
+	useEffect(() => {
+		HostApi.instance.track("codestream/nrql/webview displayed", {
 			event_type: "click",
 			meta_data: `entry_point: ${props.entryPoint}`,
 		});
-
-		disposables.push(
-			HostApi.instance.on(OpenEditorViewNotificationType, e => {
-				if (nrqlEditorRef?.current) {
-					nrqlEditorRef.current!.setValue(e.query);
-					setUserQuery(e.query!);
-					executeNRQL(accountId, e.query!);
-				}
-			})
-		);
 
 		accountsPromise = HostApi.instance
 			.send(GetAllAccountsRequestType, {})
@@ -211,9 +227,6 @@ export const NRQLPanel = (props: {
 			.catch(ex => {
 				handleError(ex?.message || "Error fetching accounts");
 			});
-		return () => {
-			disposables && disposables.forEach(_ => _.dispose());
-		};
 	}, []);
 
 	const handleError = (message: string) => {
@@ -241,15 +254,11 @@ export const NRQLPanel = (props: {
 			}
 
 			setIsLoading(true);
-			setNRQLError(undefined);
-			setResults([]);
-			setResultsTypeGuess({});
-			setEventType("");
-			setSince("");
+			_resetQueryCore();
 
 			const response = await HostApi.instance.send(GetNRQLRequestType, {
 				accountId,
-				query: nrqlQuery.replace(/[\n\r]/g, " "),
+				query: nrqlQuery,
 			});
 
 			if (!response) {
@@ -272,14 +281,26 @@ export const NRQLPanel = (props: {
 				});
 
 				setResults(response.results);
-				setResultsTypeGuess(response.resultsTypeGuess || {});
-				setEventType(response.eventType);
-				if (response.since) {
-					if (/^[0-9]+$/.test(response.since)) {
-						setSince(fuzzyTimeAgoinWords(Number(response.since)) + " ago");
-					} else {
-						setSince(response.since.toLowerCase());
+
+				if (response.resultsTypeGuess && response.resultsTypeGuess.enabled) {
+					setResultsTypeGuess({
+						selected: response.resultsTypeGuess.enabled.includes(resultsTypeGuess?.selected || "")
+							? resultsTypeGuess.selected || ""
+							: response.resultsTypeGuess.selected,
+						enabled: response.resultsTypeGuess.enabled,
+					});
+				}
+
+				if (response.metadata) {
+					setEventType(response.metadata.eventType);
+					if (response.metadata.since) {
+						if (/^[0-9]+$/.test(response.metadata.since)) {
+							setSince(fuzzyTimeAgoinWords(Number(response.metadata.since)) + " ago");
+						} else {
+							setSince(response.metadata.since.toLowerCase());
+						}
 					}
+					setFacet(response.metadata.facet);
 				}
 				setShouldRefetchRecentQueriesTimestamp(new Date().getTime());
 			}
@@ -290,16 +311,19 @@ export const NRQLPanel = (props: {
 		}
 	};
 
+	const _resetQueryCore = () => {
+		setNRQLError(undefined);
+		setResults([]);
+		setEventType("");
+		setSince("");
+		setNoResults(false);
+	};
+
 	const resetQuery = () => {
 		nrqlEditorRef.current!.setValue(DEFAULT_QUERY);
 		setUserQuery(DEFAULT_QUERY);
 
-		setNRQLError(undefined);
-		setResults([]);
-		setResultsTypeGuess({});
-		setEventType("");
-		setSince("");
-		setNoResults(false);
+		_resetQueryCore();
 	};
 
 	const formatSelectedAccount = (account: Account) => {
@@ -406,6 +430,7 @@ export const NRQLPanel = (props: {
 									setUserQuery(e.value!);
 									executeNRQL(accountId, e.value!);
 								}}
+								useSimpleEditor={!supports.enhancedEditor}
 								ref={nrqlEditorRef}
 							/>
 						</ResizeEditorContainer>
@@ -470,11 +495,24 @@ export const NRQLPanel = (props: {
 								{resultsTypeGuess.selected === "billboard" && (
 									<NRQLResultsBillboard results={results} eventType={eventType} />
 								)}
-								{resultsTypeGuess.selected === "area" && <NRQLResultsArea results={results} />}
-								{resultsTypeGuess.selected === "line" && <NRQLResultsLine results={results} />}
+								{resultsTypeGuess.selected === "area" && (
+									<NRQLResultsArea eventType={eventType} results={results} />
+								)}
+								{resultsTypeGuess.selected === "line" && (
+									<NRQLResultsLine
+										height={trimmedHeight}
+										eventType={eventType}
+										results={results}
+										facet={facet!}
+									/>
+								)}
 								{resultsTypeGuess.selected === "json" && <NRQLResultsJSON results={results} />}
-								{resultsTypeGuess.selected === "bar" && <NRQLResultsBar results={results} />}
-								{resultsTypeGuess.selected === "pie" && <NRQLResultsPie results={results} />}
+								{resultsTypeGuess.selected === "bar" && (
+									<NRQLResultsBar height={trimmedHeight} results={results} facet={facet!} />
+								)}
+								{resultsTypeGuess.selected === "pie" && (
+									<NRQLResultsPie results={results} facet={facet!} />
+								)}
 							</>
 						)}
 						{noResults && <div style={{ textAlign: "center" }}>No results found</div>}
