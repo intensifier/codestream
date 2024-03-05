@@ -101,6 +101,15 @@ export class NrLogsProvider {
 		}
 	}
 
+	private readonly possibleSeverityAttributes = [
+		`log_severity`,
+		`level`,
+		`log.level`,
+		`loglevel`,
+		`log_level`,
+		`level_name`,
+	];
+
 	@lspHandler(GetLogsRequestType)
 	@log()
 	public async getLogs(request: GetLogsRequest): Promise<GetLogsResponse> {
@@ -152,14 +161,6 @@ export class NrLogsProvider {
 
 			const logs = await this.graphqlClient.runNrql<LogResult>(accountId, query, 400);
 
-			const possibleSeverityAttributes: Set<string> = new Set([
-				`log_severity`,
-				`level`,
-				`log.level`,
-				`loglevel`,
-				`log_level`,
-			]);
-
 			logs.map(lr => {
 				const myKeys = Object.keys(lr);
 
@@ -172,7 +173,7 @@ export class NrLogsProvider {
 					lr[LogResultSpecialColumns.message] = "log_summary";
 				}
 
-				for (let psa of possibleSeverityAttributes) {
+				for (let psa of this.possibleSeverityAttributes) {
 					if (myKeys.includes(psa) && typeof lr[psa] === "string") {
 						lr[LogResultSpecialColumns.severity] = psa;
 					}
@@ -235,6 +236,44 @@ export class NrLogsProvider {
 				afterQuery,
 				400
 			);
+
+			beforeLogs.map(lr => {
+				const myKeys = Object.keys(lr);
+
+				const json = JSON.stringify(lr);
+				lr[LogResultSpecialColumns.summary] = json;
+
+				if (myKeys.includes("message")) {
+					lr[LogResultSpecialColumns.message] = "message";
+				} else {
+					lr[LogResultSpecialColumns.message] = "log_summary";
+				}
+
+				for (let psa of this.possibleSeverityAttributes) {
+					if (myKeys.includes(psa) && typeof lr[psa] === "string") {
+						lr[LogResultSpecialColumns.severity] = psa;
+					}
+				}
+			});
+
+			afterLogs.map(lr => {
+				const myKeys = Object.keys(lr);
+
+				const json = JSON.stringify(lr);
+				lr[LogResultSpecialColumns.summary] = json;
+
+				if (myKeys.includes("message")) {
+					lr[LogResultSpecialColumns.message] = "message";
+				} else {
+					lr[LogResultSpecialColumns.message] = "log_summary";
+				}
+
+				for (let psa of this.possibleSeverityAttributes) {
+					if (myKeys.includes(psa) && typeof lr[psa] === "string") {
+						lr[LogResultSpecialColumns.severity] = psa;
+					}
+				}
+			});
 
 			return {
 				beforeLogs,
