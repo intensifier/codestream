@@ -51,6 +51,7 @@ import com.intellij.openapi.editor.markup.HighlighterLayer
 import com.intellij.openapi.editor.markup.HighlighterTargetArea
 import com.intellij.openapi.editor.markup.RangeHighlighter
 import com.intellij.openapi.editor.markup.TextAttributes
+import com.intellij.openapi.project.DumbService
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiComment
@@ -411,14 +412,14 @@ abstract class CLMEditorManager(
         }
     }
 
-    private fun updateInlaysCore() {
-        val (result, project, path, editor) = displayDeps() ?: return
+    private fun updateInlaysCore() = DumbService.getInstance(project!!).runWhenSmart {
+        val (result, project, path, editor) = displayDeps() ?: return@runWhenSmart
         if (project.isDisposed || editor.isDisposed) {
-            return
+            return@runWhenSmart
         }
         val updateInlaysCoreStopWatch = startWithName("updateInlaysCore")
         val updateInlaysCoreToRenderStopWatch = startWithName("updateInlaysCore toRender")
-        val psiFile = PsiDocumentManager.getInstance(project).getPsiFile(editor.document) ?: return
+        val psiFile = PsiDocumentManager.getInstance(project).getPsiFile(editor.document) ?: return@runWhenSmart
 
         val clmElements: List<ClmElements> = symbolResolver.clmElements(psiFile, clmResult)
 
