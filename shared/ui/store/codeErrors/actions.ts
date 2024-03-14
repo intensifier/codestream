@@ -1,9 +1,7 @@
 import {
-	ClaimCodeErrorRequestType,
 	CodeBlock,
 	CSAsyncGrokError,
 	DeleteCodeErrorRequestType,
-	FetchCodeErrorsRequestType,
 	GetCodeErrorRequestType,
 } from "@codestream/protocols/agent";
 import { CSCodeError, CSStackTraceInfo } from "@codestream/protocols/api";
@@ -16,11 +14,6 @@ export const reset = () => action("RESET");
 
 export const _bootstrapCodeErrors = (codeErrors: CSCodeError[]) =>
 	action(CodeErrorsActionsTypes.Bootstrap, codeErrors);
-
-export const bootstrapCodeErrors = () => async dispatch => {
-	const { codeErrors } = await HostApi.instance.send(FetchCodeErrorsRequestType, {});
-	dispatch(_bootstrapCodeErrors(codeErrors));
-};
 
 export const addCodeErrors = (codeErrors: CSCodeError[]) =>
 	action(CodeErrorsActionsTypes.AddCodeErrors, codeErrors);
@@ -47,6 +40,9 @@ export const setFunctionToEditFailed = (value: boolean) =>
 
 export const setGrokError = (grokError: CSAsyncGrokError | undefined) =>
 	action(CodeErrorsActionsTypes.SetGrokError, grokError);
+
+export const setDemoMode = (enabled: boolean) =>
+	action(CodeErrorsActionsTypes.SetDemoMode, enabled);
 
 export const resetNrAi = () => action(CodeErrorsActionsTypes.ResetNrAi);
 
@@ -104,10 +100,6 @@ export const fetchCodeError = (codeErrorId: string) => async dispatch => {
 	const response = await HostApi.instance.send(GetCodeErrorRequestType, { codeErrorId });
 
 	if (response.codeError) return dispatch(saveCodeErrors([response.codeError]));
-};
-
-export const claimCodeError = async request => {
-	return await HostApi.instance.send(ClaimCodeErrorRequestType, request);
 };
 
 export const handleDirectives = (id: string, data: any) =>

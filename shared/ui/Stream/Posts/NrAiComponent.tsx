@@ -1,4 +1,4 @@
-import React, { useContext, useMemo } from "react";
+import React, { useCallback, useContext, useMemo } from "react";
 import { NewRelicErrorGroup, PostPlus } from "@codestream/protocols/agent";
 import { MarkdownText } from "@codestream/webview/Stream/MarkdownText";
 import { MarkdownContent } from "@codestream/webview/Stream/Posts/Reply";
@@ -12,10 +12,12 @@ import { NrAiFeedback } from "./NrAiFeedback";
 import { replaceSymbol } from "@codestream/webview/store/codeErrors/thunks";
 import { FunctionToEdit } from "@codestream/webview/store/codeErrors/types";
 import { NrAiCodeBlockLoading, NrAiLoading } from "./NrAiLoading";
-import { DiffEditor } from "@monaco-editor/react";
+import { DiffEditor, useMonaco } from "@monaco-editor/react";
 import { isDarkTheme } from "@codestream/webview/src/themes";
 import { HostApi } from "@codestream/webview/webview-api";
 import { URI } from "vscode-uri";
+import { setApplyFixCallback } from "@codestream/webview/store/codeErrors/api/apiResolver";
+import { CodeStreamState } from "@codestream/webview/store";
 
 export const DiffSection = styled.div`
 	margin: 10px 0;
@@ -49,7 +51,9 @@ function Markdown(props: { text: string }) {
 export function NrAiComponent(props: NrAiComponentProps) {
 	// console.debug("NrAiComponent", props);
 	const dispatch = useAppDispatch();
+	const monaco = useMonaco();
 	const isGrokLoading = useAppSelector(isGrokStreamLoading);
+	const demoMode = useAppSelector((state: CodeStreamState) => state.codeErrors.demoMode);
 	const hasIntro = useMemo(
 		() => props.post.parts?.intro && props.post.parts.intro.length > 0,
 		[props.post.parts?.intro]
@@ -93,7 +97,7 @@ export function NrAiComponent(props: NrAiComponentProps) {
 		return result;
 	}, [props.post.parts?.codeFix]);
 
-	const applyFix = async () => {
+	const applyFix = useCallback(async () => {
 		if (!props.file || !props.functionToEdit?.symbol || !normalizedCodeFix) {
 			console.error("No file symbol or codeBlock");
 			return;
@@ -111,17 +115,32 @@ export function NrAiComponent(props: NrAiComponentProps) {
 			// remove trailing linefeed on normalizedCodeFix
 			const normalizedCodeFixWithoutTrailingLinefeed = normalizedCodeFix.replace(/\r?\n$/, "");
 			await dispatch(
-				replaceSymbol(
-					targetUri,
-					props.functionToEdit.symbol,
-					normalizedCodeFixWithoutTrailingLinefeed,
-					props.functionToEdit.namespace
-				)
+				replaceSymbol({
+					uri: targetUri,
+					symbol: props.functionToEdit.symbol,
+					codeBlock: normalizedCodeFixWithoutTrailingLinefeed,
+					namespace: props.functionToEdit.namespace,
+				})
 			);
 		} catch (e) {
 			console.error("Error applying fix", e);
 		}
-	};
+	}, [normalizedCodeFix, props.errorGroup, props.file, props.functionToEdit]);
+
+	useMemo(() => {
+		if (demoMode.enabled) {
+			setApplyFixCallback(applyFix);
+		}
+	}, [applyFix]);
+
+	const linesChanged = useMemo(() => {
+		if (monaco && monaco.editor.getDiffEditors().length > 0) {
+			const lineChanges = monaco.editor.getDiffEditors()[0].getLineChanges();
+			// console.log(`*** lineChanges: ${lineChanges?.length}`);
+			return lineChanges?.length ?? 0;
+		}
+		return 0;
+	}, [monaco?.editor.getDiffEditors()]);
 
 	return (
 		<section className="nrai-post">
@@ -132,7 +151,7 @@ export function NrAiComponent(props: NrAiComponentProps) {
 				props.file &&
 				props.functionToEdit?.codeBlock &&
 				normalizedCodeFix && (
-					<DiffSection>
+					<DiffSection hidden={linesChanged === 0}>
 						<DiffEditor
 							original={props.functionToEdit?.codeBlock}
 							modified={normalizedCodeFix}
@@ -153,6 +172,7 @@ export function NrAiComponent(props: NrAiComponentProps) {
 						</ButtonRow>
 					</DiffSection>
 				)}
+			{linesChanged === 0 && <div style={{ marginTop: "10px" }}></div>}
 			<Markdown text={parts?.description ?? ""} />
 			{showFeedback && (
 				<>

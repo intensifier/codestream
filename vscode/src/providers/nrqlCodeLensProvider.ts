@@ -14,6 +14,7 @@ import { Logger } from "../logger";
 import { SymbolKind } from "vscode-languageclient";
 import { Container } from "../container";
 import { log } from "../system";
+import { ExecuteNrqlCommandArgs } from "../commands";
 
 // const sleep = async (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -33,7 +34,7 @@ export class NrqlCodeLensProvider implements CodeLensProvider {
 	// Expose the event emitter as a property
 	readonly onDidChangeCodeLenses: vscode.Event<void> = this._onDidChangeCodeLenses.event;
 
-	@log({ timed: true })
+	@log()
 	public async provideCodeLenses(
 		document: TextDocument,
 		token: CancellationToken
@@ -118,7 +119,14 @@ export class NrqlCodeLensProvider implements CodeLensProvider {
 								title: "Run ▶️",
 								tooltip: "Run NRQL query",
 								command: "codestream.executeNrql",
-								arguments: [document.uri, _.name, _.range.start.line]
+								arguments: [
+									{
+										fileUri: document.uri,
+										// the "name" is the query
+										text: _.name,
+										lineNumber: _.range.start.line
+									} as ExecuteNrqlCommandArgs
+								]
 							});
 						})
 				);

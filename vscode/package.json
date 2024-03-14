@@ -2,7 +2,7 @@
 	"name": "codestream",
 	"displayName": "New Relic CodeStream",
 	"description": "Bring production telemetry into your IDE to quickly identify and resolve performance issues.",
-	"version": "15.4.3",
+	"version": "15.5.0",
 	"author": "CodeStream",
 	"publisher": "CodeStream",
 	"extensionKind": [
@@ -144,6 +144,12 @@
 					"type": "boolean",
 					"default": true,
 					"description": "Specifies whether to show glyph indicators at the start of lines with associated codemarks in the editor",
+					"scope": "window"
+				},
+				"codestream.highlightEntityGuids": {
+					"type": "boolean",
+					"default": true,
+					"description": "Specifies whether to highlight entity guids in the editor",
 					"scope": "window"
 				},
 				"codestream.traceLevel": {

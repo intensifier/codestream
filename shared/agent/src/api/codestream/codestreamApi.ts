@@ -313,7 +313,7 @@ import {
 
 import { HttpsProxyAgent } from "https-proxy-agent";
 import { ServerError } from "../../agentError";
-import { Team, User } from "../../api/extensions";
+import { Team, User } from "../extensions";
 import { HistoryFetchInfo } from "../../broadcaster/broadcaster";
 import { Container, SessionContainer } from "../../container";
 import { Logger } from "../../logger";
@@ -337,6 +337,7 @@ import { CodeStreamUnreads } from "./unreads";
 import { clearResolvedFlag } from "@codestream/utils/api/codeErrorCleanup";
 import { ResponseError } from "vscode-jsonrpc/lib/messages";
 import { parseId } from "../../providers/newrelic/utils";
+import { machineIdSync } from "node-machine-id";
 
 @lsp
 export class CodeStreamApiProvider implements ApiProvider {
@@ -369,6 +370,7 @@ export class CodeStreamApiProvider implements ApiProvider {
 	private _usingServiceGatewayAuth: boolean = false;
 	private _refreshNRTokenPromise: Promise<CSNewRelicProviderInfo> | undefined;
 	private _refreshTokenFailed: boolean = false;
+	private _clientId: string;
 
 	readonly capabilities: Capabilities = {
 		channelMute: true,
@@ -384,7 +386,10 @@ export class CodeStreamApiProvider implements ApiProvider {
 		private readonly _version: VersionInfo,
 		private readonly _httpsAgent: HttpsAgent | HttpsProxyAgent<string> | HttpAgent | undefined,
 		private readonly _strictSSL: boolean
-	) {}
+	) {
+		this._clientId = this.getMachineId();
+		Logger.log(`clientId: ${this._clientId}`);
+	}
 
 	get teamId(): string {
 		return this._teamId!;
@@ -400,6 +405,15 @@ export class CodeStreamApiProvider implements ApiProvider {
 
 	get features() {
 		return this._features;
+	}
+
+	getMachineId() {
+		try {
+			return machineIdSync();
+		} catch (e) {
+			Logger.log("Error getting machine id", e);
+			return "";
+		}
 	}
 
 	setServerUrl(serverUrl: string) {
@@ -2448,11 +2462,14 @@ export class CodeStreamApiProvider implements ApiProvider {
 	refreshNewRelicToken(refreshToken: string): Promise<CSNewRelicProviderInfo> {
 		const cc = Logger.getCorrelationContext();
 
+		Logger.log("Incoming refresh New Relic token request");
 		if (this._refreshNRTokenPromise) {
+			Logger.log("Promise already made");
 			return this._refreshNRTokenPromise;
 		}
 
 		this._refreshNRTokenPromise = new Promise((resolve, reject) => {
+			Logger.log("Calling provider refresh for New Relic token...");
 			const url = "/no-auth/provider-refresh/newrelic";
 			this.put<{ refreshToken: string }, CSNewRelicProviderInfo>(url, {
 				refreshToken: refreshToken, //+ "x", // uncomment to test roadblock
@@ -2475,6 +2492,7 @@ export class CodeStreamApiProvider implements ApiProvider {
 					}
 					delete this._refreshNRTokenPromise;
 					if (this._refreshTokenFailed) {
+						Logger.log("Recovering from refresh token failure status, session now active");
 						if (SessionContainer.isInitialized()) {
 							SessionContainer.instance().session.onSessionTokenStatusChanged(
 								SessionTokenStatus.Active
@@ -2485,18 +2503,25 @@ export class CodeStreamApiProvider implements ApiProvider {
 					resolve(response);
 				})
 				.catch(ex => {
+					Logger.log(`New Relic access token refresh failed, status code ${ex.statusCode}:`, ex);
 					Logger.error(ex, cc);
 
 					if (ex.statusCode === 403) {
 						delete this._refreshNRTokenPromise;
 						if (SessionContainer.isInitialized() && !this._refreshTokenFailed) {
+							Logger.log("Setting session expired");
 							SessionContainer.instance().session.onSessionTokenStatusChanged(
 								SessionTokenStatus.Expired
 							);
+						} else {
+							Logger.log(
+								"Session is either not initialized, or token refresh has already failed, not setting session expired"
+							);
 						}
 						this._refreshTokenFailed = true;
-						reject(ex);
 					}
+					delete this._refreshNRTokenPromise;
+					reject(ex);
 				});
 		});
 		return this._refreshNRTokenPromise;
@@ -2760,6 +2785,9 @@ export class CodeStreamApiProvider implements ApiProvider {
 				if (init.headers instanceof Headers) {
 					init.headers.append("Accept", "application/json");
 					init.headers.append("Content-Type", "application/json");
+					if (!isEmpty(this._clientId)) {
+						init.headers.append("X-CS-Client-Machine-ID", this._clientId);
+					}
 
 					if (token !== undefined) {
 						if (tokenType) {

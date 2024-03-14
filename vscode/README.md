@@ -6,11 +6,6 @@ Shift left by making code performance part of the earliest stages of the develop
 - Get actionable information, such as errors, vulnerabilities and non-compliant SLOs, for the services built from your code.
 - Investigate errors more quickly by stepping through the stack trace and collaborating with teammates.
 
-### Integrations
-
-- **Issue Trackers:** Asana, Azure DevOps, Bitbucket, GitHub, GitHub Enterprise, GitLab, GitLab Self-Managed, Jira, Linear, Shortcut, Trello, YouTrack
-- **Messaging Services:** Slack, Microsoft Teams
-
 ### Requirements
 
 - CodeStream requires a current version of [Visual Studio Code](https://code.visualstudio.com/), and is also available for [JetBrains](https://plugins.jetbrains.com/plugin/12206-codestream) or [Visual Studio](https://marketplace.visualstudio.com/items?itemName=CodeStream.codestream-vs-22).

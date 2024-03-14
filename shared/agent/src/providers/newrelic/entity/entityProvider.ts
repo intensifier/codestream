@@ -1,44 +1,74 @@
-import { lsp, lspHandler } from "../../../system/decorators/lsp";
 import {
-	EntityType,
-	EntityTypeMap,
 	ERROR_GENERIC_USE_ERROR_MESSAGE,
 	ERROR_NRQL_GENERIC,
 	ERROR_NRQL_TIMEOUT,
+	Entity,
+	EntityType,
+	EntityTypeMap,
 	GetEntityCountRequest,
 	GetEntityCountRequestType,
 	GetEntityCountResponse,
 	GetNewRelicRelatedEntitiesRequest,
 	GetNewRelicRelatedEntitiesRequestType,
 	GetNewRelicRelatedEntitiesResponse,
+	GetObservabilityEntitiesByIdRequest,
+	GetObservabilityEntitiesByIdRequestType,
+	GetObservabilityEntitiesByIdResponse,
 	GetObservabilityEntitiesRequest,
 	GetObservabilityEntitiesRequestType,
 	GetObservabilityEntitiesResponse,
+	GetObservabilityEntityByGuidRequest,
+	GetObservabilityEntityByGuidRequestType,
+	GetObservabilityEntityByGuidResponse,
 	RelatedEntity,
 } from "@codestream/protocols/agent";
-import { log } from "../../../system/decorators/log";
+import Cache from "@codestream/utils/system/timedCache";
+import { isEmpty as _isEmpty, isUndefined as _isUndefined, isEqual } from "lodash";
 import { ResponseError } from "vscode-jsonrpc/lib/messages";
+import { Logger } from "../../../logger";
+import { Disposable, Strings } from "../../../system";
+import { log } from "../../../system/decorators/log";
+import { lsp, lspHandler } from "../../../system/decorators/lsp";
+import { ContextLogger } from "../../contextLogger";
+import { NewRelicGraphqlClient } from "../newRelicGraphqlClient";
 import {
 	CodedError,
 	EntitySearchResult,
 	GraphqlNrqlError,
 	GraphqlNrqlTimeoutError,
 } from "../newrelic.types";
-import Cache from "@codestream/utils/system/timedCache";
-import { NewRelicGraphqlClient } from "../newRelicGraphqlClient";
-import { Disposable, Strings } from "../../../system";
-import { isEmpty as _isEmpty, isUndefined as _isUndefined } from "lodash";
-import { Logger } from "../../../logger";
-import { ContextLogger } from "../../contextLogger";
+import { NrApiConfig } from "../nrApiConfig";
 
 const ENTITY_CACHE_KEY = "entityCache";
+
+/**
+ * Represents the cache for an entity.
+ */
+interface EntityCache {
+	/**
+	 * whether the entity was found as a result of a query
+	 */
+	found: boolean;
+	entity: Entity;
+}
 
 @lsp
 export class EntityProvider implements Disposable {
 	// 30 second cache
 	private _entityCountTimedCache = new Cache<GetEntityCountResponse>({ defaultTtl: 30 * 1000 });
 
-	constructor(private graphqlClient: NewRelicGraphqlClient) {}
+	private _entityGuidCache: {
+		[key: string]: EntityCache;
+	} = {};
+
+	constructor(
+		private nrApiConfig: NrApiConfig,
+		private graphqlClient: NewRelicGraphqlClient
+	) {}
+
+	get coreUrl() {
+		return this.nrApiConfig.productUrl;
+	}
 
 	@lspHandler(GetEntityCountRequestType)
 	@log()
@@ -81,6 +111,54 @@ export class EntityProvider implements Disposable {
 		}
 	}
 
+	@lspHandler(GetObservabilityEntityByGuidRequestType)
+	@log()
+	async getEntityByGuid(
+		request: GetObservabilityEntityByGuidRequest
+	): Promise<GetObservabilityEntityByGuidResponse> {
+		const query = `{
+			actor {
+				entity(guid: "${request.id}") {
+					account {
+						name
+						id
+					}
+					guid
+					name
+					entityType
+					tags {
+						key
+						values
+					}
+				}
+			}
+		}`;
+
+		const response = await this.graphqlClient.query<{
+			actor: {
+				entity: {
+					account: { name: string; id: number };
+					guid: string;
+					name: string;
+					entityType: EntityType;
+					tags: { key: string; values: string[] }[];
+				};
+			};
+		}>(query);
+		const entity = response.actor.entity;
+		return {
+			entity: {
+				accountId: entity.account.id,
+				accountName: entity.account.name,
+				entityGuid: entity.guid,
+				entityName: entity.name,
+				entityType: entity.entityType,
+				entityTypeDescription: EntityTypeMap[entity.entityType],
+				tags: entity.tags,
+			},
+		};
+	}
+
 	/**
 	 * Autocomplete what user has typed up to N matching entities
 	 * Relies on caching in the UI layer (AsyncPaginate)
@@ -92,7 +170,7 @@ export class EntityProvider implements Disposable {
 	 * @memberof NewRelicProvider
 	 */
 	@lspHandler(GetObservabilityEntitiesRequestType)
-	@log({ timed: true })
+	@log()
 	async getEntities(
 		request: GetObservabilityEntitiesRequest
 	): Promise<GetObservabilityEntitiesResponse> {
@@ -280,6 +358,115 @@ export class EntityProvider implements Disposable {
 
 	generateEntityQueryStatement(search: string): string {
 		return `name LIKE '%${Strings.sanitizeGraphqlValue(search)}%'`;
+	}
+
+	@lspHandler(GetObservabilityEntitiesByIdRequestType)
+	@log()
+	async getEntitiesById(
+		request: GetObservabilityEntitiesByIdRequest
+	): Promise<GetObservabilityEntitiesByIdResponse> {
+		try {
+			if (!request.guids || request.guids.length === 0) {
+				return { entities: [] };
+			}
+
+			// unique the guids
+			request.guids = Array.from(new Set(request.guids));
+			if (request.guids.length === 0) {
+				return { entities: [] };
+			}
+
+			// see if they already exist in the cache
+			const existingEntries: EntityCache[] = [];
+			const needed = [];
+			for (const guid of request.guids) {
+				const entry = this._entityGuidCache[guid];
+				if (entry) {
+					existingEntries.push(entry);
+				} else {
+					// we will look these up
+					needed.push(guid);
+				}
+			}
+
+			// if we found them all, return
+			if (
+				isEqual(
+					existingEntries.map(_ => _.entity.guid),
+					request.guids
+				)
+			) {
+				Logger.debug(`getEntitiesById: all found in cache (${request.guids})`);
+				return { entities: existingEntries.filter(_ => _.found).map(_ => _.entity) };
+			}
+			Logger.debug(`getEntitiesById: looking up others: (${needed})`);
+
+			// add all the needed ones to the cache with the found flag set to false
+			// if for some reach the query fails, this will prevent repeated attempts
+			needed.forEach(guid => {
+				this._entityGuidCache[guid] = {
+					found: false,
+					entity: {
+						guid: guid,
+						name: "",
+					},
+				};
+			});
+
+			const response = await this.graphqlClient.query<{
+				actor: {
+					entities: Entity[];
+				};
+			}>(
+				`query fetchEntitiesByIds($guids: [EntityGuid]!) {
+  actor {    
+    entities(guids: $guids) {
+	 accountId
+	 account {
+        name
+        id
+     }
+	 goldenMetrics {
+        metrics {
+          query
+          name
+        }
+      }
+	 guid
+     name
+	 entityType
+	 type	 
+    }
+  }
+}`,
+				{
+					guids: needed,
+				}
+			);
+
+			if (response?.actor?.entities?.length) {
+				// add them to the cache with the found flag set to true
+				const entities = response.actor.entities.map(_ => {
+					this._entityGuidCache[_.guid] = { found: true, entity: _ };
+					return _;
+				});
+				// return the existing (but found) entities plus the new ones
+				return {
+					entities: existingEntries
+						.filter(_ => _.found)
+						.map(_ => _.entity)
+						.concat(entities),
+				};
+			}
+			return {
+				entities: existingEntries.filter(_ => _.found).map(_ => _.entity),
+			};
+		} catch (ex) {
+			Logger.error(ex, "getEntitiesById", { guids: request.guids });
+		}
+		return {
+			entities: [],
+		};
 	}
 
 	/*

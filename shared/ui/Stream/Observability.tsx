@@ -7,7 +7,6 @@ import {
 	GetEntityCountRequestType,
 	GetObservabilityAnomaliesRequestType,
 	GetObservabilityErrorAssignmentsRequestType,
-	GetObservabilityErrorsRequestType,
 	GetObservabilityReposRequestType,
 	GetObservabilityReposResponse,
 	GetServiceLevelObjectivesRequestType,
@@ -23,7 +22,7 @@ import {
 } from "@codestream/protocols/agent";
 import cx from "classnames";
 import { head as _head, isEmpty as _isEmpty, isNil as _isNil } from "lodash-es";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { shallowEqual } from "react-redux";
 import styled from "styled-components";
 
@@ -49,7 +48,7 @@ import {
 } from "@codestream/protocols/webview";
 import { SecurityIssuesWrapper } from "@codestream/webview/Stream/SecurityIssuesWrapper";
 import { ObservabilityServiceLevelObjectives } from "@codestream/webview/Stream/ObservabilityServiceLevelObjectives";
-import { WebviewPanels } from "@codestream/protocols/api";
+import { WebviewPanels, CLMSettings, DEFAULT_CLM_SETTINGS } from "@codestream/protocols/api";
 import { Button } from "../src/components/Button";
 import {
 	NoContent,
@@ -86,12 +85,22 @@ import Timestamp from "./Timestamp";
 import Tooltip from "./Tooltip";
 import { WarningBox } from "./WarningBox";
 import { ObservabilityAnomaliesWrapper } from "@codestream/webview/Stream/ObservabilityAnomaliesWrapper";
-import { CLMSettings, DEFAULT_CLM_SETTINGS } from "@codestream/protocols/api";
 import { throwIfError } from "@codestream/webview/store/common";
 import { isFeatureEnabled } from "../store/apiVersioning/reducer";
 import { ObservabilityAlertViolations } from "./ObservabilityAlertViolations";
 import { parseId } from "../utilities/newRelic";
 import { bootstrapNrCapabilities } from "../store/nrCapabilities/thunks";
+import { doGetObservabilityErrors } from "@codestream/webview/store/codeErrors/thunks";
+import {
+	demoEntityId,
+	setApiCurrentEntityId,
+	setApiCurrentRepoId,
+	setApiDemoMode,
+	setApiNrAiUserId,
+	setApiUserId,
+} from "@codestream/webview/store/codeErrors/api/apiResolver";
+import { getNrAiUserId } from "@codestream/webview/store/users/reducer";
+import { setDemoMode } from "@codestream/webview/store/codeErrors/actions";
 
 interface Props {
 	paneState: PaneState;
@@ -175,6 +184,7 @@ const SubtleRight = styled.time`
 	color: var(--text-color-subtle);
 	font-weight: normal;
 	padding-left: 5px;
+
 	&.no-padding {
 		padding-left: 0;
 	}
@@ -195,11 +205,24 @@ export const ErrorRow = (props: {
 	icon?: "alert" | "thumbsup";
 	dataTestId?: string;
 }) => {
-	const derivedState = useAppSelector((state: CodeStreamState) => {
-		return {
-			ideName: encodeURIComponent(state.ide.name || ""),
-		};
-	}, shallowEqual);
+	const ideName = useAppSelector((state: CodeStreamState) =>
+		encodeURIComponent(state.ide.name || "")
+	);
+	const nrAiUserId = useAppSelector(getNrAiUserId);
+	const userId = useAppSelector((state: CodeStreamState) => state.session.userId);
+	const demoMode = useAppSelector((state: CodeStreamState) => state.codeErrors.demoMode);
+
+	useMemo(() => {
+		if (nrAiUserId && demoMode.enabled) {
+			setApiNrAiUserId(nrAiUserId);
+		}
+	}, [nrAiUserId, demoMode.enabled]);
+
+	useMemo(() => {
+		if (userId && demoMode.enabled) {
+			setApiUserId(userId);
+		}
+	}, [userId, demoMode.enabled]);
 
 	return (
 		<Row
@@ -239,7 +262,7 @@ export const ErrorRow = (props: {
 								event_type: "click",
 							});
 							HostApi.instance.send(OpenUrlRequestType, {
-								url: `${props.url}&utm_source=codestream&utm_medium=ide-${derivedState.ideName}&utm_campaign=error_group_link`,
+								url: `${props.url}&utm_source=codestream&utm_medium=ide-${ideName}&utm_campaign=error_group_link`,
 							});
 						}}
 					>
@@ -300,6 +323,7 @@ export const Observability = React.memo((props: Props) => {
 			isO11yPaneOnly,
 			company,
 			showLogSearch: state.ide.name === "VSC" || state.ide.name === "JETBRAINS",
+			demoMode: state.codeErrors.demoMode,
 		};
 	}, shallowEqual);
 
@@ -431,10 +455,12 @@ export const Observability = React.memo((props: Props) => {
 		if (currentRepoId) {
 			setLoadingObservabilityErrors(true);
 			try {
-				const response = await HostApi.instance.send(GetObservabilityErrorsRequestType, {
-					filters: buildFilters([currentRepoId]),
-					timeWindow: derivedState.recentErrorsTimeWindow,
-				});
+				const response = await dispatch(
+					doGetObservabilityErrors({
+						filters: buildFilters([currentRepoId]),
+						timeWindow: derivedState.recentErrorsTimeWindow,
+					})
+				).unwrap();
 
 				if (isNRErrorResponse(response.error)) {
 					setObservabilityErrorsError(response.error.error.message ?? response.error.error.type);
@@ -574,6 +600,9 @@ export const Observability = React.memo((props: Props) => {
 
 				if (_expandedEntity !== entityGuid) {
 					setExpandedEntity(entityGuid);
+					if (entityGuid === demoEntityId) {
+						doSetDemoMode(true);
+					}
 				}
 			}
 		}
@@ -752,15 +781,39 @@ export const Observability = React.memo((props: Props) => {
 		}
 	}
 
+	function doSetDemoMode(value: boolean) {
+		dispatch(setDemoMode(value));
+		setApiDemoMode(value);
+		if (currentRepoId) {
+			setApiCurrentRepoId(currentRepoId);
+		}
+		if (expandedEntity) {
+			setApiCurrentEntityId(expandedEntity);
+		}
+	}
+
+	useEffect(() => {
+		if (derivedState.demoMode.count >= 1 && expandedEntity && currentRepoId) {
+			console.debug(`demoMode fetchObservabilityErrors ${derivedState.demoMode}`);
+			if (derivedState.demoMode.enabled) {
+				setApiCurrentRepoId(currentRepoId);
+				setApiCurrentEntityId(expandedEntity);
+			}
+			fetchObservabilityErrors(expandedEntity, currentRepoId);
+		}
+	}, [derivedState.demoMode]);
+
 	const fetchObservabilityErrors = async (entityGuid: string, repoId) => {
 		setLoadingObservabilityErrors(true);
 		setLoadingPane(expandedEntity);
 
 		try {
-			const response = await HostApi.instance.send(GetObservabilityErrorsRequestType, {
-				filters: [{ repoId: repoId, entityGuid: entityGuid }],
-				timeWindow: derivedState.recentErrorsTimeWindow,
-			});
+			const response = await dispatch(
+				doGetObservabilityErrors({
+					filters: [{ repoId: repoId, entityGuid: entityGuid }],
+					timeWindow: derivedState.recentErrorsTimeWindow,
+				})
+			).unwrap();
 			if (isNRErrorResponse(response.error)) {
 				setObservabilityErrorsError(response.error.error.message ?? response.error.error.type);
 			} else {
@@ -941,6 +994,9 @@ export const Observability = React.memo((props: Props) => {
 				setPendingServiceClickedTelemetryCall(true);
 			}, 500);
 			setExpandedEntity(entityGuid);
+			if (entityGuid === demoEntityId) {
+				doSetDemoMode(true);
+			}
 		}
 	};
 
@@ -1011,6 +1067,9 @@ export const Observability = React.memo((props: Props) => {
 					? userPrefExpanded
 					: _currentEntityAccounts[0].entityGuid;
 				setExpandedEntity(_expandedEntity);
+				if (_expandedEntity === demoEntityId) {
+					doSetDemoMode(true);
+				}
 			}
 		}
 	}, [currentRepoId, observabilityRepos]);
@@ -1445,12 +1504,15 @@ export const Observability = React.memo((props: Props) => {
 																		`o11y: ObservabilityAddAdditionalService calling doRefresh(force)`
 																	);
 																	doRefresh(true);
-																	HostApi.instance.track("codestream/entity_association succeeded", {
-																		entity_guid: e?.entityGuid,
-																		account_id: parseId(e?.entityGuid)?.accountId,
-																		event_type: "response",
-																		meta_data: "first_association: false",
-																	});
+																	HostApi.instance.track(
+																		"codestream/entity_association succeeded",
+																		{
+																			entity_guid: e?.entityGuid,
+																			account_id: parseId(e?.entityGuid)?.accountId,
+																			event_type: "response",
+																			meta_data: "first_association: false",
+																		}
+																	);
 																}}
 																remote={currentObsRepo.repoRemote}
 																remoteName={currentObsRepo.repoName}

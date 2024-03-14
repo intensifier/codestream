@@ -88,7 +88,9 @@
         <editorTabTitleProvider implementation="com.codestream.webview.WebViewEditorTabTitleProvider"/>
 
         <fileType name="NRQL File" language="NRQL" extensions="nrql" implementationClass="com.codestream.language.NrqlFileType" fieldName="INSTANCE" />
+        <lang.parserDefinition language="NRQL" implementationClass="com.codestream.language.NrqlParserDefinition" />
         <lang.syntaxHighlighterFactory language="NRQL" implementationClass="com.codestream.language.NrqlSyntaxHighlighterFactory" />
+        <completion.contributor language="NRQL" implementationClass="com.codestream.language.NrqlCompletionContributor" />
 
         <notificationGroup id="codestream.notifications" displayType="BALLOON" isLogByDefault="false" />
     </extensions>
@@ -159,5 +161,5 @@
     </actions>
 
     <depends>Git4Idea</depends>
-    <idea-version since-build="223.8836.35"/>
+    <idea-version since-build="232.9559.58"/>
 </idea-plugin>

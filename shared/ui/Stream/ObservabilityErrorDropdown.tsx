@@ -12,7 +12,7 @@ import {
 	GetObservabilityErrorGroupMetadataRequestType,
 	GetObservabilityErrorGroupMetadataResponse,
 } from "@codestream/protocols/agent";
-import { CodeErrorTimeWindow } from "../../util/src/protocol/agent/api.protocol.models";
+import { CodeErrorTimeWindow } from "@codestream/protocols/api";
 import { InlineMenu } from "../src/components/controls/InlineMenu";
 import { setUserPreference } from "./actions";
 import styled from "styled-components";
@@ -40,6 +40,7 @@ export const ObservabilityErrorDropdown = React.memo((props: Props) => {
 		return {
 			sessionStart: state.context.sessionStart,
 			timeWindow,
+			errorsDemoMode: state.codeErrors.demoMode.enabled,
 		};
 	}, shallowEqual);
 
@@ -126,23 +127,29 @@ export const ObservabilityErrorDropdown = React.memo((props: Props) => {
 											onClick={async e => {
 												try {
 													setIsLoadingErrorGroupGuid(indexedErrorGroupGuid);
-													const response = (await HostApi.instance.send(
-														GetObservabilityErrorGroupMetadataRequestType,
-														{ errorGroupGuid: err.errorGroupGuid }
-													)) as GetObservabilityErrorGroupMetadataResponse;
+													const response = derivedState.errorsDemoMode
+														? ({} as GetObservabilityErrorGroupMetadataResponse)
+														: await HostApi.instance.send(
+																GetObservabilityErrorGroupMetadataRequestType,
+																{ errorGroupGuid: err.errorGroupGuid }
+														  );
 													await dispatch(
-														openErrorGroup(err.errorGroupGuid, err.occurrenceId, {
-															multipleRepos: response?.relatedRepos?.length > 1,
-															relatedRepos: response?.relatedRepos || undefined,
-															timestamp: err.lastOccurrence,
-															sessionStart: derivedState.sessionStart,
-															pendingEntityId: response?.entityId || err.entityId,
-															occurrenceId: response?.occurrenceId || err.occurrenceId,
-															pendingErrorGroupGuid: err.errorGroupGuid,
-															openType: "Observability Section",
-															remote: err?.remote || undefined,
-															stackSourceMap: response?.stackSourceMap,
-															domain: props?.domain,
+														openErrorGroup({
+															errorGroupGuid: err.errorGroupGuid,
+															occurrenceId: err.occurrenceId,
+															data: {
+																multipleRepos: response?.relatedRepos?.length > 1,
+																relatedRepos: response?.relatedRepos || undefined,
+																timestamp: err.lastOccurrence,
+																sessionStart: derivedState.sessionStart,
+																pendingEntityId: response?.entityId || err.entityId,
+																occurrenceId: response?.occurrenceId || err.occurrenceId,
+																pendingErrorGroupGuid: err.errorGroupGuid,
+																openType: "Observability Section",
+																remote: err?.remote || undefined,
+																stackSourceMap: response?.stackSourceMap,
+																domain: props?.domain,
+															},
 														})
 													);
 												} catch (ex) {

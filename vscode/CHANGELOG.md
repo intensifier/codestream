@@ -1,5 +1,13 @@
 # Change Log
 
+## [15.5.0] - 2023-3-14
+
+### Added
+
+- Adds information about the slowest operations when viewing the details of a poorly performing transaction
+- Adds links to charts when hovering over any golden metric for a service
+- Adds entity information when hovering over a New Relic entity GUID in a file (e.g., a terraform file)
+
 ## [15.4.0] - 2023-3-5
 
 ### Added

@@ -77,6 +77,22 @@ export const WhatsNewPanel = () => {
 			<TimelineContent>
 				<TimelineHeader>
 					<TimelineMarker />
+					<TimelineTitle>15.5.0</TimelineTitle>
+					<TimelineDate>March 14, 2024</TimelineDate>
+				</TimelineHeader>
+				<div className="tl-body">
+					<Update>
+						<UpdateTitle>Visualize Golden Metrics</UpdateTitle>
+						<UpdateItem>
+							Hover over any of the golden metrics for any of your services and click on "Explore this data"
+							to see the underlying data charted over time.
+						</UpdateItem>
+					</Update>
+				</div>
+			</TimelineContent>
+			<TimelineContent>
+				<TimelineHeader>
+					<TimelineMarker />
 					<TimelineTitle>15.4.0</TimelineTitle>
 					<TimelineDate>March 5, 2024</TimelineDate>
 				</TimelineHeader>

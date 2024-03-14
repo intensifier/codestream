@@ -1,5 +1,10 @@
 "use strict";
-import { CompletionItem, NotificationType, RequestType } from "vscode-languageserver-protocol";
+import {
+	CompletionItem,
+	NotificationType,
+	RequestType,
+	TextDocumentPositionParams,
+} from "vscode-languageserver-protocol";
 
 import {
 	BitbucketParticipantRole,
@@ -1556,6 +1561,21 @@ export const GetObservabilityReposRequestType = new RequestType<
 	void
 >("codestream/newrelic/repos");
 
+export interface GetObservabilityEntityByGuidRequest {
+	id: string;
+}
+
+export interface GetObservabilityEntityByGuidResponse {
+	entity: EntityAccount;
+}
+
+export const GetObservabilityEntityByGuidRequestType = new RequestType<
+	GetObservabilityEntityByGuidRequest,
+	GetObservabilityEntityByGuidResponse,
+	void,
+	void
+>("codestream/newrelic/entity");
+
 export interface GetObservabilityEntitiesRequest {
 	searchCharacters: string;
 	nextCursor?: string;
@@ -1580,6 +1600,49 @@ export const GetObservabilityEntitiesRequestType = new RequestType<
 	void,
 	void
 >("codestream/newrelic/entities");
+
+export interface GetObservabilityEntitiesByIdRequest {
+	guids: string[];
+}
+
+export interface GetObservabilityEntitiesByIdResponse {
+	entities: Entity[];
+}
+
+export const GetObservabilityEntitiesByIdRequestType = new RequestType<
+	GetObservabilityEntitiesByIdRequest,
+	GetObservabilityEntitiesByIdResponse,
+	void,
+	void
+>("codestream/newrelic/entities/list");
+
+export interface EditorEntityGuidsRequest {
+	documentUri: string;
+}
+
+export interface EntityGuidToken {
+	guid: string;
+	range: {
+		start: number;
+		end: number;
+	};
+	markdownString?: string;
+	entity: Entity;
+	url: string;
+	metadata: {
+		found: boolean;
+	};
+}
+export interface EditorEntityGuidsResponse {
+	items: EntityGuidToken[];
+}
+
+export const GetEditorEntityGuidsRequestType = new RequestType<
+	EditorEntityGuidsRequest,
+	EditorEntityGuidsResponse,
+	void,
+	void
+>("codestream/document/parse/newrelic/entity");
 
 export interface GetAllAccountsRequest {
 	force?: boolean;
@@ -1815,6 +1878,7 @@ export interface GetMethodLevelTelemetryResponse {
 	newRelicUrl?: string;
 	goldenMetrics?: MethodGoldenMetrics[];
 	deployments?: Deployment[];
+	criticalPath?: CriticalPathSpan[];
 	errors?: ObservabilityError[];
 	newRelicAlertSeverity?: string;
 	newRelicEntityAccounts: EntityAccount[];
@@ -1897,6 +1961,11 @@ export const GetSpanChartDataRequestType = new RequestType<
 	void,
 	void
 >("codestream/newrelic/spanChartData");
+
+export interface CriticalPathSpan {
+	name: string;
+	duration: number;
+}
 
 export interface Deployment {
 	seconds: number;
@@ -2030,7 +2099,31 @@ export interface StackTraceResponse {
 	};
 }
 
-export type EntityType =
+/**
+ * Entity.type
+ *
+ * NOTE: this is not a complete list
+ */
+type Type =
+	| "APPLICATION"
+	| "AWSLAMBDAFUNCTION"
+	| "AWS_ELASTICSEARCH"
+	| "AWS_LAMBDA"
+	| "BUILT_FROM"
+	| "AWS_SQS_QUEUE"
+	| "CLUSTER"
+	| "CONTAINER"
+	| "DATABASE"
+	| "EXTERNAL"
+	| "HOST"
+	| "REPOSITORY"
+	| "SERVICE"
+	| "USER";
+
+/**
+ * Entity.entityType
+ */
+export type EntityTypeKey =
 	| "APM_APPLICATION_ENTITY"
 	| "APM_DATABASE_INSTANCE_ENTITY"
 	| "APM_EXTERNAL_SERVICE_ENTITY"
@@ -2050,7 +2143,9 @@ export type EntityType =
 	| "UNAVAILABLE_ENTITY"
 	| "WORKLOAD_ENTITY";
 
-export const EntityTypeMap = {
+export type EntityType = EntityTypeKey;
+
+export const EntityTypeMap: Record<EntityTypeKey, string> = {
 	APM_APPLICATION_ENTITY: "APM Application",
 	APM_DATABASE_INSTANCE_ENTITY: "APM Database",
 	APM_EXTERNAL_SERVICE_ENTITY: "APM External",
@@ -2072,15 +2167,17 @@ export const EntityTypeMap = {
 };
 
 export interface Entity {
+	accountId?: number;
 	account?: {
 		name: string;
 		id: number;
 	};
 	domain?: string;
 	alertSeverity?: string;
+	goldenMetrics?: { metrics?: MethodGoldenMetrics[] };
 	guid: string;
 	name: string;
-	type?: "APPLICATION" | "REPOSITORY" | "SERVICE" | "AWSLAMBDAFUNCTION";
+	type?: Type;
 	entityType?: EntityType;
 	tags?: {
 		key: string;
@@ -2112,7 +2209,7 @@ export interface RelatedEntity {
 	target: {
 		entity: Entity;
 	};
-	type: string;
+	type: Type;
 }
 
 export interface RelatedEntityByType {
@@ -2329,21 +2426,25 @@ export interface RecentIssue {
 	issueId?: string;
 }
 
+export interface GoldenMetric {
+	definition: {
+		from: string;
+		select: string;
+		where?: string;
+	};
+	name: string;
+	title: string;
+	unit: string;
+}
+
+export interface GoldenMetrics {
+	metrics: GoldenMetric[];
+}
+
 export interface EntityGoldenMetricsQueries {
 	actor: {
 		entity: {
-			goldenMetrics: {
-				metrics: {
-					definition: {
-						from: string;
-						select: string;
-						where?: string;
-					};
-					name: string;
-					title: string;
-					unit: string;
-				}[];
-			};
+			goldenMetrics: GoldenMetrics;
 		};
 	};
 }
@@ -2388,6 +2489,28 @@ export const GoldenMetricUnitMappings: UnitMappings = {
 	TIMESTAMP: "time",
 };
 
+export interface GoldenMetricsQueries {
+	/**
+	 * The TIMESERIES query for a golden metric (e.g. `SELECT average(duration) FROM Transaction TIMESERIES`)
+	 */
+	timeseries: string;
+	/**
+	 * The default query for a golden metric (e.g. `SELECT average(duration) FROM Transaction`)
+	 */
+	default?: string;
+}
+
+export interface DeploymentDiff {
+	errorRateData?: {
+		percentChange: number | undefined;
+		permalinkUrl: string;
+	};
+	responseTimeData?: {
+		percentChange: number | undefined;
+		permalinkUrl: string;
+	};
+}
+
 export interface EntityGoldenMetrics {
 	lastUpdated: string;
 	/**
@@ -2395,23 +2518,36 @@ export interface EntityGoldenMetrics {
 	 */
 	since: string;
 	metrics: {
-		name: string;
+		queries?: GoldenMetricsQueries;
+		name: "errorRate" | "responseTimeMs" | "throughput" | string;
 		title: string;
 		unit: string;
 		displayUnit: string;
 		value: number;
 		displayValue: string;
 	}[];
-	pillsData?: {
-		errorRateData?: {
-			percentChange: number;
-			permalinkUrl: string;
-		};
-		responseTimeData?: {
-			percentChange: number;
-			permalinkUrl: string;
-		};
-	};
+	pillsData?: DeploymentDiff;
+}
+
+export interface MethodGoldenMetricsResult {
+	beginTimeSeconds?: number;
+	endDate?: Date;
+	endTimeSeconds?: number;
+
+	/* old/deprecated -- used in CLM[?], but let's move to the new props*/
+	"Error %"?: string;
+	"Error rate"?: number;
+	"Error Rate"?: number;
+	"Response Time Ms"?: number | undefined;
+	"Response time (ms)"?: number | undefined;
+	Throughput?: number;
+	/* end old */
+
+	/* new */
+	throughput?: number;
+	errorRate?: number;
+	responseTimeMs?: number;
+	/* end new  */
 }
 
 export interface MethodGoldenMetrics {
@@ -2421,26 +2557,7 @@ export interface MethodGoldenMetrics {
 	name: "responseTimeMs" | "throughput" | "errorRate" | string;
 	/** this title field is deprecated. use `name`as a query "key" and set the title with calling code */
 	title?: "Error Rate" | "Throughput" | "Response Time Ms" | string | undefined;
-	result: {
-		beginTimeSeconds?: number;
-		endDate?: Date;
-		endTimeSeconds?: number;
-
-		/* old/deprecated -- used in CLM[?], but let's move to the new props*/
-		"Error %"?: string;
-		"Error rate"?: number;
-		"Error Rate"?: number;
-		"Response Time Ms"?: number | undefined;
-		"Response time (ms)"?: number | undefined;
-		Throughput?: number;
-		/* end old */
-
-		/* new */
-		throughput?: number;
-		errorRate?: number;
-		responseTimeMs?: number;
-		/* end new  */
-	}[];
+	result: MethodGoldenMetricsResult[];
 	scopes?: {
 		name: string;
 		value: number;
@@ -2718,6 +2835,7 @@ export interface GetNRQLCompletionItemsRequest {
 	 * This may refer to an entire query or a single line in a multi-line or multi-queries in a file
 	 */
 	query?: string;
+	textDocumentPosition?: TextDocumentPositionParams;
 }
 
 export interface GetNRQLCompletionItemsResponse {

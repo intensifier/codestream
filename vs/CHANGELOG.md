@@ -1,5 +1,15 @@
 # Change Log
 
+## [15.5.0] - 2023-3-14
+
+### Added
+
+- Adds information about the slowest operations when viewing the details of a poorly performing transaction
+
+### Changed
+
+- Removes support for Visual Studio 2019
+
 ## [15.4.0] - 2023-3-5
 
 ### Added

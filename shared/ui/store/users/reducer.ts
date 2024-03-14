@@ -45,7 +45,7 @@ const getUsername = (user: CSUser) => {
 	return user.username;
 };
 
-const getUsers = state => state.users;
+const getUsers = (state: CodeStreamState) => state.users;
 
 const getCurrentTeam = (state: CodeStreamState) => state.teams[state.context.currentTeamId];
 
@@ -101,6 +101,9 @@ export const getTeamTagsHash = createSelector(getTeamTagsArray, tagsArray => {
 export const getAllUsers = createSelector(getUsers, (users: UsersState) => Object.values(users));
 export const getUsernames = createSelector(getAllUsers, users => {
 	return users.map(getUsername);
+});
+export const getNrAiUserId = createSelector(getAllUsers, users => {
+	return users.find(u => u.username === "AI")?.id;
 });
 
 export const getUsernamesById = createSelector(getAllUsers, users => {

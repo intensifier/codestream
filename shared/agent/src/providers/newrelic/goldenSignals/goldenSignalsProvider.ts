@@ -1,40 +1,45 @@
 import {
+	ERROR_SLT_MISSING_ENTITY,
+	ERROR_SLT_MISSING_OBSERVABILITY_REPOS,
 	EntityAccount,
 	EntityGoldenMetrics,
 	EntityGoldenMetricsQueries,
 	EntityGoldenMetricsResults,
-	ERROR_SLT_MISSING_ENTITY,
-	ERROR_SLT_MISSING_OBSERVABILITY_REPOS,
 	GetIssuesQueryResult,
 	GetIssuesResponse,
 	GetServiceLevelTelemetryRequest,
 	GetServiceLevelTelemetryRequestType,
 	GetServiceLevelTelemetryResponse,
+	GoldenMetric,
 	GoldenMetricUnitMappings,
+	GoldenMetricsQueries,
 	MethodGoldenMetrics,
 	MethodLevelGoldenMetricQueryResult,
 	MetricTimesliceNameMapping,
 	NRErrorResponse,
 	ObservabilityRepo,
 } from "@codestream/protocols/agent";
-import { Logger } from "../../../logger";
-import { escapeNrql, NewRelicGraphqlClient } from "../newRelicGraphqlClient";
 import { CSMe } from "@codestream/protocols/api";
-import { lsp, lspHandler } from "../../../system/decorators/lsp";
-import { log } from "../../../system/decorators/log";
-import { ResponseError } from "vscode-jsonrpc/lib/messages";
-import { ReposProvider } from "../repos/reposProvider";
-import { NrApiConfig } from "../nrApiConfig";
 import { uniqBy as _uniqBy } from "lodash";
-import { mapNRErrorResponse, parseId, toFixedNoRounding } from "../utils";
+import { ResponseError } from "vscode-jsonrpc/lib/messages";
+import { Logger } from "../../../logger";
+import { log } from "../../../system/decorators/log";
+import { lsp, lspHandler } from "../../../system/decorators/lsp";
 import { ContextLogger } from "../../contextLogger";
+import { DeploymentsProvider } from "../deployments/deploymentsProvider";
+import { NewRelicGraphqlClient, escapeNrql } from "../newRelicGraphqlClient";
+import { NrApiConfig } from "../nrApiConfig";
+import { NrqlQueryBuilder } from "../nrql/nrqlQueryBuilder";
+import { ReposProvider } from "../repos/reposProvider";
+import { mapNRErrorResponse, parseId, toFixedNoRounding } from "../utils";
 
 @lsp
 export class GoldenSignalsProvider {
 	constructor(
 		private graphqlClient: NewRelicGraphqlClient,
 		private reposProvider: ReposProvider,
-		private nrApiConfig: NrApiConfig
+		private nrApiConfig: NrApiConfig,
+		private deploymentsProvider: DeploymentsProvider
 	) {}
 
 	@lspHandler(GetServiceLevelTelemetryRequestType)
@@ -87,146 +92,6 @@ export class GoldenSignalsProvider {
 				recentIssues: recentIssuesResponse,
 			};
 			return response;
-		}
-		return undefined;
-	}
-
-	async getPillsData(entityGuid: string, accountId?: number): Promise<any> {
-		if (entityGuid && accountId) {
-			try {
-				const countQuery = [
-					"SELECT",
-					"latest(deploymentId) AS 'deploymentId',",
-					"latest(timestamp) AS 'timestamp'",
-					"FROM Deployment",
-					`WHERE entity.guid = '${entityGuid}'`,
-					"SINCE 13 months ago",
-				].join(" ");
-
-				const countResponse = await this.graphqlClient.query<{
-					actor: {
-						account: {
-							nrql: {
-								results: {
-									deploymentId: string;
-									timestamp: number;
-								}[];
-							};
-						};
-						entity: {
-							permalink: string;
-						};
-					};
-				}>(
-					`query fetchErrorRate($accountId:Int!, $entityGuid:EntityGuid!) {
-				actor {
-					account(id: $accountId) {
-						nrql(
-							options: { eventNamespaces: "Marker" }
-							query: "${countQuery}"
-						) { nrql results }
-					}
-					entity(guid: $entityGuid) {
-						permalink
-					}
-				}
-			}`,
-					{
-						accountId: accountId,
-						entityGuid: entityGuid,
-					}
-				);
-
-				const countResults = countResponse.actor.account.nrql?.results[0];
-
-				const { deploymentId, timestamp } = countResults;
-
-				if (!deploymentId || !timestamp) return undefined;
-
-				const deployListUrl = this.deltaUrl(entityGuid);
-
-				const threeHoursLater = timestamp + 10800000;
-
-				const comparisonQuery = [
-					"FROM Metric",
-					"SELECT",
-					"average(newrelic.goldenmetrics.apm.application.responseTimeMs) AS 'responseTimeMs',",
-					"average(newrelic.goldenmetrics.apm.application.errorRate) AS 'errorRate'",
-					`WHERE entity.guid = '${entityGuid}'`,
-					`SINCE ${timestamp} UNTIL ${threeHoursLater}`,
-					`COMPARE WITH 3 hours ago`,
-				].join(" ");
-
-				const comparisonQueryData = await this.graphqlClient.query<{
-					actor: {
-						account: {
-							nrql: {
-								results: {
-									beginTimeSeconds: number;
-									endTimeSeconds: number;
-									responseTimeMs: number;
-									errorRate: number;
-								}[];
-							};
-						};
-					};
-				}>(
-					`query fetchErrorRate($accountId:Int!) {
-					actor {
-						account(id: $accountId) {
-							nrql(
-								
-								query: "${comparisonQuery}"
-							) { nrql results }
-						}
-					}
-				}`,
-					{
-						accountId: accountId,
-					}
-				);
-
-				const currentMetrics = comparisonQueryData.actor.account.nrql?.results[0];
-				const previousMetrics = comparisonQueryData.actor.account.nrql?.results[1];
-
-				if (!currentMetrics || !previousMetrics) return undefined;
-
-				const errorRatePercentageChange =
-					previousMetrics.errorRate > 0
-						? Math.round(
-								((currentMetrics.errorRate - previousMetrics.errorRate) /
-									previousMetrics.errorRate) *
-									100
-						  )
-						: undefined;
-				const responseTimePercentageChange =
-					previousMetrics.responseTimeMs > 0
-						? Math.round(
-								((currentMetrics.responseTimeMs - previousMetrics.responseTimeMs) /
-									previousMetrics.responseTimeMs) *
-									100
-						  )
-						: undefined;
-
-				return {
-					errorRateData: {
-						percentChange:
-							errorRatePercentageChange && errorRatePercentageChange >= 0
-								? errorRatePercentageChange
-								: undefined,
-						permalinkUrl: deployListUrl,
-					},
-					responseTimeData: {
-						percentChange:
-							responseTimePercentageChange && responseTimePercentageChange >= 0
-								? responseTimePercentageChange
-								: undefined,
-						permalinkUrl: deployListUrl,
-					},
-				};
-			} catch (err) {
-				Logger.error(err, entityGuid);
-			}
 		}
 		return undefined;
 	}
@@ -333,23 +198,6 @@ export class GoldenSignalsProvider {
 		}
 
 		return `${bUrl}/accounts/${accountId}/issues/${issueId}?notifierType=codestream`;
-	}
-
-	private deltaUrl(entityGuid: string) {
-		let bUrl = "";
-
-		if (this.nrApiConfig.productUrl.includes("staging")) {
-			// Staging
-			bUrl = "https://staging-one.newrelic.com";
-		} else if (this.nrApiConfig.productUrl.includes("eu")) {
-			// EU
-			bUrl = "https://one.eu.newrelic.com";
-		} else {
-			// Prod:
-			bUrl = "https://one.newrelic.com";
-		}
-
-		return `${bUrl}/nr1-core/deployment-markers/list/${entityGuid}`;
 	}
 
 	// Map array of objects based on order of array of strings
@@ -615,28 +463,46 @@ export class GoldenSignalsProvider {
 				return undefined;
 			}
 
-			let gmQuery = `
-				{
-					actor {
-						entity(guid: "${entityGuid}") {
-	    	`;
-
 			const since = "30 MINUTES";
-			metricDefinitions.forEach(md => {
-				const whereClause = md.definition.where ? `WHERE ${md.definition.where}` : "";
-				gmQuery += `
-					${md.name}: nrdbQuery(nrql: "SELECT ${md.definition.select} AS 'result' FROM ${md.definition.from} ${whereClause} SINCE ${since} AGO", timeout: 60, async: true) {
-						results
-					}
-				`;
-			});
+			const queries: {
+				[key: string]: GoldenMetricsQueries;
+			} = {};
 
-			gmQuery += `}
-				}
-			}`;
+			const createMetricQuery = (md: GoldenMetric) => {
+				const nrqlQueryBuilder = new NrqlQueryBuilder()
+					.select(`${md.definition.select} AS 'result'`)
+					.from(md.definition.from)
+					.where(md.definition.where)
+					.since(since);
+
+				const defaultQuery = nrqlQueryBuilder.build();
+
+				const timeseriesQuery = nrqlQueryBuilder
+					.and(`entity.guid='${entityGuid}'`)
+					.timeseries()
+					.build()
+					.replace(/(FROM|WHERE|AND|FACET|SINCE|TIMESERIES)/g, "\n$1");
+
+				queries[md.name] = {
+					timeseries: timeseriesQuery,
+					default: defaultQuery,
+				};
+
+				return `${md.name}: nrdbQuery(nrql: "${defaultQuery}", timeout: 60, async: true) { results }`;
+			};
+
+			const queryTemplate = `
+{
+  actor {
+    entity(guid: "${entityGuid}") {
+      ${metricDefinitions.map(createMetricQuery).join("\n")}
+    }
+  }
+}
+`;
 
 			const entityGoldenMetricsResults = await this.graphqlClient.query<EntityGoldenMetricsResults>(
-				gmQuery
+				queryTemplate
 			);
 			const metricResults = entityGoldenMetricsResults?.actor?.entity;
 
@@ -674,10 +540,11 @@ export class GoldenSignalsProvider {
 					displayUnit: GoldenMetricUnitMappings[md.unit],
 					value: metricValue,
 					displayValue: toFixedNoRounding(metricValue, 2) ?? "Unknown",
+					queries: queries[md.name],
 				};
 			});
 
-			const pillsData = await this.getPillsData(entityGuid, accountId);
+			const pillsData = await this.deploymentsProvider.getDeploymentDiff(entityGuid, accountId);
 
 			return {
 				lastUpdated: new Date().toLocaleString(),

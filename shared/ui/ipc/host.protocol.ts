@@ -326,6 +326,7 @@ export interface OpenEditorViewNotification {
 	| "global_nav"
 		| "context_menu"
 		| "tree_view"
+		| "apm_logs"
 		// nrql
 		| "query_builder"
 		| "recent_queries"
@@ -333,12 +334,12 @@ export interface OpenEditorViewNotification {
 		// other
 		| "notification"
 		| "golden_metrics"
-		| "profile";
+		| "profile"
+		| "entity_guid_finder";
 	ide: {
 		name?: IdeNames;
 		browserEngine?: BrowserEngines;
 	};
-
 	accountId?: number;
 	panelLocation?: ViewColumn;
 	entityGuid?: string;
