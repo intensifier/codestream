@@ -230,7 +230,7 @@ export const ObservabilityAnomalyPanel = () => {
 					style={{ color: "inherit", textDecoration: "none" }}
 					onClick={e => {
 						e.preventDefault();
-						HostApi.instance.track("codestream/link_to_newrelic clicked", {
+						HostApi.instance.track("codestream/newrelic_link clicked", {
 							entity_guid: derivedState.currentObservabilityAnomalyEntityGuid,
 							meta_data: "destination: transactions",
 							meta_data_2: `codestream_section: transactions`,

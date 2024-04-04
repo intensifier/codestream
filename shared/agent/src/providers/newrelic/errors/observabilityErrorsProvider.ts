@@ -38,20 +38,17 @@ import { NrApiConfig } from "../nrApiConfig";
 import { isEmpty as _isEmpty } from "lodash";
 import { mapNRErrorResponse, parseId } from "../utils";
 import { ContextLogger } from "../../contextLogger";
-import { CSNewRelicProviderInfo } from "@codestream/protocols/api";
-import { customFetch } from "../../../system/fetchCore";
 
 const ALLOWED_ENTITY_ACCOUNT_DOMAINS_FOR_ERRORS = ["APM", "BROWSER", "EXT", "INFRA"];
-import { NraiProvider } from "../nrai/nraiProvider";
+import { SourceMapProvider } from "./sourceMapProvider";
 
 @lsp
 export class ObservabilityErrorsProvider {
 	constructor(
 		private reposProvider: ReposProvider,
-		private nraiProvider: NraiProvider,
 		private graphqlClient: NewRelicGraphqlClient,
 		private nrApiConfig: NrApiConfig,
-		private providerInfo: CSNewRelicProviderInfo | undefined
+		private sourceMapProvider: SourceMapProvider
 	) {}
 
 	/**
@@ -168,6 +165,7 @@ export class ObservabilityErrorsProvider {
 											remote: application.urlValue!,
 											errorGroupGuid: response.actor.errorsInbox.errorGroup.id,
 											occurrenceId: errorTrace.occurrenceId,
+											traceId: errorTrace.traceId,
 											count: errorTrace.count,
 											lastOccurrence: errorTrace.lastOccurrence,
 											errorGroupUrl: response.actor.errorsInbox.errorGroup.url,
@@ -389,6 +387,7 @@ export class ObservabilityErrorsProvider {
 							results: {
 								entityGuid: string;
 								id?: string;
+								traceId?: string;
 								stackHash?: string;
 								stackTrace?: string;
 								monitorAccountId?: string;
@@ -407,6 +406,7 @@ export class ObservabilityErrorsProvider {
 					stackHash?: string | number;
 					browserStackHash?: string | number;
 					id?: string;
+					traceId?: string;
 					stackTrace?: string;
 					monitorAccountId?: string;
 					appId?: number;
@@ -431,7 +431,7 @@ export class ObservabilityErrorsProvider {
 						errorTraceResult.appId &&
 						errorTraceResult.releaseIds
 					) {
-						stackSourceMap = await this.fetchSourceMap(
+						stackSourceMap = await this.sourceMapProvider.fetchSourceMap(
 							errorTraceResult.stackTrace,
 							errorTraceResult.monitorAccountId,
 							errorTraceResult.appId,
@@ -455,7 +455,7 @@ export class ObservabilityErrorsProvider {
 					}
 					return {
 						entityGuid: entityGuid || errorGroupResponse.entityGuid,
-						traceId: returnTraceId,
+						traceId: returnTraceId || errorTraceResult.traceId,
 						stackSourceMap,
 					};
 				}
@@ -465,53 +465,6 @@ export class ObservabilityErrorsProvider {
 				errorGroupGuid: errorGroupGuid,
 			});
 		}
-		return undefined;
-	}
-
-	private async fetchSourceMap(
-		stackTrace: string,
-		monitorAccountId: string,
-		appId: number,
-		releaseIds: string
-	): Promise<any> {
-		let serviceUrlChunk = "service";
-		if (this.nrApiConfig.productUrl.includes("staging")) {
-			serviceUrlChunk = "staging-service";
-		}
-
-		const url = `https://sourcemaps.${serviceUrlChunk}.newrelic.com/ui/accounts/${monitorAccountId}/applications/${appId}/stacktraces?releaseIds=${encodeURIComponent(
-			releaseIds
-		)}`;
-
-		let headers: { [key: string]: string } = {
-			"Content-Type": "text/plain",
-		};
-
-		const token = this.providerInfo?.accessToken;
-		if (token) {
-			if (this.providerInfo?.tokenType === "access") {
-				headers["x-access-token"] = token;
-			} else {
-				headers["x-id-token"] = token;
-			}
-		}
-
-		try {
-			const response = await customFetch(url, {
-				method: "POST",
-				headers: headers,
-				body: stackTrace,
-			});
-
-			if (!response.ok) {
-				throw new Error(`HTTP error! Status: ${response.status}`);
-			}
-			const responseData = await response.json();
-			return responseData;
-		} catch (error) {
-			ContextLogger.error(error, "fetchSourceMap");
-		}
-
 		return undefined;
 	}
 
@@ -531,6 +484,7 @@ export class ObservabilityErrorsProvider {
 			"latest(message) AS 'message',",
 			"latest(entityGuid) AS 'entityGuid',",
 			"latest(fingerprint) AS 'fingerprintId',",
+			"latest(traceId) AS 'traceId',",
 			"count(id) AS 'length'",
 			"FROM ErrorTrace",
 			`WHERE fingerprint IS NOT NULL AND NOT error.expected AND entityGuid='${applicationGuid}'`,
@@ -548,6 +502,7 @@ export class ObservabilityErrorsProvider {
 			"latest(errorClass) AS 'errorClass',",
 			"latest(errorMessage) AS 'message',",
 			"latest(entityGuid) AS 'entityGuid',",
+			"latest(traceId) AS 'traceId',",
 			"count(guid) as 'length'",
 			"FROM JavaScriptError",
 			`WHERE stackHash IS NOT NULL AND entityGuid='${applicationGuid}'`,
@@ -565,6 +520,7 @@ export class ObservabilityErrorsProvider {
 			"latest(crashLocationClass) AS 'errorClass',",
 			"latest(crashMessage) AS 'message',",
 			"latest(entityGuid) AS 'entityGuid',",
+			"latest(traceId) AS 'traceId',",
 			"count(occurrenceId) as 'length'",
 			"FROM MobileCrash",
 			`WHERE entityGuid='${applicationGuid}'`,
@@ -582,6 +538,7 @@ export class ObservabilityErrorsProvider {
 			"latest(exceptionLocationClass) AS 'errorClass',",
 			"latest(exceptionMessage) AS 'message',",
 			"latest(entityGuid) AS 'entityGuid',",
+			"latest(traceId) AS 'traceId',",
 			"count(handledExceptionUuid) as 'length'",
 			"FROM MobileHandledException",
 			`WHERE entityGuid='${applicationGuid}'`,
@@ -1008,6 +965,7 @@ export class ObservabilityErrorsProvider {
 				);
 				return {
 					entityId: metricResponse?.entityGuid,
+					traceId: metricResponse?.traceId,
 					occurrenceId: metricResponse?.traceId,
 					stackSourceMap: metricResponse?.stackSourceMap,
 					relatedRepos: mappedRepoEntities || [],
@@ -1167,6 +1125,7 @@ export class ObservabilityErrorsProvider {
 							if (result.length) {
 								errorGroup.releaseTag = result[0]["tags.releaseTag"];
 								errorGroup.commit = result[0]["tags.commit"];
+								errorGroup.traceId = errorGroup.traceId;
 							}
 						} catch (e) {
 							// This query is fragile with invalid nrql escape characters - Strings.escapeNrql

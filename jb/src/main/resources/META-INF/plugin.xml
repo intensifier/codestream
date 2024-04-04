@@ -120,9 +120,9 @@
                class="com.codestream.actions.CodeStreamActionGroup">
             <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="EditorPopupMenu2"/>
             <action id="CodeStream.LogSearch" class="com.codestream.actions.LogSearch" text="Find in _Logs"
-                    description="Find in Logs"/>
+                    description="Find in Logs" icon="/images/logs.svg"/>
             <action id="CodeStream.ExecuteNrql" class="com.codestream.actions.ExecuteNrql" text="Execute selected _NRQL"
-                    description="Execute selected NRQL"/>
+                    description="Execute selected NRQL" icon="/images/terminal.svg"/>
             <action id="CodeStream.AddComment" class="com.codestream.actions.AddComment" text="Add _Comment"
                     description="Add comment" icon="/images/marker-comment.svg">
                 <add-to-group group-id="Diff.EditorPopupMenu"/>

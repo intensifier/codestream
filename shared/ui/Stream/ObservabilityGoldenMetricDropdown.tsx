@@ -84,7 +84,7 @@ export const ObservabilityGoldenMetricDropdown = React.memo((props: Props) => {
 				onClick={e => {
 					e.preventDefault();
 					e.stopPropagation();
-					HostApi.instance.track("codestream/link_to_newrelic clicked", {
+					HostApi.instance.track("codestream/newrelic_link clicked", {
 						entity_guid: entityGuid,
 						account_id: accountId,
 						meta_data: "destination: change_tracking",

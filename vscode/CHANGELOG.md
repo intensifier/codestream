@@ -1,5 +1,19 @@
 # Change Log
 
+## [15.6.0] - 2023-4-4
+
+### Added
+
+- Adds repository as the top-level node in the CodeStream tree view, allowing you to see observability for services related to any repository you have open in your IDE
+- Add the ability to search logs for any entity, including infra logs
+- Adds support for partitions when searching logs
+- Adds a link to related logs when viewing error details
+
+### Fixed
+
+- Fixes an issue with the display of markdown when viewing vulnerability details
+- Fixes an issue where the state of the severity filter for vulnerabilities was not being persisted
+
 ## [15.5.0] - 2023-3-14
 
 ### Added

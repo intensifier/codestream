@@ -25,12 +25,14 @@ import { ReposProvider } from "./repos/reposProvider";
 import { SloProvider } from "./slo/sloProvider";
 import { SpansProvider } from "./spans/spansProvider";
 import { NraiProvider } from "./nrai/nraiProvider";
-import { NrLogsProvider } from "./logs/nrLogsProvider";
+import { LoggingProvider } from "./logs/loggingProvider";
 import { NrNRQLProvider } from "./nrql/nrqlProvider";
 import { NewRelicVulnerabilitiesProvider } from "./vuln/nrVulnerability";
 import { NrqlCompletionProvider } from "./nrql/nrqlCompletionProvider";
 import { AccountProvider } from "./account/accountProvider";
 import { EntityGuidDocumentParser } from "./entity/entityGuidDocumentParser";
+import { FetchCore } from "../../system/fetchCore";
+import { SourceMapProvider } from "./errors/sourceMapProvider";
 
 let nrDirectives: NrDirectives | undefined;
 let disposables: Disposable[] = [];
@@ -81,7 +83,8 @@ export async function injectNR(sessionServiceContainer: SessionServiceContainer)
 		session,
 		newRelicProviderInfo,
 		versionInfo,
-		session.isProductionCloud
+		session.isProductionCloud,
+		session.nrFetchClient
 	);
 
 	disposables.push(newRelicGraphqlClient);
@@ -95,10 +98,6 @@ export async function injectNR(sessionServiceContainer: SessionServiceContainer)
 		await nrOrgProvider.updateOrgId({ teamId: session.teamId });
 	});
 
-	const nrHttpClient = new HttpClient(newRelicProviderConfig, session, newRelicProviderInfo);
-
-	disposables.push(nrHttpClient);
-
 	const deploymentsProvider = new DeploymentsProvider(newRelicGraphqlClient, nrApiConfig);
 
 	const reposProvider = new ReposProvider(
@@ -111,12 +110,21 @@ export async function injectNR(sessionServiceContainer: SessionServiceContainer)
 
 	const nraiProvider = new NraiProvider(newRelicGraphqlClient);
 
+	disposables.push(nraiProvider);
+
+	const genericFetchClient = new FetchCore();
+
+	const sourceMapProvider = new SourceMapProvider(
+		newRelicProviderInfo,
+		nrApiConfig,
+		genericFetchClient
+	);
+
 	const observabilityErrorsProvider = new ObservabilityErrorsProvider(
 		reposProvider,
-		nraiProvider,
 		newRelicGraphqlClient,
 		nrApiConfig,
-		newRelicProviderInfo
+		sourceMapProvider
 	);
 
 	const entityProvider = new EntityProvider(nrApiConfig, newRelicGraphqlClient);
@@ -182,7 +190,12 @@ export async function injectNR(sessionServiceContainer: SessionServiceContainer)
 		baseHeaders: nrApiConfig.baseHeaders,
 	};
 
-	const vulnHttpClient = new HttpClient(newRelicVulnProviderConfig, session, newRelicProviderInfo);
+	const vulnHttpClient = new HttpClient(
+		newRelicVulnProviderConfig,
+		session,
+		newRelicProviderInfo,
+		session.nrFetchClient
+	);
 
 	disposables.push(vulnHttpClient);
 
@@ -195,7 +208,7 @@ export async function injectNR(sessionServiceContainer: SessionServiceContainer)
 
 	disposables.push(newRelicVulnerabilitiesProvider);
 
-	const logsProvider = new NrLogsProvider(newRelicGraphqlClient);
+	const logsProvider = new LoggingProvider(newRelicGraphqlClient);
 	const nrqlProvider = new NrNRQLProvider(newRelicGraphqlClient);
 
 	nrDirectives = new NrDirectives(

@@ -5,6 +5,7 @@ import { ParsedDiff } from "diff";
 import {
 	EnvironmentHost,
 	FetchProviderDefaultPullResponse,
+	RiskSeverity,
 	ThirdPartyProviders,
 } from "./agent.protocol";
 import { CSEligibleJoinCompany, CSPossibleAuthDomain, CSReviewCheckpoint } from "./api.protocol";
@@ -395,6 +396,7 @@ export interface CSCodeError extends CSEntity {
 	objectType?: "errorGroup";
 	objectInfo?: { [key: string]: string | boolean };
 	accountId?: number;
+	traceId?: string;
 }
 
 export interface Attachment {
@@ -862,6 +864,7 @@ export interface CSMePreferences {
 	hiddenPaneNodes?: {
 		[nodeId: string]: boolean;
 	};
+	vulnerabilitySeverityFilter?: RiskSeverity[];
 
 	// repoId -> o11y entityGuid mapping
 	activeO11y?: {

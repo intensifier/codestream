@@ -1144,7 +1144,7 @@ export const ProviderTokenRequestType = new RequestType<ProviderTokenRequest, vo
 );
 
 export interface WebviewErrorRequest {
-	error: { message: string; stack: string };
+	error: { message: string; stack?: string };
 }
 
 export const WebviewErrorRequestType = new RequestType<WebviewErrorRequest, void, void, void>(
@@ -1184,7 +1184,7 @@ export interface NewRelicErrorGroup {
 	entityName?: string;
 
 	occurrenceId?: string;
-
+	traceId?: string;
 	entityUrl?: string;
 	errorGroupUrl?: string;
 
@@ -1371,6 +1371,7 @@ export interface ObservabilityError extends ObservabilityErrorCore {
 	appName: string;
 	remote: string;
 	occurrenceId: string;
+	traceId?: string;
 	count: number;
 	lastOccurrence: number;
 	releaseTag?: number;
@@ -1534,9 +1535,11 @@ export interface EntityAccount {
 	entityGuid: string;
 	entityName: string;
 	entityType?: EntityType;
+	type?: string;
 	entityTypeDescription?: string;
 	domain?: string;
 	url?: string;
+	displayName?: string;
 	tags: {
 		key: string;
 		values: string[];
@@ -1590,6 +1593,7 @@ export interface GetObservabilityEntitiesResponse {
 		account: string;
 		entityType: EntityType;
 		entityTypeDescription: string;
+		displayName: string;
 	}[];
 	nextCursor?: string;
 }
@@ -1679,6 +1683,7 @@ export const GetObservabilityErrorAssignmentsRequestType = new RequestType<
 export interface GetObservabilityErrorGroupMetadataRequest {
 	errorGroupGuid?: string;
 	entityGuid?: string;
+	traceId?: string;
 }
 
 export interface GetObservabilityErrorGroupMetadataResponse {
@@ -1687,6 +1692,7 @@ export interface GetObservabilityErrorGroupMetadataResponse {
 	remote?: string;
 	relatedRepos: RelatedRepository;
 	stackSourceMap?: any;
+	traceId?: string;
 }
 
 export const GetObservabilityErrorGroupMetadataRequestType = new RequestType<
@@ -1759,6 +1765,7 @@ export const NRErrorTypes = [
 	"NR_UNKNOWN",
 	"GENERIC",
 	"INTERNAL_RATE",
+	"INTERNAL_RATE_FORCE_LOGOUT",
 ] as const;
 
 export type NRErrorType = (typeof NRErrorTypes)[number];
@@ -2665,16 +2672,24 @@ export const DidDetectObservabilityAnomaliesNotificationType = new NotificationT
 	void
 >("codestream/didDetectObservabilityAnomalies");
 
-// reusing request/response types - internally we're just omitting a filter
+export interface GetLoggingEntitiesResponse {
+	totalResults: number;
+	entities: EntityAccount[];
+	nextCursor?: string;
+}
+
+// reusing request type - internally we're just omitting a filter
 export const GetLoggingEntitiesRequestType = new RequestType<
 	GetObservabilityEntitiesRequest,
-	GetObservabilityEntitiesResponse,
+	GetLoggingEntitiesResponse,
 	void,
 	void
 >("codestream/newrelic/logs/entities");
 
 export interface GetLogsRequest {
-	entityGuid: string;
+	entity: EntityAccount;
+	traceId?: string;
+	partitions: string[];
 	filterText: string;
 	order: {
 		field: string;
@@ -2705,7 +2720,7 @@ export const GetLogsRequestType = new RequestType<GetLogsRequest, GetLogsRespons
 );
 
 export interface GetSurroundingLogsRequest {
-	entityGuid: string;
+	entity: EntityAccount;
 	messageId: string;
 	since: number;
 }
@@ -2724,7 +2739,7 @@ export const GetSurroundingLogsRequestType = new RequestType<
 >("codestream/newrelic/logs/surrounding");
 
 export interface GetLogFieldDefinitionsRequest {
-	entityGuid: string;
+	entity: EntityAccount;
 }
 
 export interface LogFieldDefinition {
@@ -2743,6 +2758,22 @@ export const GetLogFieldDefinitionsRequestType = new RequestType<
 	void,
 	void
 >("codestream/newrelic/logs/fieldDefinitions");
+
+export interface GetLoggingPartitionsRequest {
+	accountId: number;
+}
+
+export interface GetLoggingPartitionsResponse {
+	partitions?: string[];
+	error?: NRErrorResponse;
+}
+
+export const GetLoggingPartitionsRequestType = new RequestType<
+	GetLoggingPartitionsRequest,
+	GetLoggingPartitionsResponse,
+	void,
+	void
+>("codestream/newrelic/logs/partitions");
 
 export interface SaveRecentQueryRequest {
 	accountId?: number;

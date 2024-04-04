@@ -18,7 +18,7 @@ import React, {
 import { shallowEqual } from "react-redux";
 import styled from "styled-components";
 
-import { OpenUrlRequestType } from "@codestream/protocols/webview";
+import { OpenEditorViewNotificationType, OpenUrlRequestType } from "@codestream/protocols/webview";
 import { DelayedRender } from "@codestream/webview/Container/DelayedRender";
 import { Loading } from "@codestream/webview/Container/Loading";
 import { Button } from "@codestream/webview/src/components/Button";
@@ -66,7 +66,9 @@ import {
 	BigTitle,
 	Header,
 	HeaderActions,
+	LinkForExternalUrl,
 	Meta,
+	MetaDescription,
 	MetaLabel,
 	MetaSection,
 	MetaSectionCollapsed,
@@ -209,14 +211,14 @@ const ClickLine = styled.div`
 	}
 `;
 
-const DataRow = styled.div`
+export const DataRow = styled.div`
 	display: flex;
 	align-items: center;
 `;
-const DataLabel = styled.div`
+export const DataLabel = styled.div`
 	margin-right: 5px;
 `;
-const DataValue = styled.div`
+export const DataValue = styled.div`
 	color: var(--text-color-subtle);
 `;
 
@@ -635,7 +637,7 @@ export const BaseCodeErrorHeader = (props: PropsWithChildren<BaseCodeErrorHeader
 	const handleEntityLinkClick = (e, url) => {
 		e.preventDefault();
 		e.stopPropagation();
-		HostApi.instance.track("codestream/link_to_newrelic clicked", {
+		HostApi.instance.track("codestream/newrelic_link clicked", {
 			entity_guid: props.errorGroup?.entityGuid,
 			account_id: props.errorGroup?.accountId,
 			meta_data: "destination: apm_service_summary",
@@ -941,7 +943,7 @@ export const BaseCodeErrorHeader = (props: PropsWithChildren<BaseCodeErrorHeader
 											<Link
 												onClick={e => {
 													e.preventDefault();
-													HostApi.instance.track("codestream/link_to_newrelic clicked", {
+													HostApi.instance.track("codestream/newrelic_link clicked", {
 														entity_guid: props.errorGroup?.entityGuid,
 														account_id: props.errorGroup?.accountId,
 														meta_data: "destination: error_group",
@@ -1213,6 +1215,8 @@ const BaseCodeError = (props: BaseCodeErrorProps) => {
 			replies: props.collapsed
 				? emptyArray
 				: getThreadPosts(state, codeError.streamId, codeError.postId),
+			traceId: currentCodeErrorData?.traceId,
+			ideName: state.ide.name,
 		};
 	}, shallowEqual);
 	const renderedFooter = props.renderFooter && props.renderFooter(CardFooter, ComposeWrapper);
@@ -1509,6 +1513,47 @@ const BaseCodeError = (props: BaseCodeErrorProps) => {
 		}
 	};
 
+	const renderLogsIcon = () => {
+		return (
+			<Meta style={{ paddingBottom: "15px" }}>
+				<LinkForExternalUrl
+					href="#"
+					onClick={e => {
+						e.preventDefault();
+					}}
+				>
+					<MetaDescription>
+						<span
+							onClick={e => {
+								e.preventDefault();
+								openLogs();
+							}}
+							style={{ opacity: 0.5 }}
+						>
+							<span>
+								<Icon name="logs" />
+							</span>
+							View related logs
+						</span>
+					</MetaDescription>
+				</LinkForExternalUrl>
+			</Meta>
+		);
+	};
+
+	const openLogs = () => {
+		HostApi.instance.notify(OpenEditorViewNotificationType, {
+			panel: "logs",
+			title: "Logs",
+			entryPoint: "code_error",
+			entityGuid: props.errorGroup?.entityGuid,
+			traceId: currentCodeErrorData?.traceId,
+			ide: {
+				name: derivedState.ideName || undefined,
+			},
+		});
+	};
+
 	const renderStackTrace = () => {
 		if (stackTrace?.length) {
 			return (
@@ -1555,7 +1600,7 @@ const BaseCodeError = (props: BaseCodeErrorProps) => {
 						</TourTip>
 					</Meta>
 					{props.post && (
-						<div style={{ marginBottom: "10px" }}>
+						<div>
 							<Reactions className="reactions no-pad-left" post={props.post} />
 						</div>
 					)}
@@ -1676,6 +1721,7 @@ const BaseCodeError = (props: BaseCodeErrorProps) => {
 			)}
 
 			{renderStackTrace()}
+			{currentCodeErrorData?.traceId && renderLogsIcon()}
 			{props.collapsed && renderMetaSectionCollapsed(props)}
 			{!props.collapsed &&
 				props &&

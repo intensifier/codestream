@@ -22,6 +22,9 @@ interface Props {
 	currentRepoCallback: (repoId?: string) => void;
 	observabilityRepos?: ObservabilityRepo[];
 	isHeaderText?: boolean;
+	repoName?: string;
+	serviceCount?: number;
+	suppressCallback?: boolean;
 }
 
 interface CurrentRepoContainerProps {
@@ -31,6 +34,7 @@ const CurrentRepoContainer = styled.span<CurrentRepoContainerProps>`
 	color: ${props =>
 		props.isHeaderText ? "var(--text-color-highlight)" : "var(--text-color-subtle)"};
 	display: ${props => (props.isHeaderText ? "flex" : "inherit")};
+	margin-left: -4px;
 `;
 
 export const CurrentRepoContext = React.memo((props: Props) => {
@@ -76,20 +80,22 @@ export const CurrentRepoContext = React.memo((props: Props) => {
 		};
 
 		const setCurrentRepo = (repo: ReposScm, scmInfo: GetFileScmInfoResponse | undefined) => {
-			const repoName = getRepoName(repo, scmInfo);
-			const currentRepoId = repo.id || scmInfo?.scm?.repoId;
+			if (!props.suppressCallback) {
+				const repoName = getRepoName(repo, scmInfo);
+				const currentRepoId = repo.id || scmInfo?.scm?.repoId;
 
-			setCurrentRepoName(repoName);
-			console.debug(
-				`o11y: currentRepoContext: setting currentRepoCallback currentRepo?.id  ${repo.id} scmInfo?.scm?.repoId ${scmInfo?.scm?.repoId}`
-			);
-			props.currentRepoCallback(currentRepoId);
-			dispatch(
-				setUserPreference({
-					prefPath: ["currentO11yRepoId"],
-					value: currentRepoId,
-				})
-			);
+				setCurrentRepoName(repoName);
+				console.debug(
+					`o11y: currentRepoContext: setting currentRepoCallback currentRepo?.id  ${repo.id} scmInfo?.scm?.repoId ${scmInfo?.scm?.repoId}`
+				);
+				props.currentRepoCallback(currentRepoId);
+				dispatch(
+					setUserPreference({
+						prefPath: ["currentO11yRepoId"],
+						value: currentRepoId,
+					})
+				);
+			}
 		};
 
 		// case: no file open, or non-file document open, and no previous repo set
@@ -132,17 +138,19 @@ export const CurrentRepoContext = React.memo((props: Props) => {
 	return (
 		<CurrentRepoContainer isHeaderText={props.isHeaderText ? true : false}>
 			<Icon style={{ transform: "scale(0.7)", display: "inline-block" }} name="repo" />{" "}
-			<span className="repo-name" style={{ margin: props.isHeaderText ? "1px 2px 0px 0px" : "0" }}>
-				{currentRepoName}
+			<span
+				style={{
+					fontSize: "11px",
+					fontWeight: "bold",
+					margin: props.isHeaderText ? "1px 2px 0px 0px" : "0",
+				}}
+			>
+				{props.repoName?.toUpperCase()}
 			</span>
 			{props.isHeaderText && (
-				<Icon
-					name="info"
-					className="subtle"
-					placement="bottom"
-					style={{ transform: "scale(0.9)", display: "inline-block" }}
-					title={`Open a file in the editor to see data for a different repository`}
-				/>
+				<span className="subtle">
+					{props.serviceCount === 0 ? "" : <>({props.serviceCount})</>}
+				</span>
 			)}
 		</CurrentRepoContainer>
 	);

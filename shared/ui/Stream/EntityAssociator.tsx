@@ -1,6 +1,5 @@
 import {
 	EntityAccount,
-	EntityType,
 	GetObservabilityEntitiesRequestType,
 	WarningOrError,
 } from "@codestream/protocols/agent";
@@ -75,25 +74,11 @@ export const EntityAssociator = React.memo((props: PropsWithChildren<EntityAssoc
 		});
 
 		let options = result.entities.map(e => {
-			const typeLabel = (t: EntityType) => {
-				switch (t) {
-					case "BROWSER_APPLICATION_ENTITY":
-						return "Browser";
-					case "MOBILE_APPLICATION_ENTITY":
-						return "Mobile";
-					case "THIRD_PARTY_SERVICE_ENTITY":
-						return "OTEL";
-					case "INFRASTRUCTURE_AWS_LAMBDA_FUNCTION_ENTITY":
-						return "Lambda";
-					default:
-						return "APM";
-				}
-			};
 			return {
 				label: e.name,
 				value: e.guid,
 				sublabel: e.account,
-				labelAppend: typeLabel(e.entityType),
+				labelAppend: e.displayName,
 			};
 		});
 
@@ -115,6 +100,61 @@ export const EntityAssociator = React.memo((props: PropsWithChildren<EntityAssoc
 		};
 	}
 
+	const handleClick = (e: React.MouseEvent<Element, MouseEvent>): void => {
+		e.preventDefault();
+		if (!selected) {
+			return;
+		}
+		setIsLoading(true);
+		setWarningOrErrors(undefined);
+
+		const payload = {
+			url: props.remote,
+			name: props.remoteName,
+			applicationEntityGuid: selected.value,
+			entityId: selected.value,
+			parseableAccountId: selected.value,
+		};
+		dispatch(api("assignRepository", payload))
+			.then(response => {
+				setTimeout(() => {
+					if (response?.directives) {
+						console.log("assignRepository", {
+							directives: response?.directives,
+						});
+						// a little fragile, but we're trying to get the entity guid back
+						if (props.onSuccess) {
+							props.onSuccess({
+								entityGuid: response?.directives.find(d => d.type === "assignRepository")?.data
+									?.entityGuid,
+							});
+						}
+					} else if (response?.error) {
+						setWarningOrErrors([{ message: response.error }]);
+					} else {
+						setWarningOrErrors([
+							{ message: "Failed to direct to entity dropdown, please refresh" },
+						]);
+						console.warn("Could not find directive", {
+							_: response,
+							payload: payload,
+						});
+					}
+				}, 5000);
+			})
+			.catch(err => {
+				setWarningOrErrors([{ message: "Failed to direct to entity dropdown, please refresh" }]);
+				logError(`Unexpected error during assignRepository: ${err}`, {});
+			})
+			.finally(() => {
+				setTimeout(() => {
+					{
+						/* @TODO clean up this code, put in place so spinner doesn't stop before onSuccess */
+					}
+					setIsLoading(false);
+				}, 6000);
+			});
+	};
 	return (
 		<NoContent style={{ marginLeft: props.isSidebarView ? "20px" : "40px" }}>
 			{props.title && <h3>{props.title}</h3>}
@@ -140,63 +180,7 @@ export const EntityAssociator = React.memo((props: PropsWithChildren<EntityAssoc
 				style={{ width: "100%" }}
 				isLoading={isLoading}
 				disabled={isLoading || !selected}
-				onClick={e => {
-					e.preventDefault();
-					if (!selected) {
-						return;
-					}
-					setIsLoading(true);
-					setWarningOrErrors(undefined);
-
-					const payload = {
-						url: props.remote,
-						name: props.remoteName,
-						applicationEntityGuid: selected.value,
-						entityId: selected.value,
-						parseableAccountId: selected.value,
-					};
-					dispatch(api("assignRepository", payload))
-						.then(_ => {
-							setTimeout(() => {
-								if (_?.directives) {
-									console.log("assignRepository", {
-										directives: _?.directives,
-									});
-									// a little fragile, but we're trying to get the entity guid back
-									if (props.onSuccess) {
-										props.onSuccess({
-											entityGuid: _?.directives.find(d => d.type === "assignRepository")?.data
-												?.entityGuid,
-										});
-									}
-								} else if (_?.error) {
-									setWarningOrErrors([{ message: _.error }]);
-								} else {
-									setWarningOrErrors([
-										{ message: "Failed to direct to entity dropdown, please refresh" },
-									]);
-									console.warn("Could not find directive", {
-										_: _,
-										payload: payload,
-									});
-								}
-							}, 5000);
-						})
-						.catch(err => {
-							setWarningOrErrors([
-								{ message: "Failed to direct to entity dropdown, please refresh" },
-							]);
-							logError(`Unexpected error during assignRepository: ${err}`, {});
-						})
-						.finally(() => {
-							setTimeout(() => {
-								{
-									/* @TODO clean up this code, put in place so spinner doesn't stop before onSuccess */
-								}
-								setIsLoading(false);
-							}, 6000);
-						});
-				}}
+				onClick={handleClick}
 			>
 				Show Performance Data
 			</Button>

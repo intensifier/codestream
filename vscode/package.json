@@ -2,7 +2,7 @@
 	"name": "codestream",
 	"displayName": "New Relic CodeStream",
 	"description": "Bring production telemetry into your IDE to quickly identify and resolve performance issues.",
-	"version": "15.5.0",
+	"version": "15.6.0",
 	"author": "CodeStream",
 	"publisher": "CodeStream",
 	"extensionKind": [
@@ -31,11 +31,8 @@
 		"theme": "light"
 	},
 	"keywords": [
-		"gitlab",
-		"collaboration",
-		"bitbucket",
-		"github",
-		"slack"
+		"insights",
+		"observability"
 	],
 	"contributes": {
 		"snippets": [

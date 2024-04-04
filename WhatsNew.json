@@ -1,6 +1,6 @@
 [
 	{
-		"version": "15.3.0",
-		"title": "Search logs, run NRQL queries, and investigate browser errors!"
+		"version": "15.6.0",
+		"title": "Search infra logs, with support for log partitions."
 	}
 ]

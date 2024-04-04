@@ -200,12 +200,14 @@ export function reportErrorToNr(request: ReportMessageRequest, attributes?: Erro
 			return;
 		}
 		_errorCache.put(cacheKey, true);
+		const errorClassName = error.constructor ? error.constructor.name : ""; // NR agent just records Object or Error :(
 
 		NewRelic.noticeError(error, {
 			...attributes,
 			extra:
 				typeof request.extra === "object" ? JSON.stringify(request.extra) : request.extra || "",
 			type: request.type,
+			errorClassName: errorClassName,
 			source: request.source || "agent",
 			stack: stack || undefined,
 		});
@@ -225,7 +227,7 @@ export function webviewError(request: WebviewErrorRequest): void {
 	// } catch (e) {
 	// 	console.warn(e);
 	// }
-	if (stackMapper) {
+	if (stackMapper && request.error.stack) {
 		// console.log(`=== stack before ${request.error.stack}`);
 		const stackTraceInfo = parseStackString(request.error.stack);
 		// Use source map to resolve original filename / lines

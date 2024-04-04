@@ -95,7 +95,7 @@ export class NotificationsController implements Disposable {
     const result = await window.showInformationMessage(message, ...actions);
 
     if (result === actions[0]) {
-			Container.agent.telemetry.track("codestream/toast clicked", {
+			Container.agent.telemetry.track("codestream/toast_button clicked", {
 				meta_data: `content: anomaly`,
 				target: "toast",
 				event_type: "click"
@@ -144,7 +144,7 @@ export class NotificationsController implements Disposable {
       } else if (review) {
         Container.sidebar.openReview(review.id);
       }
-			Container.agent.telemetry.track("codestream/toast clicked", {
+			Container.agent.telemetry.track("codestream/toast_button clicked", {
 				meta_data: `content: ${toastContentType === "Codemark" ? "codemark" : ""}`,
 				target: "toast",
 				event_type: "click"

@@ -447,7 +447,6 @@ export function PaneBody(props: PropsWithChildren<PaneBodyProps>) {
 const Root = styled.div`
 	padding: 22px 0 0px 0;
 	// border: 1px solid transparent;
-	border-bottom: 1px solid var(--sidebar-header-border);
 	&.open {
 		// border: 3px solid green;
 	}
@@ -519,16 +518,16 @@ const Root = styled.div`
 
 interface PaneProps {
 	className?: string;
-	top: number;
-	height: number;
-	tabIndex: number;
+	top?: number;
+	height?: number;
+	tabIndex?: number;
 }
 
 export function Pane(props: PropsWithChildren<PaneProps>) {
 	return (
 		<Root
 			className={props.className}
-			style={{ top: `${props.top}px`, height: `${props.height}px` }}
+			style={{ top: `${props.top}px`, height: `${props.height}px`, overflowY: "auto" }}
 		>
 			{props.children}
 		</Root>

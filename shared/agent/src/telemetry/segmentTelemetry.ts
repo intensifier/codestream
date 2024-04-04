@@ -1,13 +1,15 @@
 "use strict";
+import UUID from "uuid";
 import uuid from "uuid/v4";
 import { Logger } from "../logger";
 import { CodeStreamSession, SessionStatusChangedEvent } from "../session";
 import { SessionStatus } from "../types";
 
 // FIXME: sorry, typescript purists: i simply gave up trying to get the type definitions for this module to work
-import Analytics from "analytics-node";
-import { debug } from "../system";
 import { TelemetryData, TelemetryEventName } from "@codestream/protocols/agent";
+import Analytics from "analytics-node";
+import { FetchCore } from "../system/fetchCore";
+import { debug } from "../system";
 
 export class SegmentTelemetryService {
 	private _segmentInstance: Analytics | undefined;
@@ -23,6 +25,7 @@ export class SegmentTelemetryService {
 	}[] = [];
 
 	private _onReady: () => void = () => {};
+	private fetchClient = new FetchCore();
 
 	/**
 	 * @param {boolean} hasOptedOut - Has the user opted out of tracking?
@@ -174,14 +177,44 @@ export class SegmentTelemetryService {
 			payload
 		);
 		try {
-			this._segmentInstance.track({
-				userId: this._distinctId,
-				anonymousId: this._anonymousId,
-				event,
-				properties: payload,
-			});
-			this._segmentInstance.flush();
+			if (event === "codestream/user/login succeeded") {
+				this._segmentInstance.track({
+					userId: this._distinctId,
+					anonymousId: this._anonymousId,
+					event,
+					properties: payload,
+				});
+				this._segmentInstance.flush();
+			}
 		} catch (ex) {
+			Logger.error(ex, cc);
+		}
+		try {
+			if (
+				this._session.environmentInfo.isProductionCloud &&
+				this._session.newRelicTaxonomyEnforcerUrl
+			) {
+				this.fetchClient
+					.customFetch(`${this._session.newRelicTaxonomyEnforcerUrl}/events`, {
+						method: "POST",
+						body: JSON.stringify({
+							event: event,
+							properties: payload,
+							messageId: UUID(),
+							timestamp: new Date(),
+							userId: this._distinctId,
+							anonymousId: this._anonymousId,
+							type: "track",
+						}),
+						headers: {
+							"Content-Type": "application/json",
+						},
+					})
+					.catch((ex: any) => {
+						Logger.error(ex, cc);
+					});
+			}
+		} catch (ex: any) {
 			Logger.error(ex, cc);
 		}
 	}

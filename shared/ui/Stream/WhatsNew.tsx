@@ -77,6 +77,33 @@ export const WhatsNewPanel = () => {
 			<TimelineContent>
 				<TimelineHeader>
 					<TimelineMarker />
+					<TimelineTitle>15.6.0</TimelineTitle>
+					<TimelineDate>April 4, 2024</TimelineDate>
+				</TimelineHeader>
+				<div className="tl-body">
+					<Update>
+						<UpdateTitle>Support for Infra logs and log partitions</UpdateTitle>
+						<UpdateItem>
+							You can now search for logs from any entity type, and leverage your log partitions as well. Just select the
+							appropriate entity from the dropdown at the top of the log search page, and the appropriate partition.
+						</UpdateItem>
+						<UpdateItem>
+							<img src="https://images.codestream.com/misc/WN-infra-logs.png" />
+						</UpdateItem>
+					</Update>
+					<Update>
+						<UpdateTitle>Updated Tree View</UpdateTitle>
+						<UpdateItem>
+							Repository is now the top level in the tree view in the CodeStream pane, allowing you to view
+							observability data for services built from any of the repositories you have open in your IDE, regardles
+							of which files you have open.
+						</UpdateItem>
+					</Update>
+				</div>
+			</TimelineContent>
+			<TimelineContent>
+				<TimelineHeader>
+					<TimelineMarker />
 					<TimelineTitle>15.5.0</TimelineTitle>
 					<TimelineDate>March 14, 2024</TimelineDate>
 				</TimelineHeader>

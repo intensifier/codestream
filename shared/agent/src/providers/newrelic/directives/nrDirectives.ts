@@ -36,6 +36,7 @@ export class NrDirectives {
 		/** we don't always have an errorGroupId */
 		errorGroupGuid?: string;
 	}): Promise<Directives | undefined> {
+		ContextLogger.log(`assignRepository ${JSON.stringify(request)}`);
 		try {
 			const parsedId = parseId(request.parseableAccountId)!;
 			const accountId = parsedId?.accountId;

@@ -64,7 +64,7 @@ export const ObservabilityAlertViolations = React.memo((props: Props) => {
 		e.preventDefault();
 		const account_id = violationUrl.split("/");
 		// HostApi.instance.track("Issue Clicked", { "Entity GUID": props.entityGuid });
-		HostApi.instance.track("codestream/link_to_newrelic clicked", {
+		HostApi.instance.track("codestream/newrelic_link clicked", {
 			event_type: "click",
 			entity_guid: props.entityGuid,
 			account_id: Number(account_id[4]),

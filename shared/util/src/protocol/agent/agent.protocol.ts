@@ -283,7 +283,6 @@ export const ReportBreadcrumbRequestType = new RequestType<
 >("codestream/reporting/breadcrumb");
 
 export type TelemetryEventName =
-	| "codestream/transaction_anomaly_async_calculation succeeded"
 	| "codestream/anomaly_link clicked"
 	| "codestream/codelens_link clicked"
 	| "codestream/codelenses displayed"
@@ -309,7 +308,7 @@ export type TelemetryEventName =
 	| "codestream/instrumentation_wizard/start_button clicked"
 	| "codestream/instrumentation_wizard/finish displayed"
 	| "codestream/integration/connection succeeded"
-	| "codestream/link_to_newrelic clicked"
+	| "codestream/newrelic_link clicked"
 	| "codestream/logs/search succeeded"
 	| "codestream/logs/expand_button clicked"
 	| "codestream/logs/show_surrounding_button clicked"
@@ -325,8 +324,10 @@ export type TelemetryEventName =
 	| "codestream/repo_disambiguation succeeded"
 	| "codestream/service displayed"
 	| "codestream/sign_in page_viewed"
+	| "codestream/sign_in_form displayed"
+	| "codestream/sign_in_button clicked"
 	| "codestream/toast displayed"
-	| "codestream/toast clicked"
+	| "codestream/toast_button clicked"
 	| "codestream/tracing/span displayed"
 	| "codestream/user/login failed"
 	| "codestream/user/login succeeded"

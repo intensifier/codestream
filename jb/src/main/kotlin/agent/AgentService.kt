@@ -131,13 +131,14 @@ val TEST_MODE = System.getenv("TEST_MODE") == "true"
 val serverUrlMigrations = hashMapOf(
     "https://staging-api.codestream.us" to "https://codestream-stg.staging-service.newrelic.com",
     "https://api.codestream.com" to "https://codestream-us1.service.newrelic.com",
-    "https://eu-api.codestream.com" to "https://codestream-eu1.service.eu.newrelic.com"
+    "https://eu-api.codestream.com" to "https://codestream-eu1.service.eu.newrelic.com",
+    "https://codestream.eu.service.newrelic.com" to "https://codestream-eu1.service.eu.newrelic.com"
 )
 
 class AgentService(private val project: Project) : Disposable {
 
     companion object {
-        private var debugPortSeed = AtomicInteger(6010)
+        private var debugPortSeed = AtomicInteger(1337)
         private val debugPort get() = debugPortSeed.getAndAdd(1)
     }
 
@@ -409,7 +410,7 @@ class AgentService(private val project: Project) : Disposable {
         val port = if (AGENT_PATH == null) {
             debugPort
         } else {
-            debugPortSeed // fixed on 6010 so we can just keep "Attach to agent" running
+            debugPortSeed // fixed on 1337 so we can just keep "Attach to agent" running
         }
         lastLaunchedNodePath = "node"
         return GeneralCommandLine(
@@ -478,7 +479,7 @@ class AgentService(private val project: Project) : Disposable {
                             params["Crash Details"] = agentCrashDetails.details
                             params["Crash Date"] = agentCrashDetails.dateTime.toString()
                         }
-                        
+
                     }
                 }
             }
