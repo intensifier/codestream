@@ -5,6 +5,13 @@ import * as ssh from "../lib/SSH";
 import { isWhatIfMode } from "../lib/TeamCity";
 import * as Versioning from "../lib/Versioning";
 
+interface TokenFile {
+	publishers: {
+		name: string;
+		pat: string;
+	}[];
+}
+
 export default function (vsRootPath: string) {
 	const fullVersion = process.env.build_number;
 
@@ -20,7 +27,7 @@ export default function (vsRootPath: string) {
 	const remoteVSCETokenFile = "/home/web/.codestream/microsoft/vsce-credentials";
 	const asset = `${vsRootPath}\\artifacts\\codestream-vs-PROD-${version}.vsix`;
 	const vsixPublisher =
-		"C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\VSSDK\\VisualStudioIntegration\\Tools\\Bin\\VsixPublisher.exe";
+		"C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VSSDK\\VisualStudioIntegration\\Tools\\Bin\\VsixPublisher.exe";
 
 	try {
 		if (!fs.existsSync(asset)) {
@@ -30,8 +37,10 @@ export default function (vsRootPath: string) {
 
 		ssh.copyRemoteFile(remoteVSCETokenFile, localVSCETokenFile);
 
-		const tokenJson = JSON.parse(fs.readFileSync(localVSCETokenFile, "utf-8"));
-		const token = tokenJson.publishers.pat;
+		const tokenJson = JSON.parse(fs.readFileSync(localVSCETokenFile, "utf-8")) as TokenFile;
+		const token = tokenJson.publishers.find(p => {
+			return p.name === "CodeStream";
+		})?.pat;
 
 		const publishCommand = `"${vsixPublisher}" publish -payload "${asset}" -publishManifest "${vsRootPath}\\src\\CodeStream.VisualStudio.Vsix.x64\\dist\\publish\\publishManifest.json" -personalAccessToken "${token}"`;
 
