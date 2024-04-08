@@ -18,8 +18,7 @@ import { IdeNames, OpenEditorViewNotificationType } from "@codestream/protocols/
 import { parseId } from "@codestream/webview/utilities/newRelic";
 import React, { useEffect, useState } from "react";
 import { useResizeDetector } from "react-resize-detector";
-import Select, { components, OptionProps } from "react-select";
-import { AsyncPaginate } from "react-select-async-paginate";
+import { components, OptionProps } from "react-select";
 import styled from "styled-components";
 import { PanelHeader } from "../../src/components/PanelHeader";
 import { useDidMount } from "../../utilities/hooks";
@@ -35,6 +34,8 @@ import { APMLogTableLoading } from "./APMLogTableLoading";
 import { APMPartitions } from "./APMPartitions";
 import { TableWindow } from "../TableWindow";
 import { debounce } from "lodash-es";
+import { DropdownWithSearch } from "../DropdownWithSearch";
+import { SelectCustomStyles } from "../AsyncPaginateCustomStyles";
 
 export interface SelectedOption {
 	value: string;
@@ -49,7 +50,7 @@ const LogFilterBarContainer = styled.div`
 		display: flex;
 
 		.log-filter-bar-service {
-			flex: 8;
+			flex: 4;
 		}
 
 		.log-filter-bar-since {
@@ -62,6 +63,7 @@ const LogFilterBarContainer = styled.div`
 			padding-left: 10px;
 			flex: 2;
 			justify-content: flex-end;
+			min-width: 130px;
 		}
 
 		.log-filter-bar-query {
@@ -231,6 +233,7 @@ export const APMLogSearchPanel = (props: {
 	const [totalItems, setTotalItems] = useState<number>(0);
 	const [logError, setLogError] = useState<string | undefined>("");
 	const { height, ref } = useResizeDetector();
+	const { width: entitySearchWidth, ref: entitySearchRef } = useResizeDetector();
 	const trimmedListHeight: number = (height ?? 0) - (height ?? 0) * 0.08;
 	const disposables: Disposable[] = [];
 	const [currentTraceId, setTraceId] = useState<string | undefined>(props.traceId);
@@ -771,26 +774,21 @@ export const APMLogSearchPanel = (props: {
 			>
 				<LogFilterBarContainer>
 					<div className="log-filter-bar-row">
-						<div className="log-filter-bar-service">
-							<AsyncPaginate
+						<div className="log-filter-bar-service" ref={entitySearchRef}>
+							<DropdownWithSearch
+								selectedOption={selectedEntityAccount}
+								loadOptions={loadEntities}
 								id="input-entity-log-autocomplete"
 								name="entity-log-autocomplete"
-								classNamePrefix="react-select"
-								loadOptions={loadEntities}
-								value={selectedEntityAccount}
-								isClearable
-								debounceTimeout={750}
-								placeholder={`Type to search for entities...`}
-								onChange={newValue => {
-									handleSelectDropdownOption(newValue);
-								}}
-								components={{ Option }}
+								handleChangeCallback={handleSelectDropdownOption}
 								tabIndex={1}
+								customOption={Option}
+								customWidth={entitySearchWidth?.toString()}
 							/>
 						</div>
 
 						<div className="log-filter-bar-since">
-							<Select
+							<SelectCustomStyles
 								id="input-since"
 								name="since"
 								classNamePrefix="react-select"
@@ -799,6 +797,7 @@ export const APMLogSearchPanel = (props: {
 								options={sinceOptions}
 								onChange={value => setSelectedSinceOption(value)}
 								tabIndex={2}
+								isSearchable={false}
 							/>
 						</div>
 
