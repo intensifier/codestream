@@ -42,13 +42,16 @@ export default function (vsRootPath: string) {
 			return p.name.toLowerCase() === "codestream";
 		})?.pat;
 
-		const publishCommand = `"${vsixPublisher}" publish -payload "${asset}" -publishManifest "${vsRootPath}\\src\\CodeStream.VisualStudio.Vsix.x64\\dist\\publish\\publishManifest.json" -personalAccessToken "${token}"`;
+		const publishCommand = `"${vsixPublisher}" publish -payload "${asset}" -publishManifest "publishManifest.json" -personalAccessToken "${token}"`;
 
 		if (isWhatIfMode()) {
 			consoul.info("***** RUNNING IN WHAT-IF MODE *****");
 			consoul.info(publishCommand);
 		} else {
-			execSync(publishCommand, { stdio: "inherit" });
+			execSync(publishCommand, {
+				stdio: "inherit",
+				cwd: `${vsRootPath}\\src\\CodeStream.VisualStudio.Vsix.x64\\dist\\publish`
+			});
 		}
 	} catch (error) {
 		console.error("Error executing command:", error);
