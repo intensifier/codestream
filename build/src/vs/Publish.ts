@@ -39,7 +39,7 @@ export default function (vsRootPath: string) {
 
 		const tokenJson = JSON.parse(fs.readFileSync(localVSCETokenFile, "utf-8")) as TokenFile;
 		const token = tokenJson.publishers.find(p => {
-			return p.name === "CodeStream";
+			return p.name.toLowerCase() === "codestream";
 		})?.pat;
 
 		const publishCommand = `"${vsixPublisher}" publish -payload "${asset}" -publishManifest "${vsRootPath}\\src\\CodeStream.VisualStudio.Vsix.x64\\dist\\publish\\publishManifest.json" -personalAccessToken "${token}"`;
