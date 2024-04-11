@@ -233,6 +233,7 @@ export const APMLogSearchPanel = (props: {
 	const trimmedListHeight: number = (height ?? 0) - (height ?? 0) * 0.08;
 	const disposables: Disposable[] = [];
 	const [currentTraceId, setTraceId] = useState<string | undefined>(props.traceId);
+	const [entitiesLoading, setEntitiesLoading] = useState<boolean>(false);
 
 	useEffect(() => {
 		if (isInitializing) {
@@ -299,6 +300,8 @@ export const APMLogSearchPanel = (props: {
 
 		let entityAccounts: EntityAccount[] = [];
 
+		setEntitiesLoading(true);
+
 		HostApi.instance
 			.send(GetObservabilityReposRequestType, { force: true })
 			.then((_: GetObservabilityReposResponse) => {
@@ -327,12 +330,11 @@ export const APMLogSearchPanel = (props: {
 				}
 			})
 			.catch(ex => {
-				handleError(
-					"We ran into an error fetching a default service. Please select a service from the list above."
-				);
+				setLogInformation("Please select an entity from the list above.");
 			})
 			.finally(() => {
 				setIsInitializing(false);
+				setEntitiesLoading(false);
 			});
 
 		return () => {
@@ -524,6 +526,7 @@ export const APMLogSearchPanel = (props: {
 	}) => {
 		try {
 			setLogError(undefined);
+			setLogInformation(undefined);
 			setHasSearched(true);
 			setIsLoading(true);
 			setSearchResults([]);
@@ -535,7 +538,7 @@ export const APMLogSearchPanel = (props: {
 			const entityAccount = options?.overrideEntityAccount || selectedEntityAccount?.entityAccount;
 
 			if (!entityAccount) {
-				handleError("Please select a service from the drop down before searching.");
+				setLogInformation("Please select an entity from the list above.");
 				return;
 			}
 
@@ -778,6 +781,8 @@ export const APMLogSearchPanel = (props: {
 								tabIndex={1}
 								customOption={Option}
 								customWidth={entitySearchWidth?.toString()}
+								isLoading={entitiesLoading}
+								valuePlaceholder="Please select an entity"
 							/>
 						</div>
 
@@ -827,7 +832,9 @@ export const APMLogSearchPanel = (props: {
 							<Button
 								data-testid="query-btn"
 								className="query"
-								onClick={() => fetchLogs()}
+								onClick={() => {
+									setQuery(searchTerm);
+								}}
 								loading={isLoading}
 								tabIndex={hasPartitions ? 5 : 4}
 							>
@@ -850,6 +857,7 @@ export const APMLogSearchPanel = (props: {
 					{isLoading && <APMLogTableLoading height={height} />}
 
 					{!logError &&
+						!logInformation &&
 						!isLoading &&
 						searchResults &&
 						totalItems > 0 &&
@@ -867,33 +875,43 @@ export const APMLogSearchPanel = (props: {
 							</>
 						)}
 
-					{!logError && !totalItems && !isLoading && !hasSearched && !isInitializing && (
-						<div className="no-matches" style={{ margin: "0", fontStyle: "unset" }}>
-							<span data-testid="default-message">
-								Enter search criteria above, or just click Query to see recent logs.
-							</span>
-						</div>
-					)}
+					{!logError &&
+						!logInformation &&
+						!totalItems &&
+						!isLoading &&
+						!hasSearched &&
+						!isInitializing && (
+							<div className="no-matches" style={{ margin: "0", fontStyle: "unset" }}>
+								<span data-testid="default-message">
+									Enter search criteria above, or just click Query to see recent logs.
+								</span>
+							</div>
+						)}
 
-					{!logError && !totalItems && !isLoading && hasSearched && !isInitializing && (
-						<div className="no-matches" style={{ margin: "0", fontStyle: "unset" }}>
-							<h4>No logs found during this time range</h4>
-							<span>
-								Try adjusting your time range or{" "}
-								<Link href="https://docs.newrelic.com/docs/logs/logs-context/annotate-logs-logs-context-using-apm-agent-apis/">
-									set up log management
-								</Link>
-							</span>
-						</div>
-					)}
+					{!logError &&
+						!logInformation &&
+						!totalItems &&
+						!isLoading &&
+						hasSearched &&
+						!isInitializing && (
+							<div className="no-matches" style={{ margin: "0", fontStyle: "unset" }}>
+								<h4>No logs found during this time range</h4>
+								<span>
+									Try adjusting your time range or{" "}
+									<Link href="https://docs.newrelic.com/docs/logs/logs-context/annotate-logs-logs-context-using-apm-agent-apis/">
+										set up log management
+									</Link>
+								</span>
+							</div>
+						)}
 
-					{logError && !isInitializing && (
+					{logError && !logInformation && !isInitializing && (
 						<div className="no-matches" style={{ margin: "0", fontStyle: "unset" }}>
 							<h4>Uh oh, we've encounted an error!</h4>
 							<span>{logError}</span>
 						</div>
 					)}
-					{logInformation && !isInitializing && (
+					{logInformation && !logError && !isInitializing && (
 						<div className="no-matches" style={{ margin: "0", fontStyle: "unset" }}>
 							<h4>{logInformation}</h4>
 						</div>

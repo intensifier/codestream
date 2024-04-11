@@ -60,6 +60,7 @@ interface DropdownWithSearchProps {
 	placeholder?: string;
 	customWidth?: string;
 	valuePlaceholder?: string;
+	isLoading?: boolean;
 }
 
 export const DropdownWithSearch: React.FC<DropdownWithSearchProps> = ({
@@ -73,6 +74,7 @@ export const DropdownWithSearch: React.FC<DropdownWithSearchProps> = ({
 	placeholder,
 	customWidth,
 	valuePlaceholder,
+	isLoading = false,
 }) => {
 	const [showSelect, setShowSelect] = useState<boolean>(false);
 	const selectRef = useRef(null);
@@ -116,10 +118,16 @@ export const DropdownWithSearch: React.FC<DropdownWithSearchProps> = ({
 		if (selectedOption?.label) {
 			return selectedOption?.label;
 		}
+
+		if (isLoading) {
+			return <LoadingSpan>Loading...</LoadingSpan>;
+		}
+
 		if (valuePlaceholder) {
 			return <ValuePlaceholder>{valuePlaceholder}</ValuePlaceholder>;
 		}
-		return <LoadingSpan>Loading...</LoadingSpan>;
+
+		return "Search"; //to match placeholder
 	};
 
 	return (
