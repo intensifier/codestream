@@ -190,10 +190,7 @@ export class SegmentTelemetryService {
 			Logger.error(ex, cc);
 		}
 		try {
-			if (
-				this._session.environmentInfo.isProductionCloud &&
-				this._session.newRelicTaxonomyEnforcerUrl
-			) {
+			if (this._session.newRelicTaxonomyEnforcerUrl) {
 				this.fetchClient
 					.customFetch(`${this._session.newRelicTaxonomyEnforcerUrl}/events`, {
 						method: "POST",
