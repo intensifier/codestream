@@ -139,7 +139,6 @@ class EditorService(val project: Project) {
         editor.selectionModel.addSelectionListener(SelectionListenerImpl(project))
         editor.scrollingModel.addVisibleAreaListener(VisibleAreaListenerImpl(project))
         (editor as? EditorImpl)?.let {
-            NewCodemarkGutterIconManager(editor)
             if (reviewFile != null) {
                 inlineTextFieldManagers[editor] = InlineTextFieldManager(editor)
             }
