@@ -275,20 +275,6 @@ class EditorService(val project: Project) {
         }
     }
 
-    fun updatePullRequestDiffMarkers() {
-        managedEditors
-            .filter {
-                val reviewFile = it.document.file as? ReviewDiffVirtualFile
-                reviewFile?.side == ReviewDiffSide.RIGHT
-            }
-            .forEach {
-                appDispatcher.launch {
-                    val markers = getDocumentMarkers(it.document)
-                    it.renderMarkers(markers)
-                }
-            }
-    }
-
     fun updateMarkers(document: Document) = ApplicationManager.getApplication().invokeLater {
         val editors = EditorFactory.getInstance().getEditors(document, project)
         val visibleEditors = editors
@@ -300,27 +286,9 @@ class EditorService(val project: Project) {
         if (visibleEditors.isEmpty()) return@invokeLater
 
         appDispatcher.launch {
-            val markers = getDocumentMarkers(document)
-            visibleEditors.forEach { it.renderMarkers(markers) }
             val documentSymbols = getDocumentSymbols(document)
             visibleEditors.forEach { it.renderDocumentSymbols(documentSymbols) }
         }
-    }
-
-    private suspend fun getDocumentMarkers(document: Document): List<DocumentMarker> {
-        val agent = project.agentService ?: return emptyList()
-        val session = project.sessionService ?: return emptyList()
-        val uri = document.uri
-
-        val markers = if (uri == null || session.userLoggedIn == null || !appSettings.showMarkers) {
-            emptyList()
-        } else {
-            val result = agent.documentMarkers(DocumentMarkersParams(TextDocument(uri), document.gitSha, true))
-            result.markers
-        }
-
-        documentMarkers[document] = markers
-        return markers
     }
 
     private suspend fun getDocumentSymbols(document: Document): List<Either<SymbolInformation, DocumentSymbol>>? {
@@ -416,39 +384,6 @@ class EditorService(val project: Project) {
                 range, newLength, newFragment.toString()
             )
         }
-
-    private fun Editor.renderMarkers(markers: List<DocumentMarker>) = ApplicationManager.getApplication().invokeLater {
-        if (isDisposed) return@invokeLater
-
-        markerHighlighters[this]?.let { highlighters ->
-            highlighters.forEach { highlighter ->
-                markupModel.removeHighlighter(highlighter)
-            }
-        }
-
-        markerHighlighters[this] = markers.filter { marker ->
-            marker.range.start.line >= 0
-        }.map { marker ->
-            val start = getOffset(marker.range.start)
-            val end = getOffset(marker.range.end)
-
-            markupModel.addRangeHighlighter(
-                Math.min(start, end),
-                Math.max(start, end),
-                HighlighterLayer.LAST,
-                null,
-                HighlighterTargetArea.EXACT_RANGE
-            ).also {
-                if (showGutterIcons && (marker.codemark != null || marker.externalContent != null)) {
-                    it.gutterIconRenderer = GutterIconRendererImpl(this, marker)
-                }
-                it.isThinErrorStripeMark = true
-                it.errorStripeMarkColor = if (marker.type == "prcomment") gray else (marker.codemark?.color() ?: green)
-                it.errorStripeTooltip = marker.summary
-                it.putUserData(CODESTREAM_HIGHLIGHTER, true)
-            }
-        }
-    }
 
     private fun Editor.renderDocumentSymbols(documentSymbols: List<Either<SymbolInformation, DocumentSymbol>>?) = ApplicationManager.getApplication().invokeLater {
         if (isDisposed) return@invokeLater

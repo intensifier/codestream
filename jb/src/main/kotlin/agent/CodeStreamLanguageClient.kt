@@ -66,7 +66,6 @@ class CodeStreamLanguageClient(private val project: Project) : LanguageClient {
 
     @JsonNotification("codestream/didChangePullRequestComments")
     fun didChangePullRequestComments(notification: DidChangePullRequestCommentsNotification) {
-        project.editorService?.updatePullRequestDiffMarkers()
         project.webViewService?.postNotification("codestream/didChangePullRequestComments", notification)
     }
 

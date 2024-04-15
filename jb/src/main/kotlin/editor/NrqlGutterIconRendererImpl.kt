@@ -10,7 +10,7 @@ import com.intellij.openapi.editor.markup.GutterIconRenderer
 import com.intellij.openapi.util.IconLoader
 import javax.swing.Icon
 
-private val logger = Logger.getInstance(GutterIconRendererImpl::class.java)
+private val logger = Logger.getInstance(NrqlGutterIconRendererImpl::class.java)
 
 class NrqlGutterIconRendererImpl(val editor: Editor, val line: Int, val query: String) : GutterIconRenderer() {
 
