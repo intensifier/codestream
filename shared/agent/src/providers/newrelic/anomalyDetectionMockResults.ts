@@ -1,9 +1,11 @@
 import {
+	CriticalPathSpan,
 	GetMethodLevelTelemetryRequest,
 	GetMethodLevelTelemetryResponse,
 	GetObservabilityAnomaliesRequest,
 	GetObservabilityAnomaliesResponse,
 	MethodGoldenMetrics,
+	ObservabilityError,
 } from "@codestream/protocols/agent";
 
 export const getAnomalyDetectionMockResponse = (
@@ -68,12 +70,27 @@ const getMethodLevelTelemetryMockResponseConfirmationJsp = (
 		},
 	] as any as MethodGoldenMetrics[];
 
+	const errors: ObservabilityError[] = [
+		{
+			appName: "foo",
+			remote: "foo",
+			occurrenceId: "foo",
+			count: 67,
+			lastOccurrence: 0,
+			entityId: "foo",
+			errorClass: "java.lang.NullPointerException",
+			message:
+				'Cannot invoke "acme.storefront.action.report.UserDataManager$Phone.getCountryCode()" because the return value of "acme.storefront.action.report.UserDataManager$User.getPhone()" is null',
+			errorGroupGuid: "foo",
+		},
+	];
+
 	return {
 		newRelicEntityGuid: request.newRelicEntityGuid,
 		newRelicUrl: undefined,
 		goldenMetrics: methodGoldenMetrics,
 		deployments: deployments,
-		errors: undefined,
+		errors,
 		newRelicAlertSeverity: undefined,
 		newRelicEntityAccounts: [],
 		newRelicEntityName: "WebPortal",
@@ -82,21 +99,21 @@ const getMethodLevelTelemetryMockResponseConfirmationJsp = (
 
 const getMethodLevelTelemetryMockResponsePhoneJsp = (request: GetMethodLevelTelemetryRequest) => {
 	const methodGoldenMetrics = [
-		{
-			...errorRateChartTemplate,
-			result: [
-				buildChartDataForNDaysAgo(10, null, null, "0.00"),
-				buildChartDataForNDaysAgo(9, null, null, "0.00"),
-				buildChartDataForNDaysAgo(8, null, null, "0.00"),
-				buildChartDataForNDaysAgo(7, null, null, "0.00"),
-				buildChartDataForNDaysAgo(6, null, null, "0.00"),
-				buildChartDataForNDaysAgo(5, null, null, "0.00"),
-				buildChartDataForNDaysAgo(4, null, null, "0.00"),
-				buildChartDataForNDaysAgo(3, null, null, "0.00"),
-				buildChartDataForNDaysAgo(2, null, null, "0.00"),
-				buildChartDataForNDaysAgo(1, null, null, "0.00"),
-			],
-		},
+		// {
+		// 	...errorRateChartTemplate,
+		// 	result: [
+		// 		buildChartDataForNDaysAgo(10, null, null, "0.00"),
+		// 		buildChartDataForNDaysAgo(9, null, null, "0.00"),
+		// 		buildChartDataForNDaysAgo(8, null, null, "0.00"),
+		// 		buildChartDataForNDaysAgo(7, null, null, "0.00"),
+		// 		buildChartDataForNDaysAgo(6, null, null, "0.00"),
+		// 		buildChartDataForNDaysAgo(5, null, null, "0.00"),
+		// 		buildChartDataForNDaysAgo(4, null, null, "0.00"),
+		// 		buildChartDataForNDaysAgo(3, null, null, "0.00"),
+		// 		buildChartDataForNDaysAgo(2, null, null, "0.00"),
+		// 		buildChartDataForNDaysAgo(1, null, null, "0.00"),
+		// 	],
+		// },
 		{
 			...durationChartTemplate,
 			result: [
@@ -129,12 +146,24 @@ const getMethodLevelTelemetryMockResponsePhoneJsp = (request: GetMethodLevelTele
 		},
 	] as any as MethodGoldenMetrics[];
 
+	const criticalPath: CriticalPathSpan[] = [
+		{
+			name: "Custom/acme.storefront.serviceproxy.CouponServiceProxy/getCoupon",
+			duration: 180.3,
+		},
+		{
+			name: "Custom/acme.storefront.serviceproxy.InventoryServiceProxy/getPhone",
+			duration: 41.45,
+		},
+	];
+
 	return {
 		newRelicEntityGuid: request.newRelicEntityGuid,
 		newRelicUrl: undefined,
 		goldenMetrics: methodGoldenMetrics,
 		deployments: deployments,
 		errors: undefined,
+		criticalPath,
 		newRelicAlertSeverity: undefined,
 		newRelicEntityAccounts: [],
 		newRelicEntityName: "WebPortal",
