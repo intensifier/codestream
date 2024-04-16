@@ -199,35 +199,6 @@ export const WhatsNewPanel = () => {
 					</Update>
 				</div>
 			</TimelineContent>
-			<TimelineContent>
-				<TimelineHeader>
-					<TimelineMarker />
-					<TimelineTitle>15.1.0</TimelineTitle>
-					<TimelineDate>January 23, 2024</TimelineDate>
-				</TimelineHeader>
-				<div className="tl-body">
-					<Update>
-						<UpdateTitle>Added</UpdateTitle>
-						<ListContainer>
-							<li>
-								Investigate errors being reported by your browser services, with the ability to step
-								throught he stack traces, collaborate with teammates, and get suggested code fixes
-								from NRAI.
-							</li>
-							<li>
-								The Golden Metrics section now calls out significant increases in error rate or
-								response time since your last release.
-							</li>
-							<li>
-								Anomalies in the Code-Level Metrics section are now displayed in a hierarchy of
-								transactions and metrics.
-							</li>
-							<li>Adds display of Golden Metrics, SLOs and Related Services for OTel services</li>
-							<li>Adds display of Golden Metrics for Lambda functions</li>
-						</ListContainer>
-					</Update>
-				</div>
-			</TimelineContent>
 		</TimelineWrapper>
 	);
 };

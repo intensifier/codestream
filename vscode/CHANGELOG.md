@@ -1,5 +1,17 @@
 # Change Log
 
+## [15.7.0] - 2023-4-18
+
+### Changed
+
+- Improved UX for service and account pickers
+
+### Fixed
+
+- Fixes an issue where NRAI would suggest a code fix when one wasn't needed
+- Fixes an issue where the query builder wouldn't wrap text 
+- Fixes an issue where a log search submitted via Enter key would get re-submitted
+
 ## [15.6.0] - 2023-4-4
 
 ### Added
