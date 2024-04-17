@@ -11,13 +11,10 @@
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)authentication\CredentialManager.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)CamelCaseStringEnumConverter.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Commands\AddCodemarkCommandBase.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Commands\AddCodemarkCommands.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands\AuthenticationCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands\IVsCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands\IVsCommandBase.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands\MenuCommandServiceExtensions.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Commands\UserCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands\VsCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands\VsCommandBase.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands\WebViewReloadCommand.cs" />
@@ -168,8 +165,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)UI\Settings\OptionsDialogPage.cs">
       <SubType>Component</SubType>
     </Compile>
-    <Compile Include="$(MSBuildThisFileDirectory)UI\SuggestedActions\CodemarkSuggestedActionsSource.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)UI\SuggestedActions\CodemarkSuggestedActionsSourceProvider.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)UI\Taggers\DocumentMarkTagger.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)UI\Taggers\DocumentMarkTaggerProvider.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)UI\TextDocumentExtensions.cs" />
