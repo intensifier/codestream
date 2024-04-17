@@ -14,7 +14,10 @@ namespace CodeStream.VisualStudio.Shared.Commands
 		private readonly ISessionService _sessionService;
 
 		public WebViewReloadCommand(ISessionService sessionService)
-			: base(PackageGuids.guidWebViewPackageCmdSet, PackageIds.WebViewReloadCommandId)
+			: base(
+				PackageGuids.guidVSPackageCommandTopMenuCmdSet,
+				PackageIds.CodeStreamTopLevelMenuReloadCommand
+			)
 		{
 			_sessionService = sessionService;
 		}

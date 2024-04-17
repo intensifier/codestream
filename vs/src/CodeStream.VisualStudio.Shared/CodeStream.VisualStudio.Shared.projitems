@@ -189,8 +189,8 @@
       <Generator>MSBuild:Compile</Generator>
     </Page>
     <Page Include="$(MSBuildThisFileDirectory)UI\Margins\DocumentMark.xaml">
-      <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
     </Page>
     <Page Include="$(MSBuildThisFileDirectory)UI\ToolWindows\SidebarControl.xaml">
       <SubType>Designer</SubType>
