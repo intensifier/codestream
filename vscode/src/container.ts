@@ -17,7 +17,6 @@ import { NotificationsController } from "./controllers/notificationsController";
 import { StatusBarController } from "./controllers/statusBarController";
 import { SidebarController } from "./controllers/sidebarController";
 import { Logger, TraceLevel } from "./logger";
-import { CodeStreamCodeActionProvider } from "./providers/codeActionProvider";
 import { CodemarkDecorationProvider } from "./providers/markerDecorationProvider";
 import { CodemarkPatchContentProvider } from "./providers/patchContentProvider";
 import { SetServerUrlRequestType } from "@codestream/protocols/agent";
@@ -55,7 +54,6 @@ export class Container {
 		context.subscriptions.push((this._session = new CodeStreamSession(config.serverUrl)));
 		context.subscriptions.push((this._notifications = new NotificationsController()));
 		context.subscriptions.push((this._commands = new Commands()));
-		context.subscriptions.push((this._codeActions = new CodeStreamCodeActionProvider()));
 		context.subscriptions.push((this._diffContents = new ReviewDiffContentProvider()));
 		context.subscriptions.push((this._gitContents = new GitContentProvider()));
 		context.subscriptions.push((this._markerDecorations = new CodemarkDecorationProvider()));
@@ -176,11 +174,6 @@ export class Container {
 	private static _inlayHintsProvider: CodeStreamInlayHintsProvider;
 	static get inlayHintsProvider() {
 		return this._inlayHintsProvider;
-	}
-
-	private static _codeActions: CodeStreamCodeActionProvider;
-	static get codeActions() {
-		return this._codeActions;
 	}
 
 	private static _commands: Commands;

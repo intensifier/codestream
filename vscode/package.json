@@ -318,16 +318,6 @@
 			],
 			"editor/context": [
 				{
-					"command": "codestream.newComment",
-					"when": "codestream:status == signedIn",
-					"group": "9_zcodestream@1"
-				},
-				{
-					"command": "codestream.newIssue",
-					"when": "codestream:status == signedIn && resourceScheme == file",
-					"group": "9_zcodestream@2"
-				},
-				{
 					"command": "codestream.logSearch",
 					"when": "codestream:status == signedIn && editorTextFocus",
 					"group": "9_zcodestream@3"
