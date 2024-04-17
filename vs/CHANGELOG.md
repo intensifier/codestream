@@ -1,6 +1,6 @@
 # Change Log
 
-## [15.7.0] - 2023-4-18
+## [15.7.0] - 2024-4-18
 
 ### Changed
 
@@ -12,7 +12,7 @@
 - Fixes an issue where the query builder wouldn't wrap text 
 - Fixes an issue where a log search submitted via Enter key would get re-submitted
 
-## [15.6.0] - 2023-4-4
+## [15.6.0] - 2024-4-4
 
 ### Added
 
@@ -26,7 +26,7 @@
 - Fixes an issue with the display of markdown when viewing vulnerability details
 - Fixes an issue where the state of the severity filter for vulnerabilities was not being persisted
 
-## [15.5.0] - 2023-3-14
+## [15.5.0] - 2024-3-14
 
 ### Added
 
@@ -36,7 +36,7 @@
 
 - Removes support for Visual Studio 2019
 
-## [15.4.0] - 2023-3-5
+## [15.4.0] - 2024-3-5
 
 ### Added
 
@@ -54,13 +54,13 @@
 - Fixes an issue where creating an issue on Shortcut would result in duplicate issues
 - Addresses [#1869](https://github.com/TeamCodeStream/codestream/issues/1869) &mdash; OTel service not recognized
 
-## [15.3.0] - 2023-2-14
+## [15.3.0] - 2024-2-14
 
 ### Added
 
 - Adds a "What's New" page under username > Help that covers recently added features
 
-## [15.2.0] - 2023-2-7
+## [15.2.0] - 2024-2-7
 
 ### Changed
 
@@ -68,13 +68,13 @@
 - Code fixes suggested by NRAI are now presented in a diff view
 - In-editor code-level metrics are now represented by a New Relic icon in the gutter, with a red icon indicating anomalous performance
 
-## [15.1.1] - 2023-1-25
+## [15.1.1] - 2024-1-25
 
 ### Added
 
 - Fixes an issue with an infinite loop on non-refresh token errors
 
-## [15.1.0] - 2023-1-23
+## [15.1.0] - 2024-1-23
 
 ### Added
 
