@@ -59,7 +59,6 @@ import { HostApi } from "../webview-api";
 import { AcceptCompanyInvite } from "./AcceptCompanyInvite";
 import { SetUserPreferenceRequest } from "./actions.types";
 import { ActivityPanel } from "./ActivityPanel";
-import { BlameMap } from "./BlameMap";
 import CancelButton from "./CancelButton";
 import { ChangeAvatar } from "./ChangeAvatar";
 import { ChangeCompanyName } from "./ChangeCompanyName";
@@ -89,7 +88,6 @@ import { FlowPanel } from "./Flow";
 import { GettingStarted } from "./GettingStarted";
 import { GlobalNav } from "./GlobalNav";
 import InlineCodemarks from "./InlineCodemarks";
-import { IntegrationsPanel } from "./IntegrationsPanel";
 import { Invite } from "./Invite";
 import { Keybindings } from "./Keybindings";
 import { MethodLevelTelemetryPanel } from "./MethodLevelTelemetry/MethodLevelTelemetryPanel";
@@ -486,7 +484,6 @@ export class SimpleStream extends PureComponent<Props> {
 						{activeModal === WebviewModals.ChangeCompanyName && <ChangeCompanyName />}
 						{activeModal === WebviewModals.FinishReview && <FinishReview />}
 						{activeModal === WebviewModals.Profile && <ProfilePanel />}
-						{activeModal === WebviewModals.BlameMap && <BlameMap />}
 						{activeModal === WebviewModals.Invite && <Invite />}
 						{activeModal === WebviewModals.Team && <Team />}
 						{activeModal === WebviewModals.TeamSetup && <TeamSetup />}
@@ -562,7 +559,6 @@ export class SimpleStream extends PureComponent<Props> {
 							{activePanel === WebviewPanels.MethodLevelTelemetry && <MethodLevelTelemetryPanel />}
 							{activePanel === WebviewPanels.TransactionSpan && <TransactionSpanPanel />}
 							{activePanel === WebviewPanels.ObservabilityAnomaly && <ObservabilityAnomalyPanel />}
-							{activePanel === WebviewPanels.Integrations && <IntegrationsPanel />}
 							{activePanel === WebviewPanels.Profile && <ProfilePanel />}
 							{activePanel === WebviewPanels.NewPullRequest && (
 								<CreatePullRequestPanel closePanel={() => this.props.closePanel()} />

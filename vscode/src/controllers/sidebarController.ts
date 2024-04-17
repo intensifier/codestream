@@ -26,7 +26,7 @@ import {
 	ReportingMessageType,
 	VersionCompatibility
 } from "@codestream/protocols/agent";
-import { CodemarkType, CSApiCapabilities, WebviewPanels } from "@codestream/protocols/api";
+import { CodemarkType, CSApiCapabilities } from "@codestream/protocols/api";
 import {
 	ActiveEditorInfo,
 	ApplyMarkerRequestType,
@@ -1561,17 +1561,6 @@ export class SidebarController implements Disposable {
 				teams,
 				teamless
 			});
-
-			if (
-				!hidden &&
-				this._context &&
-				this._context.panelStack &&
-				this._context.panelStack[0] === WebviewPanels.CodemarksForFile
-			) {
-				Container.markerDecorations.suspend();
-			} else {
-				Container.markerDecorations.resume();
-			}
 		} catch {}
 	}
 
