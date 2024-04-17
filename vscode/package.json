@@ -121,28 +121,6 @@
 					"description": "Specifies the url to use to connect to the CodeStream service",
 					"scope": "window"
 				},
-				"codestream.showInStatusBar": {
-					"type": "string",
-					"enum": [
-						"left",
-						"right",
-						false
-					],
-					"enumDescriptions": [
-						"Shows the CodeStream status bar item on the left",
-						"Shows the CodeStream status bar item on the right",
-						"No CodeStream status bar item will be shown"
-					],
-					"default": "left",
-					"description": "Specifies whether to show CodeStream in the status bar",
-					"scope": "window"
-				},
-				"codestream.showMarkerGlyphs": {
-					"type": "boolean",
-					"default": true,
-					"description": "Specifies whether to show glyph indicators at the start of lines with associated codemarks in the editor",
-					"scope": "window"
-				},
 				"codestream.highlightEntityGuids": {
 					"type": "boolean",
 					"default": true,
