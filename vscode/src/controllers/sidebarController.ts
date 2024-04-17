@@ -37,17 +37,13 @@ import {
 	DisconnectFromIDEProviderRequestType,
 	EditorContext,
 	EditorCopySymbolType,
-	EditorHighlightRangeRequestType,
 	EditorReplaceSymbolType,
-	EditorRevealRangeRequestType,
 	EditorRevealSymbolRequestType,
 	EditorScrollToNotificationType,
 	EditorSelectRangeRequestType,
 	GetActiveEditorContextRequestType,
 	HostDidChangeActiveEditorNotificationType,
 	HostDidChangeConfigNotificationType,
-	HostDidChangeEditorSelectionNotificationType,
-	HostDidChangeEditorVisibleRangesNotificationType,
 	HostDidChangeLayoutNotificationType,
 	HostDidChangeVisibleEditorsNotificationType,
 	HostDidChangeWorkspaceFoldersNotificationType,
@@ -109,8 +105,6 @@ import {
 	Range,
 	Selection,
 	TextEditor,
-	TextEditorSelectionChangeEvent,
-	TextEditorVisibleRangesChangeEvent,
 	Uri,
 	ViewColumn,
 	window,
@@ -124,7 +118,6 @@ import { gate } from "../system/decorators/gate";
 import { Functions, log, Strings } from "../system";
 import { openUrl } from "../urlHandler";
 import { toLoggableIpcMessage, WebviewLike } from "../webviews/webviewLike";
-import { toCSGitUri } from "../providers/gitContentProvider";
 import {
 	CodeStreamSession,
 	SessionSignedOutReason,
@@ -600,20 +593,6 @@ export class SidebarController implements Disposable {
 				(...args) => this.onDocumentMarkersChanged(webview, ...args),
 				this
 			),
-			window.onDidChangeTextEditorSelection(
-				Functions.debounce<(e: TextEditorSelectionChangeEvent) => any>(
-					(...args) => this.onEditorSelectionChanged(webview, ...args),
-					250,
-					{
-						maxWait: 250
-					}
-				),
-				this
-			),
-			window.onDidChangeTextEditorVisibleRanges(
-				(...args) => this.onEditorVisibleRangesChanged(webview, ...args),
-				this
-			),
 			configuration.onDidChange((...args) => this.onConfigurationChanged(webview, ...args), this),
 
 			// Keep this at the end otherwise the above subscriptions can fire while disposing
@@ -750,35 +729,6 @@ export class SidebarController implements Disposable {
 
 	private onDocumentMarkersChanged(webview: WebviewLike, e: DidChangeDocumentMarkersNotification) {
 		webview.notify(DidChangeDocumentMarkersNotificationType, e);
-	}
-
-	private async onEditorSelectionChanged(webview: WebviewLike, e: TextEditorSelectionChangeEvent) {
-		if (e.textEditor !== this._lastEditor || !this.isSupportedEditor(e.textEditor)) return;
-
-		const { fileUri, sha } = csUri.Uris.getFileUriAndSha(e.textEditor.document.uri);
-		webview.notify(HostDidChangeEditorSelectionNotificationType, {
-			uri: fileUri.toString(true),
-			gitSha: sha,
-			selections: Editor.toEditorSelections(e.selections),
-			visibleRanges: Editor.toSerializableRange(e.textEditor.visibleRanges),
-			lineCount: e.textEditor.document.lineCount
-		});
-	}
-
-	private onEditorVisibleRangesChanged(
-		webview: WebviewLike,
-		e: TextEditorVisibleRangesChangeEvent
-	) {
-		if (e.textEditor !== this._lastEditor || !this.isSupportedEditor(e.textEditor)) return;
-
-		const { fileUri, sha } = csUri.Uris.getFileUriAndSha(e.textEditor.document.uri);
-		webview.notify(HostDidChangeEditorVisibleRangesNotificationType, {
-			uri: fileUri.toString(true),
-			gitSha: sha,
-			selections: Editor.toEditorSelections(e.textEditor.selections),
-			visibleRanges: Editor.toSerializableRange(e.visibleRanges),
-			lineCount: e.textEditor.document.lineCount
-		});
 	}
 
 	private isSupportedEditor(textEditor: TextEditor): boolean {
@@ -1044,43 +994,43 @@ export class SidebarController implements Disposable {
 				}));
 				break;
 			}
-			case EditorHighlightRangeRequestType.method: {
-				webview.onIpcRequest(EditorHighlightRangeRequestType, e, async (_type, params) => {
-					let uri = Uri.parse(params.uri);
-					if (params.ref) {
-						uri = toCSGitUri(uri, params.ref);
-					}
-					const success = await Editor.highlightRange(
-						uri,
-						Editor.fromSerializableRange(params.range),
-						this._lastEditor,
-						!params.highlight
-					);
-					return { success: success };
-				});
+			// case EditorHighlightRangeRequestType.method: {
+			// 	webview.onIpcRequest(EditorHighlightRangeRequestType, e, async (_type, params) => {
+			// 		let uri = Uri.parse(params.uri);
+			// 		if (params.ref) {
+			// 			uri = toCSGitUri(uri, params.ref);
+			// 		}
+			// 		const success = await Editor.highlightRange(
+			// 			uri,
+			// 			Editor.fromSerializableRange(params.range),
+			// 			this._lastEditor,
+			// 			!params.highlight
+			// 		);
+			// 		return { success: success };
+			// 	});
 
-				break;
-			}
-			case EditorRevealRangeRequestType.method: {
-				webview.onIpcRequest(EditorRevealRangeRequestType, e, async (_type, params) => {
-					let uri = Uri.parse(params.uri);
-					if (params.ref) {
-						uri = toCSGitUri(uri, params.ref);
-					}
-					const success = await Editor.revealRange(
-						uri,
-						Editor.fromSerializableRange(params.range),
-						this._lastEditor,
-						{
-							preserveFocus: params.preserveFocus,
-							atTop: params.atTop
-						}
-					);
-					return { success: success };
-				});
+			// 	break;
+			// }
+			// case EditorRevealRangeRequestType.method: {
+			// 	webview.onIpcRequest(EditorRevealRangeRequestType, e, async (_type, params) => {
+			// 		let uri = Uri.parse(params.uri);
+			// 		if (params.ref) {
+			// 			uri = toCSGitUri(uri, params.ref);
+			// 		}
+			// 		const success = await Editor.revealRange(
+			// 			uri,
+			// 			Editor.fromSerializableRange(params.range),
+			// 			this._lastEditor,
+			// 			{
+			// 				preserveFocus: params.preserveFocus,
+			// 				atTop: params.atTop
+			// 			}
+			// 		);
+			// 		return { success: success };
+			// 	});
 
-				break;
-			}
+			// 	break;
+			// }
 			case EditorCopySymbolType.method: {
 				webview.onIpcRequest(EditorCopySymbolType, e, async (_type, params) => {
 					return await copySymbol(params);
