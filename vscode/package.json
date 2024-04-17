@@ -160,11 +160,6 @@
 				"category": "CodeStream"
 			},
 			{
-				"command": "codestream.goOffline",
-				"title": "Go Offline",
-				"category": "CodeStream"
-			},
-			{
 				"command": "codestream.signIn",
 				"title": "Sign In...",
 				"category": "CodeStream"
@@ -177,16 +172,6 @@
 			{
 				"command": "codestream.toggle",
 				"title": "Toggle CodeStream",
-				"category": "CodeStream"
-			},
-			{
-				"command": "codestream.newComment",
-				"title": "Add Comment",
-				"category": "CodeStream"
-			},
-			{
-				"command": "codestream.newIssue",
-				"title": "Create Issue",
 				"category": "CodeStream"
 			},
 			{
@@ -222,42 +207,6 @@
 				"when": "codestream:status == signedIn"
 			},
 			{
-				"command": "codestream.newComment",
-				"args": {
-					"source": "Shortcut"
-				},
-				"key": "ctrl+shift+/ c",
-				"mac": "ctrl+/ c",
-				"when": "codestream:status == signedIn"
-			},
-			{
-				"command": "codestream.newComment",
-				"args": {
-					"source": "Shortcut"
-				},
-				"key": "ctrl+shift+/ ctrl+shift+c",
-				"mac": "ctrl+/ ctrl+c",
-				"when": "codestream:status == signedIn"
-			},
-			{
-				"command": "codestream.newIssue",
-				"args": {
-					"source": "Shortcut"
-				},
-				"key": "ctrl+shift+/ i",
-				"mac": "ctrl+/ i",
-				"when": "codestream:status == signedIn"
-			},
-			{
-				"command": "codestream.newIssue",
-				"args": {
-					"source": "Shortcut"
-				},
-				"key": "ctrl+shift+/ ctrl+shift+i",
-				"mac": "ctrl+/ ctrl+i",
-				"when": "codestream:status == signedIn"
-			},
-			{
 				"command": "codestream.executeNrql",
 				"args": {
 					"source": "Shortcut"
@@ -270,10 +219,6 @@
 		"menus": {
 			"commandPalette": [
 				{
-					"command": "codestream.goOffline",
-					"when": "codestream:status != signedOut"
-				},
-				{
 					"command": "codestream.signIn",
 					"when": "codestream:status != signedIn && codestream:status != signingIn"
 				},
@@ -283,14 +228,6 @@
 				},
 				{
 					"command": "codestream.toggle",
-					"when": "codestream:status == signedIn"
-				},
-				{
-					"command": "codestream.newComment",
-					"when": "codestream:status == signedIn"
-				},
-				{
-					"command": "codestream.newIssue",
 					"when": "codestream:status == signedIn"
 				}
 			],

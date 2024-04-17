@@ -26,7 +26,7 @@ import {
 	ReportingMessageType,
 	VersionCompatibility
 } from "@codestream/protocols/agent";
-import { CodemarkType, CSApiCapabilities } from "@codestream/protocols/api";
+import { CSApiCapabilities } from "@codestream/protocols/api";
 import {
 	ActiveEditorInfo,
 	ApplyMarkerRequestType,
@@ -61,7 +61,6 @@ import {
 	isIpcResponseMessage,
 	LocalFilesCloseDiffRequestType,
 	LogoutRequestType,
-	NewCodemarkNotificationType,
 	NewPullRequestBranch,
 	NewPullRequestNotificationType,
 	NewReviewNotificationType,
@@ -338,35 +337,6 @@ export class SidebarController implements Disposable {
 		// TODO: Change this to be a request vs a notification
 		this._sidebar!.notify(StartWorkNotificationType, {
 			uri: editor ? editor.document.uri.toString() : undefined,
-			source: source
-		});
-	}
-
-	@log()
-	async newCodemarkRequest(
-		type: CodemarkType,
-		editor: TextEditor | undefined = this._lastEditor,
-		source: string,
-		ignoreLastEditor?: boolean
-	): Promise<void> {
-		if (this.visible) {
-			await this._sidebar!.show();
-		} else {
-			await this.show();
-		}
-		if (ignoreLastEditor) {
-			editor = undefined;
-		}
-
-		if (!this._sidebar) {
-			// it's possible that the webview is closing...
-			return;
-		}
-		// TODO: Change this to be a request vs a notification
-		this._sidebar!.notify(NewCodemarkNotificationType, {
-			uri: editor ? editor.document.uri.toString() : undefined,
-			range: editor ? Editor.toSerializableRange(editor.selection) : undefined,
-			type: type,
 			source: source
 		});
 	}
