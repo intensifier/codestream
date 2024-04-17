@@ -521,7 +521,7 @@ namespace CodeStream.VisualStudio.Shared.UI
 											&& documentMarkerManager != null
 										)
 										{
-											await documentMarkerManager.TrySetMarkersAsync(true);
+											await documentMarkerManager.TrySetMarkersAsync();
 										}
 									}
 								}
@@ -762,7 +762,7 @@ namespace CodeStream.VisualStudio.Shared.UI
 										?.GetProperty<DocumentMarkerManager>(
 											PropertyNames.DocumentMarkerManager
 										)
-										?.TrySetMarkersAsync(true);
+										?.TrySetMarkersAsync();
 								}
 
 								using (metrics.Measure("OnMarkerChanged"))
@@ -820,7 +820,7 @@ namespace CodeStream.VisualStudio.Shared.UI
 									&& manager != null
 								)
 								{
-									await manager.TrySetMarkersAsync(true);
+									await manager.TrySetMarkersAsync();
 								}
 							}
 							using (metrics.Measure("OnMarkerChanged"))

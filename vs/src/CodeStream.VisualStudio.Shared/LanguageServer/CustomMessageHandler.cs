@@ -14,7 +14,6 @@ using System.Reactive.Subjects;
 using System.Windows.Controls;
 
 using CodeStream.VisualStudio.Core;
-using CodeStream.VisualStudio.Shared.Controllers;
 using CodeStream.VisualStudio.Shared.Events;
 using CodeStream.VisualStudio.Shared.Extensions;
 using CodeStream.VisualStudio.Shared.Models;

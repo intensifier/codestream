@@ -20,7 +20,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)Commands\WebViewReloadCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands\WebViewToggleCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Authentication\AuthenticationController.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Controllers\ConfigurationController.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Exceptions\NRApiErrorException.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Exceptions\VisualStudioSettingException.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Extensions\ITextSelectionExtensions.cs" />
@@ -28,7 +27,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)Extensions\PackageExtensions.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Extensions\RangeExtensions.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Extensions\TextViewExtensions.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Interfaces\IVisualStudioSettingsManager.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IpcLogger.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)LanguageServer\CustomCamelCasePropertyNamesContractResolver.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)LanguageServer\CustomMessageHandler.cs" />
@@ -128,7 +126,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)Services\SymbolService.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Services\ThemeEventsService.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Services\UserSettingsService.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Services\VisualStudioSettingsManager.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Services\WebviewUserSettingsService.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Services\WpfTextViewCache.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)UI\ActiveTextEditorExtensions.cs" />
