@@ -148,6 +148,8 @@ import {
 	ReportingMessageType,
 	SendPasswordResetEmailRequest,
 	SendPasswordResetEmailRequestType,
+	ServiceEntitiesViewedRequest,
+	ServiceEntitiesViewedRequestType,
 	SessionTokenStatus,
 	SetCodemarkPinnedRequest,
 	SetCodemarkStatusRequest,
@@ -2249,6 +2251,15 @@ export class CodeStreamApiProvider implements ApiProvider {
 		);
 	}
 
+	@lspHandler(ServiceEntitiesViewedRequestType)
+	async serviceEntitiesViewed(request: ServiceEntitiesViewedRequest) {
+		await this.post(
+			`/entities`,
+			{ teamId: request.teamId, entityId: request.entityId },
+			tokenHolder.accessToken
+		);
+	}
+
 	@log()
 	async fetchUsers(request: FetchUsersRequest) {
 		let path = `/users?teamId=${this.teamId}`;
@@ -3134,6 +3145,7 @@ export class CodeStreamApiProvider implements ApiProvider {
 				response.newRelicLandingServiceUrl = json.newRelicLandingServiceUrl;
 				response.newRelicApiUrl = json.newRelicApiUrl;
 				response.newRelicSecApiUrl = json.newRelicSecApiUrl;
+				response.telemetryEndpoint = json.telemetryEndpoint;
 				response.environmentHosts = json.environmentHosts;
 			}
 		} catch (err) {

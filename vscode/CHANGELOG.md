@@ -1,6 +1,18 @@
 # Change Log
 
-## [15.6.0] - 2023-4-4
+## [15.7.0] - 2024-4-18
+
+### Changed
+
+- Improved UX for service and account pickers
+
+### Fixed
+
+- Fixes an issue where NRAI would suggest a code fix when one wasn't needed
+- Fixes an issue where the query builder wouldn't wrap text 
+- Fixes an issue where a log search submitted via Enter key would get re-submitted
+
+## [15.6.0] - 2024-4-4
 
 ### Added
 
@@ -14,7 +26,7 @@
 - Fixes an issue with the display of markdown when viewing vulnerability details
 - Fixes an issue where the state of the severity filter for vulnerabilities was not being persisted
 
-## [15.5.0] - 2023-3-14
+## [15.5.0] - 2024-3-14
 
 ### Added
 
@@ -22,7 +34,7 @@
 - Adds links to charts when hovering over any golden metric for a service
 - Adds entity information when hovering over a New Relic entity GUID in a file (e.g., a terraform file)
 
-## [15.4.0] - 2023-3-5
+## [15.4.0] - 2024-3-5
 
 ### Added
 
@@ -40,7 +52,7 @@
 - Fixes an issue where creating an issue on Shortcut would result in duplicate issues
 - Addresses [#1869](https://github.com/TeamCodeStream/codestream/issues/1869) &mdash; OTel service not recognized
 
-## [15.3.0] - 2023-2-14
+## [15.3.0] - 2024-2-14
 
 ### Added
 
@@ -50,20 +62,20 @@
 - Adds code-level metrics support for Node anonymous functions, which require you to send build SHA information either via New Relic's change tracking or via environment variable in your build pipeline
 - Adds a "What's New" page under username > Help that covers recently added features
 
-## [15.2.0] - 2023-2-7
+## [15.2.0] - 2024-2-7
 
 ### Added
 
 - A new "Apply Fix" button allows you to easily accept a suggested code fix when NRAI analyzes an error for you
 - Code fixes suggested by NRAI are now presented in a diff view
 
-## [15.1.1] - 2023-1-25
+## [15.1.1] - 2024-1-25
 
 ### Added
 
 - Fixes an issue with an infinite loop on non-refresh token errors
 
-## [15.1.0] - 2023-1-23
+## [15.1.0] - 2024-1-23
 
 ### Added
 

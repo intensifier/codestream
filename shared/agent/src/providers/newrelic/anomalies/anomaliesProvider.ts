@@ -48,10 +48,10 @@ export class AnomaliesProvider implements Disposable {
 	}
 
 	private init() {
-		this._pollObservabilityAnomaliesTimeout = setTimeout(
-			this.pollObservabilityAnomalies.bind(this),
-			2 * 60 * 1000
-		);
+		// this._pollObservabilityAnomaliesTimeout = setTimeout(
+		// 	this.pollObservabilityAnomalies.bind(this),
+		// 	2 * 60 * 1000
+		// );
 	}
 
 	getLastObservabilityAnomaliesResponse(entityGuid: string) {

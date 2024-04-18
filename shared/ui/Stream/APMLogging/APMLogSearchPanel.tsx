@@ -18,8 +18,7 @@ import { IdeNames, OpenEditorViewNotificationType } from "@codestream/protocols/
 import { parseId } from "@codestream/webview/utilities/newRelic";
 import React, { useEffect, useState } from "react";
 import { useResizeDetector } from "react-resize-detector";
-import Select, { components, OptionProps } from "react-select";
-import { AsyncPaginate } from "react-select-async-paginate";
+import { components, OptionProps } from "react-select";
 import styled from "styled-components";
 import { PanelHeader } from "../../src/components/PanelHeader";
 import { useDidMount } from "../../utilities/hooks";
@@ -34,7 +33,8 @@ import { isEmpty as _isEmpty } from "lodash";
 import { APMLogTableLoading } from "./APMLogTableLoading";
 import { APMPartitions } from "./APMPartitions";
 import { TableWindow } from "../TableWindow";
-import { debounce } from "lodash-es";
+import { DropdownWithSearch } from "../DropdownWithSearch";
+import { SelectCustomStyles } from "../AsyncPaginateCustomStyles";
 
 export interface SelectedOption {
 	value: string;
@@ -49,7 +49,7 @@ const LogFilterBarContainer = styled.div`
 		display: flex;
 
 		.log-filter-bar-service {
-			flex: 8;
+			flex: 4;
 		}
 
 		.log-filter-bar-since {
@@ -62,6 +62,7 @@ const LogFilterBarContainer = styled.div`
 			padding-left: 10px;
 			flex: 2;
 			justify-content: flex-end;
+			min-width: 130px;
 		}
 
 		.log-filter-bar-query {
@@ -192,10 +193,6 @@ const defaultPartition: SelectedOption = {
 	disabled: true,
 };
 
-const debouncedSave = debounce((value, fn) => {
-	fn(value);
-}, 1000);
-
 export const APMLogSearchPanel = (props: {
 	entryPoint: string;
 	entityGuid?: string;
@@ -204,7 +201,7 @@ export const APMLogSearchPanel = (props: {
 	ide?: { name?: IdeNames };
 }) => {
 	const [fieldDefinitions, setFieldDefinitions] = useState<LogFieldDefinition[]>([]);
-	const [isInitializing, setIsInitializing] = useState<boolean>();
+	const [isInitializing, setIsInitializing] = useState<boolean>(true);
 	const [isLoading, setIsLoading] = useState<boolean>(false);
 	const [query, setQuery] = useState<string>("");
 	const [searchTerm, setSearchTerm] = useState<string>("");
@@ -229,15 +226,14 @@ export const APMLogSearchPanel = (props: {
 	>(undefined);
 	const [queriedWithNonEmptyString, setQueriedWithNonEmptyString] = useState<boolean>(false);
 	const [totalItems, setTotalItems] = useState<number>(0);
+	const [logInformation, setLogInformation] = useState<string | undefined>("");
 	const [logError, setLogError] = useState<string | undefined>("");
 	const { height, ref } = useResizeDetector();
+	const { width: entitySearchWidth, ref: entitySearchRef } = useResizeDetector();
 	const trimmedListHeight: number = (height ?? 0) - (height ?? 0) * 0.08;
 	const disposables: Disposable[] = [];
 	const [currentTraceId, setTraceId] = useState<string | undefined>(props.traceId);
-
-	useEffect(() => {
-		debouncedSave(searchTerm, setQuery);
-	}, [searchTerm]);
+	const [entitiesLoading, setEntitiesLoading] = useState<boolean>(false);
 
 	useEffect(() => {
 		if (isInitializing) {
@@ -248,8 +244,6 @@ export const APMLogSearchPanel = (props: {
 	}, [currentTraceId, query, selectedEntityAccount, selectedPartitions, selectedSinceOption]);
 
 	useDidMount(() => {
-		setIsInitializing(true);
-
 		disposables.push(
 			HostApi.instance.on(OpenEditorViewNotificationType, e => {
 				if (e.traceId && e.traceId !== currentTraceId) {
@@ -258,7 +252,8 @@ export const APMLogSearchPanel = (props: {
 				}
 
 				if (e.query && e.query !== query) {
-					setSearchTerm(e.query!);
+					setSearchTerm(e.query);
+					setQuery(e.query);
 				}
 			})
 		);
@@ -288,20 +283,30 @@ export const APMLogSearchPanel = (props: {
 				entityAccount: entityAccount,
 			});
 
-			fetchFieldDefinitions(entityAccount);
-			fetchPartitions(entityAccount);
-
-			// not trusting state to be fully set here, so we'll pass everything in as overrides
-			fetchLogs({
-				overrideEntityAccount: entityAccount,
-				overrideQuery: props.suppliedQuery,
-				overrideTraceId: props.traceId,
-				overridePartitions: [defaultPartition],
-				overrideSince: props.traceId ? maxSinceOption : defaultSinceOption,
-			});
+			Promise.all([
+				fetchFieldDefinitions(entityAccount),
+				fetchPartitions(entityAccount),
+				// not trusting state to be fully set here, so we'll pass everything in as overrides
+				fetchLogs({
+					overrideEntityAccount: entityAccount,
+					overrideQuery: props.suppliedQuery,
+					overrideTraceId: props.traceId,
+					overridePartitions: [defaultPartition],
+					overrideSince: props.traceId ? maxSinceOption : defaultSinceOption,
+				}),
+			])
+				.then(results => {
+					setIsInitializing(false);
+				})
+				.catch(error => {
+					console.error("At least one promise encountered an error:", error);
+					setIsInitializing(false);
+				});
 		};
 
 		let entityAccounts: EntityAccount[] = [];
+
+		setEntitiesLoading(true);
 
 		HostApi.instance
 			.send(GetObservabilityReposRequestType, { force: true })
@@ -321,24 +326,23 @@ export const APMLogSearchPanel = (props: {
 							finishHandlingEntityAccount(entity);
 						})
 						.catch(ex => {
-							handleError(
-								"We ran into an error fetching a default service. Please select a service from the list above."
-							);
+							setLogInformation("Please select an entity from the list above.");
 							trackOpenTelemetry(props.entryPoint);
+							setIsInitializing(false);
 						});
 				} else {
 					// its possible a race condition could get us here and the entity guid passed in doesn't match any in the list
 					// allow it, so the user can still use the panel - it just won't have a default selection/query/execution.
 					trackOpenTelemetry(props.entryPoint);
+					setIsInitializing(false);
 				}
 			})
 			.catch(ex => {
-				handleError(
-					"We ran into an error fetching a default service. Please select a service from the list above."
-				);
+				setLogInformation("Please select an entity from the list above.");
+				setIsInitializing(false);
 			})
 			.finally(() => {
-				setIsInitializing(false);
+				setEntitiesLoading(false);
 			});
 
 		return () => {
@@ -406,7 +410,7 @@ export const APMLogSearchPanel = (props: {
 	const checkKeyPress = (e: { keyCode: Number }) => {
 		const { keyCode } = e;
 		if (keyCode === 13) {
-			fetchLogs();
+			setQuery(searchTerm);
 		}
 	};
 
@@ -530,6 +534,7 @@ export const APMLogSearchPanel = (props: {
 	}) => {
 		try {
 			setLogError(undefined);
+			setLogInformation(undefined);
 			setHasSearched(true);
 			setIsLoading(true);
 			setSearchResults([]);
@@ -541,7 +546,7 @@ export const APMLogSearchPanel = (props: {
 			const entityAccount = options?.overrideEntityAccount || selectedEntityAccount?.entityAccount;
 
 			if (!entityAccount) {
-				handleError("Please select a service from the drop down before searching.");
+				setLogInformation("Please select an entity from the list above.");
 				return;
 			}
 
@@ -611,6 +616,7 @@ export const APMLogSearchPanel = (props: {
 			trackSearchTelemetry(
 				entityAccount.entityGuid,
 				entityAccount.accountId,
+				entityAccount.displayName,
 				(response?.logs?.length ?? 0) > 0
 			);
 		} catch (ex) {
@@ -623,6 +629,7 @@ export const APMLogSearchPanel = (props: {
 	const trackSearchTelemetry = (
 		entityGuid: string,
 		accountId: number,
+		entityDisplayName: string,
 		resultsReturned: boolean
 	) => {
 		HostApi.instance.track("codestream/logs/search succeeded", {
@@ -630,6 +637,7 @@ export const APMLogSearchPanel = (props: {
 			account_id: accountId,
 			event_type: "response",
 			meta_data: `results_returned: ${resultsReturned}`,
+			meta_data_2: `entity_type: ${entityDisplayName}`,
 		});
 	};
 
@@ -771,26 +779,23 @@ export const APMLogSearchPanel = (props: {
 			>
 				<LogFilterBarContainer>
 					<div className="log-filter-bar-row">
-						<div className="log-filter-bar-service">
-							<AsyncPaginate
+						<div className="log-filter-bar-service" ref={entitySearchRef}>
+							<DropdownWithSearch
+								selectedOption={selectedEntityAccount}
+								loadOptions={loadEntities}
 								id="input-entity-log-autocomplete"
 								name="entity-log-autocomplete"
-								classNamePrefix="react-select"
-								loadOptions={loadEntities}
-								value={selectedEntityAccount}
-								isClearable
-								debounceTimeout={750}
-								placeholder={`Type to search for entities...`}
-								onChange={newValue => {
-									handleSelectDropdownOption(newValue);
-								}}
-								components={{ Option }}
+								handleChangeCallback={handleSelectDropdownOption}
 								tabIndex={1}
+								customOption={Option}
+								customWidth={entitySearchWidth?.toString()}
+								isLoading={entitiesLoading}
+								valuePlaceholder="Please select an entity"
 							/>
 						</div>
 
 						<div className="log-filter-bar-since">
-							<Select
+							<SelectCustomStyles
 								id="input-since"
 								name="since"
 								classNamePrefix="react-select"
@@ -799,6 +804,7 @@ export const APMLogSearchPanel = (props: {
 								options={sinceOptions}
 								onChange={value => setSelectedSinceOption(value)}
 								tabIndex={2}
+								isSearchable={false}
 							/>
 						</div>
 
@@ -834,7 +840,9 @@ export const APMLogSearchPanel = (props: {
 							<Button
 								data-testid="query-btn"
 								className="query"
-								onClick={() => fetchLogs()}
+								onClick={() => {
+									setQuery(searchTerm);
+								}}
 								loading={isLoading}
 								tabIndex={hasPartitions ? 5 : 4}
 							>
@@ -857,6 +865,7 @@ export const APMLogSearchPanel = (props: {
 					{isLoading && <APMLogTableLoading height={height} />}
 
 					{!logError &&
+						!logInformation &&
 						!isLoading &&
 						searchResults &&
 						totalItems > 0 &&
@@ -874,30 +883,45 @@ export const APMLogSearchPanel = (props: {
 							</>
 						)}
 
-					{!logError && !totalItems && !isLoading && !hasSearched && !isInitializing && (
-						<div className="no-matches" style={{ margin: "0", fontStyle: "unset" }}>
-							<span data-testid="default-message">
-								Enter search criteria above, or just click Query to see recent logs.
-							</span>
-						</div>
-					)}
+					{!logError &&
+						!logInformation &&
+						!totalItems &&
+						!isLoading &&
+						!hasSearched &&
+						!isInitializing && (
+							<div className="no-matches" style={{ margin: "0", fontStyle: "unset" }}>
+								<span data-testid="default-message">
+									Enter search criteria above, or just click Query to see recent logs.
+								</span>
+							</div>
+						)}
 
-					{!logError && !totalItems && !isLoading && hasSearched && !isInitializing && (
-						<div className="no-matches" style={{ margin: "0", fontStyle: "unset" }}>
-							<h4>No logs found during this time range</h4>
-							<span>
-								Try adjusting your time range or{" "}
-								<Link href="https://docs.newrelic.com/docs/logs/logs-context/annotate-logs-logs-context-using-apm-agent-apis/">
-									set up log management
-								</Link>
-							</span>
-						</div>
-					)}
+					{!logError &&
+						!logInformation &&
+						!totalItems &&
+						!isLoading &&
+						hasSearched &&
+						!isInitializing && (
+							<div className="no-matches" style={{ margin: "0", fontStyle: "unset" }}>
+								<h4>No logs found during this time range</h4>
+								<span>
+									Try adjusting your time range or{" "}
+									<Link href="https://docs.newrelic.com/docs/logs/logs-context/annotate-logs-logs-context-using-apm-agent-apis/">
+										set up log management
+									</Link>
+								</span>
+							</div>
+						)}
 
-					{logError && !isInitializing && (
+					{logError && !logInformation && !isInitializing && (
 						<div className="no-matches" style={{ margin: "0", fontStyle: "unset" }}>
 							<h4>Uh oh, we've encounted an error!</h4>
 							<span>{logError}</span>
+						</div>
+					)}
+					{logInformation && !logError && !isInitializing && (
+						<div className="no-matches" style={{ margin: "0", fontStyle: "unset" }}>
+							<h4>{logInformation}</h4>
 						</div>
 					)}
 				</div>
