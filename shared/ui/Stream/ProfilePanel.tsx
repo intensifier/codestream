@@ -247,20 +247,7 @@ export const ProfilePanel = () => {
 							/>
 						)}
 					</Row>
-					{(isMe || person.phoneNumber) && (
-						<Row>
-							<MetaLabel>Phone Number</MetaLabel>
-							<Value>{person.phoneNumber || "-not set-"}</Value>
-							{isMe && <RowIcon name="pencil" title="Edit Phone" onClick={editPhoneNumber} />}
-						</Row>
-					)}
-					{(isMe || person.iWorkOn) && (
-						<Row>
-							<MetaLabel>Works On</MetaLabel>
-							<Value>{person.iWorkOn || "-not set-"}</Value>
-							{isMe && <RowIcon name="pencil" title="Edit Works On" onClick={editWorksOn} />}
-						</Row>
-					)}
+
 					{person.lastLogin && (
 						<Row>
 							<MetaLabel

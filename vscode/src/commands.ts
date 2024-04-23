@@ -1,6 +1,6 @@
 import * as paths from "path";
 
-import { CodemarkType, CSMarkerIdentifier, CSReviewCheckpoint } from "@codestream/protocols/api";
+import { CSMarkerIdentifier, CSReviewCheckpoint } from "@codestream/protocols/api";
 import {
 	commands,
 	Disposable,
@@ -170,11 +170,6 @@ export class Commands implements Disposable {
 
 	dispose() {
 		this._disposable && this._disposable.dispose();
-	}
-
-	@command("goOffline")
-	goOffline() {
-		return Container.session.goOffline();
 	}
 
 	@command("insertText", { showErrorMessage: "Unable to insertText" })
@@ -412,16 +407,6 @@ export class Commands implements Disposable {
 		return this.startWorkRequest();
 	}
 
-	@command("newComment", { showErrorMessage: "Unable to add comment" })
-	newComment(args?: NewCodemarkCommandArgs) {
-		return this.newCodemarkRequest(CodemarkType.Comment, args);
-	}
-
-	@command("newIssue", { showErrorMessage: "Unable to create issue" })
-	newIssue(args?: NewCodemarkCommandArgs) {
-		return this.newCodemarkRequest(CodemarkType.Issue, args);
-	}
-
 	@command("newReview", { showErrorMessage: "Unable to request a review" })
 	newReview(args?: NewReviewCommandArgs) {
 		return this.newReviewRequest(args);
@@ -435,16 +420,6 @@ export class Commands implements Disposable {
 	@command("showPreviousChangedFile", { showErrorMessage: "Unable to show previous changed file" })
 	showPreviousChangedFile() {
 		return this.showPreviousChangedFileRequest();
-	}
-
-	@command("newBookmark", { showErrorMessage: "Unable to add bookmark" })
-	newBookmark(args?: NewCodemarkCommandArgs) {
-		return this.newCodemarkRequest(CodemarkType.Bookmark, args);
-	}
-
-	@command("newPermalink", { showErrorMessage: "Unable to get permalink" })
-	newPermalink(args?: NewCodemarkCommandArgs) {
-		return this.newCodemarkRequest(CodemarkType.Link, args);
 	}
 
 	@command("newPullRequest", { showErrorMessage: "Unable to create Pull Request" })
@@ -466,75 +441,6 @@ export class Commands implements Disposable {
 
 		return env.clipboard.writeText(response.linkUrl);
 	}
-
-	// @command("gotoCodemark0", {
-	// 	args: ([args]) => [{ ...(args || {}), index: 0 }],
-	// 	showErrorMessage: "Unable to jump to codemark #0"
-	// })
-	// @command("gotoCodemark1", {
-	// 	args: ([args]) => [{ ...(args || {}), index: 1 }],
-	// 	showErrorMessage: "Unable to jump to codemark #1"
-	// })
-	// @command("gotoCodemark2", {
-	// 	args: ([args]) => [{ ...(args || {}), index: 2 }],
-	// 	showErrorMessage: "Unable to jump to codemark #2"
-	// })
-	// @command("gotoCodemark3", {
-	// 	args: ([args]) => [{ ...(args || {}), index: 3 }],
-	// 	showErrorMessage: "Unable to jump to codemark #3"
-	// })
-	// @command("gotoCodemark4", {
-	// 	args: ([args]) => [{ ...(args || {}), index: 4 }],
-	// 	showErrorMessage: "Unable to jump to codemark #4"
-	// })
-	// @command("gotoCodemark5", {
-	// 	args: ([args]) => [{ ...(args || {}), index: 5 }],
-	// 	showErrorMessage: "Unable to jump to codemark #5"
-	// })
-	// @command("gotoCodemark6", {
-	// 	args: ([args]) => [{ ...(args || {}), index: 6 }],
-	// 	showErrorMessage: "Unable to jump to codemark #6"
-	// })
-	// @command("gotoCodemark7", {
-	// 	args: ([args]) => [{ ...(args || {}), index: 7 }],
-	// 	showErrorMessage: "Unable to jump to codemark #7"
-	// })
-	// @command("gotoCodemark8", {
-	// 	args: ([args]) => [{ ...(args || {}), index: 8 }],
-	// 	showErrorMessage: "Unable to jump to codemark #8"
-	// })
-	// @command("gotoCodemark9", {
-	// 	args: ([args]) => [{ ...(args || {}), index: 9 }],
-	// 	showErrorMessage: "Unable to jump to codemark #9"
-	// })
-	// async gotoCodemark(args?: GotoCodemarkCommandArgs) {
-	// 	if (args === undefined) return;
-
-	// 	Container.agent.telemetry.track("Codemark Clicked", { "Codemark Location": "Shortcut" });
-	// 	const response = await Container.agent.documentMarkers.getDocumentFromKeyBinding(args.index);
-	// 	if (response == null) return;
-
-	// 	const uri = Uri.parse(response.textDocument.uri);
-
-	// 	await Editor.selectRange(
-	// 		uri,
-	// 		new Range(
-	// 			response.range.start.line,
-	// 			response.range.start.character,
-	// 			response.range.start.line,
-	// 			response.range.start.character
-	// 		),
-	// 		undefined,
-	// 		{
-	// 			preserveFocus: false
-	// 		}
-	// 	);
-
-	// 	await Container.sidebar.openCodemark(response.marker.codemarkId, {
-	// 		onlyWhenVisible: true,
-	// 		sourceUri: uri
-	// 	});
-	// }
 
 	@command("openCodemark", { showErrorMessage: "Unable to open comment" })
 	async openCodemark(args: OpenCodemarkCommandArgs): Promise<void> {
@@ -795,14 +701,6 @@ export class Commands implements Disposable {
 
 	private async startWorkRequest() {
 		await Container.sidebar.startWorkRequest(window.activeTextEditor, "Context Menu");
-	}
-
-	private async newCodemarkRequest(type: CodemarkType, args: NewCodemarkCommandArgs = {}) {
-		await Container.sidebar.newCodemarkRequest(
-			type,
-			window.activeTextEditor,
-			args.source || "Context Menu"
-		);
 	}
 
 	private async newReviewRequest(args: NewCodemarkCommandArgs = {}) {
