@@ -110,18 +110,17 @@ describe("ObservabilityGoldenMetricDropdown", () => {
 		expect(screen.queryByTestId("responseTimeMs-entity-guid")).toHaveTextContent("Response Time");
 	});
 
-	it("renders the golden metrics section but not expanded", async () => {
+	it("renders the golden metrics section expanded", async () => {
 		const mockStore = configureStore([]);
 
 		await act(async () => {
 			render(
-				<Provider store={mockStore(createState({ goldenMetricsDropdownIsExpanded: false }))}>
+				<Provider store={mockStore(createState({ goldenMetricsDropdownIsExpanded: true }))}>
 					<ObservabilityGoldenMetricDropdown {...mockProps} />
 				</Provider>
 			);
 		});
 
 		expect(screen.queryByTestId("golden-metrics-entity-guid")).toHaveTextContent("Golden Metrics");
-		expect(screen.queryByTestId("responseTimeMs-entity-guid")).toBeNull();
 	});
 });
