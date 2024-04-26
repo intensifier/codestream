@@ -1115,6 +1115,12 @@ export const Observability = React.memo((props: Props) => {
 			setTimeout(() => {
 				if (!currentRepoId && !_isEmpty(observabilityRepos) && observabilityRepos[0]?.repoId) {
 					setCurrentRepoId(observabilityRepos[0].repoId);
+					dispatch(
+						setUserPreference({
+							prefPath: ["currentO11yRepoId"],
+							value: observabilityRepos[0].repoId,
+						})
+					);
 				}
 			}, 2500);
 		}
@@ -1306,6 +1312,12 @@ export const Observability = React.memo((props: Props) => {
 										setCurrentRepoId(undefined);
 									} else {
 										setCurrentRepoId(repo.repoId);
+										dispatch(
+											setUserPreference({
+												prefPath: ["currentO11yRepoId"],
+												value: repo.repoId,
+											})
+										);
 										setLoadingEntities(repo.repoId);
 									}
 								}}
@@ -1327,6 +1339,12 @@ export const Observability = React.memo((props: Props) => {
 											e.preventDefault();
 											e.stopPropagation();
 											setCurrentRepoId(repo.repoId);
+											dispatch(
+												setUserPreference({
+													prefPath: ["currentO11yRepoId"],
+													value: repo.repoId,
+												})
+											);
 											setLoadingEntities(repo.repoId);
 											doRefresh(true);
 										}}
