@@ -1,5 +1,18 @@
 # Change Log
 
+## [15.8.0] - 2024-4-30
+
+### Changed
+
+- The codemarks feature (comments and issues) has been removed from the service
+- A new Summary section has been added to the tree view, with issues, golden metrics, SLOs and related services consolidated underneath it
+- The recent queries dropdown in the query builder has been expanded for easier viewing
+- The display of query results is now limited to a single line in height, with a new copy button added and the complete cell value displayed in a tooltip on hover
+
+### Fixed
+
+- Fixes issues with language detection in the instrumentation wizard
+
 ## [15.7.0] - 2024-4-18
 
 ### Changed
