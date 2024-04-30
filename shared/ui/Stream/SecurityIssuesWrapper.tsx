@@ -185,12 +185,6 @@ function VulnerabilityView(props: {
 								url: vuln.url,
 							});
 						}
-						HostApi.instance.track("codestream/vulnerability_link clicked", {
-							entity_guid: props.entityGuid,
-							account_id: props.accountId,
-							target: "vulnerability",
-							event_type: "click",
-						});
 					}}
 				>
 					<Icon style={{ transform: "scale(0.9)", paddingRight: "10px" }} name="lock" />
@@ -246,7 +240,7 @@ function VulnerabilityRow(props: {
 	entityGuid: string;
 	vulnerability: Vulnerability;
 }) {
-	const [expanded, setExpanded] = useState<boolean>(false);
+	const [modalOpen, setModalOpen] = useState<boolean>(false);
 
 	return (
 		<>
@@ -254,7 +248,13 @@ function VulnerabilityRow(props: {
 				style={{ padding: "0 10px 0 64px" }}
 				className={"pr-row"}
 				onClick={() => {
-					setExpanded(!expanded);
+					setModalOpen(true);
+					HostApi.instance.track("codestream/vulnerability_link clicked", {
+						entity_guid: props.entityGuid,
+						account_id: props.accountId,
+						target: "vulnerability",
+						event_type: "click",
+					});
 				}}
 			>
 				<div>
@@ -263,18 +263,18 @@ function VulnerabilityRow(props: {
 				<div>{props.vulnerability.title}</div>
 				<Severity severity={criticalityToRiskSeverity(props.vulnerability.severity)} />
 			</Row>
-			{expanded && (
+			{modalOpen && (
 				<Modal
 					translucent
 					onClose={() => {
-						setExpanded(false);
+						setModalOpen(false);
 					}}
 				>
 					<VulnerabilityView
 						vulnerability={props.vulnerability}
 						accountId={props.accountId}
 						entityGuid={props.entityGuid}
-						onClose={() => setExpanded(false)}
+						onClose={() => setModalOpen(false)}
 					/>
 				</Modal>
 			)}

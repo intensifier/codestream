@@ -1,13 +1,12 @@
-import { EntityGoldenMetrics, GetIssuesResponse } from "@codestream/protocols/agent";
+import { EntityGoldenMetrics } from "@codestream/protocols/agent";
 import { isEmpty as _isEmpty } from "lodash-es";
-import React from "react";
+import React, { useState } from "react";
 import { Row } from "./CrossPostIssueControls/IssuesPane";
 import Icon from "./Icon";
 import Tooltip from "./Tooltip";
 import { ObservabilityLoadingGoldenMetrics } from "@codestream/webview/Stream/ObservabilityLoading";
-import { useAppSelector, useAppDispatch } from "../utilities/hooks";
+import { useAppSelector } from "../utilities/hooks";
 import { CodeStreamState } from "@codestream/webview/store";
-import { setUserPreference } from "./actions";
 import { HostApi } from "../webview-api";
 import { OpenEditorViewNotificationType, OpenUrlRequestType } from "../ipc/host.protocol";
 import { parseId } from "../utilities/newRelic";
@@ -17,23 +16,18 @@ interface Props {
 	errors: string[];
 	loadingGoldenMetrics: boolean;
 	noDropdown?: boolean;
-	recentIssues?: GetIssuesResponse;
 	entityGuid: string;
 	accountId?: number;
 }
 
 export const ObservabilityGoldenMetricDropdown = React.memo((props: Props) => {
-	const dispatch = useAppDispatch();
-
+	const [isExpanded, setIsExpanded] = useState<boolean>(true);
 	const derivedState = useAppSelector((state: CodeStreamState) => {
 		const { preferences, context, ide } = state;
-
-		const goldenMetricsDropdownIsExpanded = preferences?.goldenMetricsDropdownIsExpanded ?? false;
 
 		return {
 			currentEntityGuid: context.currentEntityGuid,
 			ideName: ide?.name,
-			goldenMetricsDropdownIsExpanded,
 			supportsExploreYourData: ide?.name === "VSC" || ide?.name === "JETBRAINS",
 		};
 	});
@@ -119,7 +113,7 @@ export const ObservabilityGoldenMetricDropdown = React.memo((props: Props) => {
 						<Row
 							className={"pr-row no-shrink"}
 							style={{
-								padding: noDropdown ? "0 10px 0 60px" : "0 10px 0 42px",
+								padding: noDropdown ? "0 10px 0 60px" : "0 10px 0 50px",
 							}}
 						>
 							<div data-testid={`${gm.name}-${entityGuid}`}>
@@ -171,14 +165,7 @@ export const ObservabilityGoldenMetricDropdown = React.memo((props: Props) => {
 	};
 
 	const handleRowOnClick = () => {
-		const { goldenMetricsDropdownIsExpanded } = derivedState;
-
-		dispatch(
-			setUserPreference({
-				prefPath: ["goldenMetricsDropdownIsExpanded"],
-				value: !goldenMetricsDropdownIsExpanded,
-			})
-		);
+		setIsExpanded(!isExpanded);
 	};
 
 	return (
@@ -187,14 +174,14 @@ export const ObservabilityGoldenMetricDropdown = React.memo((props: Props) => {
 				<>
 					<Row
 						style={{
-							padding: "2px 10px 2px 30px",
+							padding: "2px 10px 2px 40px",
 						}}
 						className={"pr-row"}
 						onClick={() => handleRowOnClick()}
 						data-testid={`golden-metrics-dropdown`}
 					>
-						{derivedState.goldenMetricsDropdownIsExpanded && <Icon name="chevron-down-thin" />}
-						{!derivedState.goldenMetricsDropdownIsExpanded && <Icon name="chevron-right-thin" />}
+						{isExpanded && <Icon name="chevron-down-thin" />}
+						{!isExpanded && <Icon name="chevron-right-thin" />}
 						<span data-testid={`golden-metrics-${entityGuid}`} style={{ margin: "0 5px 0 2px" }}>
 							Golden Metrics
 						</span>
@@ -225,10 +212,8 @@ export const ObservabilityGoldenMetricDropdown = React.memo((props: Props) => {
 				</>
 			)}
 
-			{derivedState.goldenMetricsDropdownIsExpanded && loadingGoldenMetrics && (
-				<ObservabilityLoadingGoldenMetrics />
-			)}
-			{(noDropdown || derivedState.goldenMetricsDropdownIsExpanded) &&
+			{isExpanded && loadingGoldenMetrics && <ObservabilityLoadingGoldenMetrics />}
+			{(noDropdown || isExpanded) &&
 				!loadingGoldenMetrics &&
 				!_isEmpty(entityGoldenMetrics?.metrics) && <>{goldenMetricOutput()}</>}
 		</>

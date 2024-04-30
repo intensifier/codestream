@@ -17,7 +17,6 @@ namespace CodeStream.VisualStudio.Shared.UI.Settings
 		private string _email;
 		private string _team;
 		private bool _autoSignIn = true;
-		private bool _showMarkerGlyphs = true;
 		private TraceLevel _traceLevel = TraceLevel.Info;
 
 #if DEBUG
@@ -29,8 +28,6 @@ namespace CodeStream.VisualStudio.Shared.UI.Settings
 		private bool _proxyStrictSsl;
 		private string _extraCertificates;
 		private ProxySupport _proxySupport;
-
-		private bool _showContextMenuCommands = true;
 
 		public event PropertyChangedEventHandler PropertyChanged;
 
@@ -218,40 +215,6 @@ namespace CodeStream.VisualStudio.Shared.UI.Settings
 				{
 					_extraCertificates = value;
 
-					NotifyPropertyChanged();
-				}
-			}
-		}
-
-		[Category("UI")]
-		[DisplayName("Show Marker Glyphs")]
-		[Description(
-			"Specifies whether to show glyph indicators at the start of lines with associated codemarks in the editor"
-		)]
-		public bool ShowMarkerGlyphs
-		{
-			get => _showMarkerGlyphs;
-			set
-			{
-				if (_showMarkerGlyphs != value)
-				{
-					_showMarkerGlyphs = value;
-					NotifyPropertyChanged();
-				}
-			}
-		}
-
-		[Category("UI")]
-		[DisplayName("Show Context Menu Commands")]
-		[Description("Specifies whether to show commands on the right-click context-menu")]
-		public bool ShowContextMenuCommands
-		{
-			get => _showContextMenuCommands;
-			set
-			{
-				if (_showContextMenuCommands != value)
-				{
-					_showContextMenuCommands = value;
 					NotifyPropertyChanged();
 				}
 			}

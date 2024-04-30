@@ -1,9 +1,10 @@
 import {
 	EnvironmentHost,
 	GetFileScmInfoResponse,
+	RelatedRepository,
 	SessionTokenStatus,
 } from "@codestream/protocols/agent";
-import { CSEligibleJoinCompany, WebviewPanels } from "@codestream/protocols/api";
+import { CSEligibleJoinCompany } from "@codestream/protocols/api";
 import { Position, Range } from "vscode-languageserver-types";
 
 import { NewPullRequestBranch } from "./webview.protocol";
@@ -108,9 +109,15 @@ export interface CodeErrorData {
 	occurrenceId?: string;
 	lineIndex?: number;
 	timestamp?: number;
-	openType?: "Open in IDE Flow" | "Observability Section" | "Activity Feed";
+	openType?: "Open in IDE Flow" | "Observability Section" | "Activity Feed" | "CLM Details";
 	multipleRepos?: boolean;
+	relatedRepos?: RelatedRepository;
 	claimWhenConnected?: boolean;
+	environment?: string;
+	pendingRequiresConnection?: boolean;
+	stackSourceMap?: string;
+	domain?: string;
+	traceId?: string;
 }
 
 export interface TeamlessContext {
@@ -161,10 +168,7 @@ export interface WebviewContext {
 	hasFocus: boolean;
 	/** the first page seen after registration */
 	isFirstPageview?: boolean;
-	panelStack?: (WebviewPanels | string)[];
-	activePanel?: WebviewPanels;
 	startWorkCard?: any; // TODO figure out how to type CardView which include JSX.Element
-	onboardStep: number;
 	pendingProtocolHandlerUrl?: string;
 	pendingProtocolHandlerQuery?: any;
 	forceRegion?: string;

@@ -202,7 +202,8 @@ export class GitRepositories {
 				let initializing = false;
 				const repoMap: RepoMap[] = [];
 				let allAddedRepositories: GitRepository[] = [];
-				const remoteToRepoMap = await this.getKnownRepositories();
+				// removed await this.getKnownRepositories();
+				const remoteToRepoMap = new Map();
 				if (e === undefined) {
 					e = {
 						added: [],
@@ -223,7 +224,7 @@ export class GitRepositories {
 							existingRepo.root,
 							existingRepo.folder,
 							true
-						).withKnownRepo(remoteToRepoMap);
+						);
 						upgradedRepos.push(repo);
 					}
 					allAddedRepositories = [...upgradedRepos];
@@ -257,7 +258,7 @@ export class GitRepositories {
 								foundRepo.root,
 								foundRepo.folder,
 								true
-							).withKnownRepo(remoteToRepoMap);
+							);
 
 							repos.push(repo);
 						}
@@ -293,7 +294,8 @@ export class GitRepositories {
 							repoInfo.repos.push({ remotes, knownCommitHashes });
 						})
 					);
-					const repoMatches = await this.session.api.matchRepos(repoInfo);
+					// removed await this.session.api.matchRepos(repoInfo);
+					const repoMatches = { repos: [] as any[] };
 					for (let i = 0; i < repoMatches.repos.length; i++) {
 						Logger.debug(
 							`onWorkspaceFoldersChanged: Git repo ${orderedUnassignedRepos[i].path} matched to ${repoMatches.repos[i].id}:${repoMatches.repos[i].name}`
@@ -426,7 +428,7 @@ export class GitRepositories {
 					foundRepo.root,
 					foundRepo.folder,
 					foundRepo.isInWorkspace
-				).withKnownRepo(remoteToRepoMap);
+				);
 				reposWithIds.push(repoWithId);
 			}
 

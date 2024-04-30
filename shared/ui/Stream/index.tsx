@@ -5,7 +5,7 @@ import {
 	PostPlus,
 	SetCodemarkPinnedRequestType,
 } from "@codestream/protocols/agent";
-import { CodemarkType, CSMe, CSUser } from "@codestream/protocols/api";
+import { CodemarkType, CSMe, CSUser, WebviewPanels } from "@codestream/protocols/api";
 import cx from "classnames";
 import PropTypes from "prop-types";
 import React, { PureComponent } from "react";
@@ -33,7 +33,6 @@ import {
 	PixieDynamicLoggingType,
 } from "../ipc/webview.protocol";
 import { WebviewModals } from "@codestream/webview/ipc/webview.protocol.common";
-import { WebviewPanels } from "@codestream/protocols/api";
 import { isFeatureEnabled } from "../store/apiVersioning/reducer";
 import { canCreateCodemark } from "../store/codemarks/actions";
 import { getCodemark } from "../store/codemarks/reducer";
@@ -59,7 +58,6 @@ import { HostApi } from "../webview-api";
 import { AcceptCompanyInvite } from "./AcceptCompanyInvite";
 import { SetUserPreferenceRequest } from "./actions.types";
 import { ActivityPanel } from "./ActivityPanel";
-import { BlameMap } from "./BlameMap";
 import CancelButton from "./CancelButton";
 import { ChangeAvatar } from "./ChangeAvatar";
 import { ChangeCompanyName } from "./ChangeCompanyName";
@@ -89,7 +87,6 @@ import { FlowPanel } from "./Flow";
 import { GettingStarted } from "./GettingStarted";
 import { GlobalNav } from "./GlobalNav";
 import InlineCodemarks from "./InlineCodemarks";
-import { IntegrationsPanel } from "./IntegrationsPanel";
 import { Invite } from "./Invite";
 import { Keybindings } from "./Keybindings";
 import { MethodLevelTelemetryPanel } from "./MethodLevelTelemetry/MethodLevelTelemetryPanel";
@@ -486,7 +483,6 @@ export class SimpleStream extends PureComponent<Props> {
 						{activeModal === WebviewModals.ChangeCompanyName && <ChangeCompanyName />}
 						{activeModal === WebviewModals.FinishReview && <FinishReview />}
 						{activeModal === WebviewModals.Profile && <ProfilePanel />}
-						{activeModal === WebviewModals.BlameMap && <BlameMap />}
 						{activeModal === WebviewModals.Invite && <Invite />}
 						{activeModal === WebviewModals.Team && <Team />}
 						{activeModal === WebviewModals.TeamSetup && <TeamSetup />}
@@ -562,7 +558,6 @@ export class SimpleStream extends PureComponent<Props> {
 							{activePanel === WebviewPanels.MethodLevelTelemetry && <MethodLevelTelemetryPanel />}
 							{activePanel === WebviewPanels.TransactionSpan && <TransactionSpanPanel />}
 							{activePanel === WebviewPanels.ObservabilityAnomaly && <ObservabilityAnomalyPanel />}
-							{activePanel === WebviewPanels.Integrations && <IntegrationsPanel />}
 							{activePanel === WebviewPanels.Profile && <ProfilePanel />}
 							{activePanel === WebviewPanels.NewPullRequest && (
 								<CreatePullRequestPanel closePanel={() => this.props.closePanel()} />

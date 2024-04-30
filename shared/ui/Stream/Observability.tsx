@@ -14,7 +14,6 @@ import {
 	ObservabilityErrorCore,
 	ObservabilityRepo,
 	GetObservabilityAnomaliesResponse,
-	ObservabilityRepoError,
 	ServiceEntitiesViewedRequestType,
 	ServiceLevelObjectiveResult,
 	isNRErrorResponse,
@@ -22,6 +21,7 @@ import {
 	TelemetryData,
 	GetFileScmInfoRequestType,
 	GetFileScmInfoResponse,
+	ObservabilityRepoError,
 	GetReposScmRequestType,
 	ReposScm,
 } from "@codestream/protocols/agent";
@@ -33,20 +33,12 @@ import styled from "styled-components";
 import { fetchDocumentMarkers } from "../store/documentMarkers/actions";
 import { setEditorContext } from "../store/editorContext/actions";
 import { isNotOnDisk } from "../utils";
-
-import { ObservabilityRelatedWrapper } from "@codestream/webview/Stream/ObservabilityRelatedWrapper";
-import { ObservabilityPreview } from "@codestream/webview/Stream/ObservabilityPreview";
-import {
-	ObservabilityLoadingServiceEntities,
-	ObservabilityLoadingServiceEntity,
-} from "@codestream/webview/Stream/ObservabilityLoading";
 import { CurrentMethodLevelTelemetry } from "@codestream/webview/store/context/types";
 import {
 	setCurrentEntityGuid,
 	setEntityAccounts,
 	setRefreshAnomalies,
 } from "../store/context/actions";
-
 import { HealthIcon } from "@codestream/webview/src/components/HealthIcon";
 import {
 	HostDidChangeWorkspaceFoldersNotificationType,
@@ -55,7 +47,6 @@ import {
 	OpenEditorViewNotificationType,
 } from "@codestream/protocols/webview";
 import { SecurityIssuesWrapper } from "@codestream/webview/Stream/SecurityIssuesWrapper";
-import { ObservabilityServiceLevelObjectives } from "@codestream/webview/Stream/ObservabilityServiceLevelObjectives";
 import { WebviewPanels, CLMSettings, DEFAULT_CLM_SETTINGS } from "@codestream/protocols/api";
 import { Button } from "../src/components/Button";
 import { NoContent, PaneNode, PaneNodeName, PaneState } from "../src/components/Pane";
@@ -76,16 +67,11 @@ import { Row } from "./CrossPostIssueControls/IssuesPane";
 import { EntityAssociator } from "./EntityAssociator";
 import Icon from "./Icon";
 import { Link } from "./Link";
-import { ObservabilityAddAdditionalService } from "./ObservabilityAddAdditionalService";
-import { ObservabilityErrorWrapper } from "./ObservabilityErrorWrapper";
-import { ObservabilityGoldenMetricDropdown } from "./ObservabilityGoldenMetricDropdown";
 import Timestamp from "./Timestamp";
 import Tooltip from "./Tooltip";
 import { WarningBox } from "./WarningBox";
-import { ObservabilityAnomaliesWrapper } from "@codestream/webview/Stream/ObservabilityAnomaliesWrapper";
 import { throwIfError } from "@codestream/webview/store/common";
 import { isFeatureEnabled } from "../store/apiVersioning/reducer";
-import { ObservabilityAlertViolations } from "./ObservabilityAlertViolations";
 import { parseId } from "../utilities/newRelic";
 import { bootstrapNrCapabilities } from "../store/nrCapabilities/thunks";
 import { doGetObservabilityErrors } from "@codestream/webview/store/codeErrors/thunks";
@@ -99,6 +85,15 @@ import {
 } from "@codestream/webview/store/codeErrors/api/apiResolver";
 import { getNrAiUserId } from "@codestream/webview/store/users/reducer";
 import { setDemoMode } from "@codestream/webview/store/codeErrors/actions";
+import { ObservabilityAddAdditionalService } from "./ObservabilityAddAdditionalService";
+import { ObservabilityErrorWrapper } from "./ObservabilityErrorWrapper";
+import { ObservabilityAnomaliesWrapper } from "@codestream/webview/Stream/ObservabilityAnomaliesWrapper";
+import { ObservabilityPreview } from "@codestream/webview/Stream/ObservabilityPreview";
+import {
+	ObservabilityLoadingServiceEntities,
+	ObservabilityLoadingServiceEntity,
+} from "@codestream/webview/Stream/ObservabilityLoading";
+import { ObservabilitySummary } from "./ObservabilitySummary";
 
 interface Props {
 	paneState: PaneState;
@@ -619,13 +614,20 @@ export const Observability = React.memo((props: Props) => {
 	useInterval(
 		() => {
 			fetchGoldenMetrics(expandedEntity, true);
-			fetchServiceLevelObjectives(expandedEntity);
 			// fetchAnomalies(expandedEntity || "", currentRepoId);
 		},
 		300000,
 		true
 	);
 
+	// Update SLO/SLI metrics every 2 hours
+	useInterval(
+		() => {
+			fetchServiceLevelObjectives(expandedEntity);
+		},
+		7200000,
+		true
+	);
 	/*
 	 *	After initial load, every time repo context changes, do telemetry tracking
 	 */
@@ -1100,9 +1102,9 @@ export const Observability = React.memo((props: Props) => {
 	useEffect(() => {
 		console.debug(
 			`o11y: useEffect (callObservabilityTelemetry)
-			didMount: ${didMount} 
-			hasLoadedOnce: ${hasLoadedOnce} 
-			loadingEntities: ${loadingEntities} 
+			didMount: ${didMount}
+			hasLoadedOnce: ${hasLoadedOnce}
+			loadingEntities: ${loadingEntities}
 			currentEntityAccounts: ${JSON.stringify(currentEntityAccounts)}`
 		);
 		if (!hasLoadedOnce && didMount && !loadingEntities && currentEntityAccounts) {
@@ -1113,6 +1115,12 @@ export const Observability = React.memo((props: Props) => {
 			setTimeout(() => {
 				if (!currentRepoId && !_isEmpty(observabilityRepos) && observabilityRepos[0]?.repoId) {
 					setCurrentRepoId(observabilityRepos[0].repoId);
+					dispatch(
+						setUserPreference({
+							prefPath: ["currentO11yRepoId"],
+							value: observabilityRepos[0].repoId,
+						})
+					);
 				}
 			}, 2500);
 		}
@@ -1189,31 +1197,10 @@ export const Observability = React.memo((props: Props) => {
 	const onFileChanged = async (checkBranchUpdate = false) => {
 		let { scmInfo, textEditorUri } = derivedState;
 
-		const getRepoName = (repo: ReposScm, scmInfo: GetFileScmInfoResponse | undefined) => {
-			let repoName;
-			if (repo.folder.name) {
-				repoName = repo.folder.name;
-			}
-
-			if (!repoName && repo.path) {
-				repoName = repo.path.substring(repo.path.lastIndexOf("/") + 1);
-			}
-
-			if (!repoName && scmInfo?.scm?.repoPath) {
-				repoName = scmInfo?.scm?.repoPath.substring(scmInfo?.scm?.repoPath.lastIndexOf("/") + 1);
-			}
-
-			return repoName;
-		};
-
 		const setCurrentRepo = (repo: ReposScm, scmInfo: GetFileScmInfoResponse | undefined) => {
 			if (!isRefreshing) {
-				const repoName = getRepoName(repo, scmInfo);
 				const currentRepoId = repo.id || scmInfo?.scm?.repoId;
 
-				console.debug(
-					`o11y: currentRepoContext: setting currentRepoCallback currentRepo?.id  ${repo.id} scmInfo?.scm?.repoId ${scmInfo?.scm?.repoId}`
-				);
 				setCurrentRepoId(currentRepoId);
 				dispatch(
 					setUserPreference({
@@ -1325,6 +1312,12 @@ export const Observability = React.memo((props: Props) => {
 										setCurrentRepoId(undefined);
 									} else {
 										setCurrentRepoId(repo.repoId);
+										dispatch(
+											setUserPreference({
+												prefPath: ["currentO11yRepoId"],
+												value: repo.repoId,
+											})
+										);
 										setLoadingEntities(repo.repoId);
 									}
 								}}
@@ -1346,6 +1339,12 @@ export const Observability = React.memo((props: Props) => {
 											e.preventDefault();
 											e.stopPropagation();
 											setCurrentRepoId(repo.repoId);
+											dispatch(
+												setUserPreference({
+													prefPath: ["currentO11yRepoId"],
+													value: repo.repoId,
+												})
+											);
 											setLoadingEntities(repo.repoId);
 											doRefresh(true);
 										}}
@@ -1404,7 +1403,7 @@ export const Observability = React.memo((props: Props) => {
 												style={{ margin: "20px" }}
 												items={[
 													{
-														message: `Enable CodeLenses to see code-level metrics. 
+														message: `Enable CodeLenses to see code-level metrics.
 														Go to Tools > Options > Text Editor > All Languages > CodeLens or [learn more about code-level metrics]`,
 														helpUrl:
 															"https://docs.newrelic.com/docs/codestream/observability/code-level-metrics",
@@ -1517,25 +1516,19 @@ export const Observability = React.memo((props: Props) => {
 																		) : (
 																			<>
 																				<>
-																					<ObservabilityAlertViolations
-																						issues={recentIssues?.recentIssues}
-																						customPadding={"2px 10px 2px 27px"}
-																						entityGuid={ea.entityGuid}
-																					/>
-																					<ObservabilityGoldenMetricDropdown
+																					<ObservabilitySummary
 																						entityGoldenMetrics={entityGoldenMetrics}
 																						loadingGoldenMetrics={loadingGoldenMetrics}
-																						errors={entityGoldenMetricsErrors}
-																						recentIssues={recentIssues ? recentIssues : {}}
+																						entityGoldenMetricsErrors={entityGoldenMetricsErrors}
+																						recentIssues={recentIssues?.recentIssues}
 																						entityGuid={ea.entityGuid}
 																						accountId={ea.accountId}
+																						serviceLevelObjectives={serviceLevelObjectives}
+																						serviceLevelObjectiveError={serviceLevelObjectiveError}
+																						domain={ea?.domain}
+																						currentRepoId={currentRepoId}
+																						hasServiceLevelObjectives={hasServiceLevelObjectives}
 																					/>
-																					{hasServiceLevelObjectives && ea?.domain !== "INFRA" && (
-																						<ObservabilityServiceLevelObjectives
-																							serviceLevelObjectives={serviceLevelObjectives}
-																							errorMsg={serviceLevelObjectiveError}
-																						/>
-																					)}
 																					{anomalyDetectionSupported && (
 																						<ObservabilityAnomaliesWrapper
 																							accountId={ea.accountId}
@@ -1553,7 +1546,6 @@ export const Observability = React.memo((props: Props) => {
 																							}
 																						/>
 																					)}
-
 																					{showErrors && (
 																						<>
 																							{observabilityErrors?.find(
@@ -1582,13 +1574,6 @@ export const Observability = React.memo((props: Props) => {
 																							entityGuid={ea.entityGuid}
 																							accountId={ea.accountId}
 																							setHasVulnerabilities={setIsVulnPresent}
-																						/>
-																					)}
-																					{currentRepoId && ea?.domain !== "INFRA" && (
-																						<ObservabilityRelatedWrapper
-																							accountId={ea.accountId}
-																							currentRepoId={currentRepoId}
-																							entityGuid={ea.entityGuid}
 																						/>
 																					)}
 
@@ -1689,7 +1674,6 @@ export const Observability = React.memo((props: Props) => {
 																meta_data: "first_association: true",
 															});
 															_useDidMount(true);
-															setExpandedEntity(e?.entityGuid);
 														}}
 														remote={repoForEntityAssociator.repoRemote}
 														remoteName={repoForEntityAssociator.repoName}

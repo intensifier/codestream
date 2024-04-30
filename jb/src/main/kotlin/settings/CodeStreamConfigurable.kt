@@ -34,13 +34,10 @@ class CodeStreamConfigurable : SearchableConfigurable {
             val serverUrl =
                 if (gui.serverUrl.text.isNullOrEmpty()) gui.serverUrl.text else gui.serverUrl.text.trimEnd('/')
             val proxySupport = gui.proxySupport.selectedItem as ProxySupport
-            val showNewCodemarkGutterIconOnHover = gui.showNewCodemarkGutterIconOnHover.isSelected
             settingsService.autoSignIn = gui.autoSignIn.isSelected
             settingsService.serverUrl = serverUrl
             settingsService.disableStrictSSL = gui.disableStrictSSL.isSelected
             settingsService.extraCerts = gui.extraCerts.text
-            settingsService.showMarkers = gui.showMarkers.isSelected
-            settingsService.showNewCodemarkGutterIconOnHover = showNewCodemarkGutterIconOnHover
             settingsService.setProxySupport(proxySupport)
             settingsService.proxyStrictSSL = gui.proxyStrictSSL.isSelected
             settingsService.jcef = gui.jcef.isSelected
@@ -84,8 +81,6 @@ class CodeStreamConfigurable : SearchableConfigurable {
                 serverUrl.text = it.serverUrl
                 disableStrictSSL.isSelected = it.disableStrictSSL
                 extraCerts.text = it.extraCerts
-                showMarkers.isSelected = it.showMarkers
-                showNewCodemarkGutterIconOnHover.isSelected = it.showNewCodemarkGutterIconOnHover
                 proxySupport.selectedItem = it.proxySupport
                 proxyStrictSSL.isSelected = it.proxyStrictSSL
                 jcef.isSelected = it.jcef

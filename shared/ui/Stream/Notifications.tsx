@@ -3,13 +3,11 @@ import React, { useState } from "react";
 import { CodeStreamState } from "../store";
 import { isFeatureEnabled } from "../store/apiVersioning/reducer";
 import { Checkbox } from "../src/components/Checkbox";
-import { RadioGroup, Radio } from "../src/components/RadioGroup";
 import { setUserPreference, closeModal } from "./actions";
 import {
 	CSNotificationDeliveryPreference,
 	CSNotificationPreference,
 } from "@codestream/protocols/api";
-import Icon from "./Icon";
 import { Dialog } from "../src/components/Dialog";
 
 export const Notifications = props => {
@@ -64,69 +62,9 @@ export const Notifications = props => {
 		<Dialog title="Notification Settings" onClose={() => dispatch(closeModal())}>
 			<form className="standard-form vscroll">
 				<fieldset className="form-body">
-					{!derivedState.emailSupported && (
-						<p
-							className="color-warning"
-							style={{ display: "flex", padding: "10px 0", whiteSpace: "normal" }}
-						>
-							<Icon name="alert" />
-							<div style={{ paddingLeft: "10px" }}>
-								Ask your admin to set up outbound email for your on-prem instance of CodeStream.
-							</div>
-						</p>
-					)}
-					<p className="explainer">
-						{derivedState.hasDesktopNotifications
-							? "Follow discussions to receive desktop and email notifications."
-							: "Follow discussions to receive email notifications."}
-					</p>
 					<div id="controls">
-						<RadioGroup
-							name="preference"
-							selectedValue={derivedState.notificationPreference}
-							onChange={handleChange}
-							loading={loading}
-						>
-							<Radio value="all">Automatically follow all new discussions</Radio>
-							<Radio value="involveMe">
-								Follow discussions I have created, I have been mentioned in, or I have replied to
-							</Radio>
-							<Radio value="off">Don't automatically follow any discussions</Radio>
-						</RadioGroup>
-						{derivedState.hasDesktopNotifications && derivedState.notificationDeliverySupported && (
-							<div style={{ marginTop: "20px" }}>
-								<p className="explainer">Deliver notifications via:</p>
-								<RadioGroup
-									name="delivery"
-									data-test-id="deliveryRadioGroup"
-									selectedValue={derivedState.notificationDeliveryPreference}
-									onChange={handleChangeDelivery}
-									loading={loadingDelivery}
-								>
-									<Radio data-testid="delivery-all" value={CSNotificationDeliveryPreference.All}>
-										Email &amp; Desktop
-									</Radio>
-									<Radio
-										data-testid="delivery-email"
-										value={CSNotificationDeliveryPreference.EmailOnly}
-									>
-										Email only
-									</Radio>
-									<Radio
-										data-testid="delivery-desktop"
-										value={CSNotificationDeliveryPreference.ToastOnly}
-									>
-										Desktop only
-									</Radio>
-									<Radio data-testid="delivery-none" value={CSNotificationDeliveryPreference.Off}>
-										None
-									</Radio>
-								</RadioGroup>
-							</div>
-						)}
 						{derivedState.hasDesktopNotifications && derivedState.notificationDeliverySupported && (
 							<div>
-								<h3>Desktop Notifications</h3>
 								<div style={{ marginTop: "20px" }}>
 									<Checkbox
 										name="notifyPerformanceIssues"

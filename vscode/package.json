@@ -2,7 +2,7 @@
 	"name": "codestream",
 	"displayName": "New Relic CodeStream",
 	"description": "Bring production telemetry into your IDE to quickly identify and resolve performance issues.",
-	"version": "15.7.0",
+	"version": "15.8.0",
 	"author": "CodeStream",
 	"publisher": "CodeStream",
 	"extensionKind": [
@@ -121,28 +121,6 @@
 					"description": "Specifies the url to use to connect to the CodeStream service",
 					"scope": "window"
 				},
-				"codestream.showInStatusBar": {
-					"type": "string",
-					"enum": [
-						"left",
-						"right",
-						false
-					],
-					"enumDescriptions": [
-						"Shows the CodeStream status bar item on the left",
-						"Shows the CodeStream status bar item on the right",
-						"No CodeStream status bar item will be shown"
-					],
-					"default": "left",
-					"description": "Specifies whether to show CodeStream in the status bar",
-					"scope": "window"
-				},
-				"codestream.showMarkerGlyphs": {
-					"type": "boolean",
-					"default": true,
-					"description": "Specifies whether to show glyph indicators at the start of lines with associated codemarks in the editor",
-					"scope": "window"
-				},
 				"codestream.highlightEntityGuids": {
 					"type": "boolean",
 					"default": true,
@@ -182,11 +160,6 @@
 				"category": "CodeStream"
 			},
 			{
-				"command": "codestream.goOffline",
-				"title": "Go Offline",
-				"category": "CodeStream"
-			},
-			{
 				"command": "codestream.signIn",
 				"title": "Sign In...",
 				"category": "CodeStream"
@@ -199,16 +172,6 @@
 			{
 				"command": "codestream.toggle",
 				"title": "Toggle CodeStream",
-				"category": "CodeStream"
-			},
-			{
-				"command": "codestream.newComment",
-				"title": "Add Comment",
-				"category": "CodeStream"
-			},
-			{
-				"command": "codestream.newIssue",
-				"title": "Create Issue",
 				"category": "CodeStream"
 			},
 			{
@@ -244,42 +207,6 @@
 				"when": "codestream:status == signedIn"
 			},
 			{
-				"command": "codestream.newComment",
-				"args": {
-					"source": "Shortcut"
-				},
-				"key": "ctrl+shift+/ c",
-				"mac": "ctrl+/ c",
-				"when": "codestream:status == signedIn"
-			},
-			{
-				"command": "codestream.newComment",
-				"args": {
-					"source": "Shortcut"
-				},
-				"key": "ctrl+shift+/ ctrl+shift+c",
-				"mac": "ctrl+/ ctrl+c",
-				"when": "codestream:status == signedIn"
-			},
-			{
-				"command": "codestream.newIssue",
-				"args": {
-					"source": "Shortcut"
-				},
-				"key": "ctrl+shift+/ i",
-				"mac": "ctrl+/ i",
-				"when": "codestream:status == signedIn"
-			},
-			{
-				"command": "codestream.newIssue",
-				"args": {
-					"source": "Shortcut"
-				},
-				"key": "ctrl+shift+/ ctrl+shift+i",
-				"mac": "ctrl+/ ctrl+i",
-				"when": "codestream:status == signedIn"
-			},
-			{
 				"command": "codestream.executeNrql",
 				"args": {
 					"source": "Shortcut"
@@ -292,10 +219,6 @@
 		"menus": {
 			"commandPalette": [
 				{
-					"command": "codestream.goOffline",
-					"when": "codestream:status != signedOut"
-				},
-				{
 					"command": "codestream.signIn",
 					"when": "codestream:status != signedIn && codestream:status != signingIn"
 				},
@@ -306,27 +229,9 @@
 				{
 					"command": "codestream.toggle",
 					"when": "codestream:status == signedIn"
-				},
-				{
-					"command": "codestream.newComment",
-					"when": "codestream:status == signedIn"
-				},
-				{
-					"command": "codestream.newIssue",
-					"when": "codestream:status == signedIn"
 				}
 			],
 			"editor/context": [
-				{
-					"command": "codestream.newComment",
-					"when": "codestream:status == signedIn",
-					"group": "9_zcodestream@1"
-				},
-				{
-					"command": "codestream.newIssue",
-					"when": "codestream:status == signedIn && resourceScheme == file",
-					"group": "9_zcodestream@2"
-				},
 				{
 					"command": "codestream.logSearch",
 					"when": "codestream:status == signedIn && editorTextFocus",

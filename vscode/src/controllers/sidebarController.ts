@@ -26,7 +26,7 @@ import {
 	ReportingMessageType,
 	VersionCompatibility
 } from "@codestream/protocols/agent";
-import { CodemarkType, CSApiCapabilities, WebviewPanels } from "@codestream/protocols/api";
+import { CSApiCapabilities } from "@codestream/protocols/api";
 import {
 	ActiveEditorInfo,
 	ApplyMarkerRequestType,
@@ -37,17 +37,13 @@ import {
 	DisconnectFromIDEProviderRequestType,
 	EditorContext,
 	EditorCopySymbolType,
-	EditorHighlightRangeRequestType,
 	EditorReplaceSymbolType,
-	EditorRevealRangeRequestType,
 	EditorRevealSymbolRequestType,
 	EditorScrollToNotificationType,
 	EditorSelectRangeRequestType,
 	GetActiveEditorContextRequestType,
 	HostDidChangeActiveEditorNotificationType,
 	HostDidChangeConfigNotificationType,
-	HostDidChangeEditorSelectionNotificationType,
-	HostDidChangeEditorVisibleRangesNotificationType,
 	HostDidChangeLayoutNotificationType,
 	HostDidChangeVisibleEditorsNotificationType,
 	HostDidChangeWorkspaceFoldersNotificationType,
@@ -61,7 +57,6 @@ import {
 	isIpcResponseMessage,
 	LocalFilesCloseDiffRequestType,
 	LogoutRequestType,
-	NewCodemarkNotificationType,
 	NewPullRequestBranch,
 	NewPullRequestNotificationType,
 	NewReviewNotificationType,
@@ -98,7 +93,9 @@ import {
 	WebviewIpcRequestMessage,
 	IdeNames,
 	LogoutReason,
-	EditorUndoType
+	EditorUndoType,
+	EditorRevealRangeRequestType,
+	EditorHighlightRangeRequestType
 } from "@codestream/protocols/webview";
 import {
 	authentication,
@@ -110,8 +107,6 @@ import {
 	Range,
 	Selection,
 	TextEditor,
-	TextEditorSelectionChangeEvent,
-	TextEditorVisibleRangesChangeEvent,
 	Uri,
 	ViewColumn,
 	window,
@@ -125,7 +120,6 @@ import { gate } from "../system/decorators/gate";
 import { Functions, log, Strings } from "../system";
 import { openUrl } from "../urlHandler";
 import { toLoggableIpcMessage, WebviewLike } from "../webviews/webviewLike";
-import { toCSGitUri } from "../providers/gitContentProvider";
 import {
 	CodeStreamSession,
 	SessionSignedOutReason,
@@ -143,6 +137,7 @@ import * as csUri from "../system/uri";
 import * as TokenManager from "../api/tokenManager";
 import { SaveTokenReason } from "../api/tokenManager";
 import { copySymbol, editorUndo, replaceSymbol } from "./symbolEditController";
+import { toCSGitUri } from "../providers/gitContentProvider";
 
 const emptyObj = {};
 
@@ -248,7 +243,6 @@ export class SidebarController implements Disposable {
 					this._context = {
 						currentTeamId: "_",
 						hasFocus: true,
-						onboardStep: 0,
 						__teamless__: state.teamless
 					};
 				}
@@ -338,35 +332,6 @@ export class SidebarController implements Disposable {
 		// TODO: Change this to be a request vs a notification
 		this._sidebar!.notify(StartWorkNotificationType, {
 			uri: editor ? editor.document.uri.toString() : undefined,
-			source: source
-		});
-	}
-
-	@log()
-	async newCodemarkRequest(
-		type: CodemarkType,
-		editor: TextEditor | undefined = this._lastEditor,
-		source: string,
-		ignoreLastEditor?: boolean
-	): Promise<void> {
-		if (this.visible) {
-			await this._sidebar!.show();
-		} else {
-			await this.show();
-		}
-		if (ignoreLastEditor) {
-			editor = undefined;
-		}
-
-		if (!this._sidebar) {
-			// it's possible that the webview is closing...
-			return;
-		}
-		// TODO: Change this to be a request vs a notification
-		this._sidebar!.notify(NewCodemarkNotificationType, {
-			uri: editor ? editor.document.uri.toString() : undefined,
-			range: editor ? Editor.toSerializableRange(editor.selection) : undefined,
-			type: type,
 			source: source
 		});
 	}
@@ -630,20 +595,6 @@ export class SidebarController implements Disposable {
 				(...args) => this.onDocumentMarkersChanged(webview, ...args),
 				this
 			),
-			window.onDidChangeTextEditorSelection(
-				Functions.debounce<(e: TextEditorSelectionChangeEvent) => any>(
-					(...args) => this.onEditorSelectionChanged(webview, ...args),
-					250,
-					{
-						maxWait: 250
-					}
-				),
-				this
-			),
-			window.onDidChangeTextEditorVisibleRanges(
-				(...args) => this.onEditorVisibleRangesChanged(webview, ...args),
-				this
-			),
 			configuration.onDidChange((...args) => this.onConfigurationChanged(webview, ...args), this),
 
 			// Keep this at the end otherwise the above subscriptions can fire while disposing
@@ -780,35 +731,6 @@ export class SidebarController implements Disposable {
 
 	private onDocumentMarkersChanged(webview: WebviewLike, e: DidChangeDocumentMarkersNotification) {
 		webview.notify(DidChangeDocumentMarkersNotificationType, e);
-	}
-
-	private async onEditorSelectionChanged(webview: WebviewLike, e: TextEditorSelectionChangeEvent) {
-		if (e.textEditor !== this._lastEditor || !this.isSupportedEditor(e.textEditor)) return;
-
-		const { fileUri, sha } = csUri.Uris.getFileUriAndSha(e.textEditor.document.uri);
-		webview.notify(HostDidChangeEditorSelectionNotificationType, {
-			uri: fileUri.toString(true),
-			gitSha: sha,
-			selections: Editor.toEditorSelections(e.selections),
-			visibleRanges: Editor.toSerializableRange(e.textEditor.visibleRanges),
-			lineCount: e.textEditor.document.lineCount
-		});
-	}
-
-	private onEditorVisibleRangesChanged(
-		webview: WebviewLike,
-		e: TextEditorVisibleRangesChangeEvent
-	) {
-		if (e.textEditor !== this._lastEditor || !this.isSupportedEditor(e.textEditor)) return;
-
-		const { fileUri, sha } = csUri.Uris.getFileUriAndSha(e.textEditor.document.uri);
-		webview.notify(HostDidChangeEditorVisibleRangesNotificationType, {
-			uri: fileUri.toString(true),
-			gitSha: sha,
-			selections: Editor.toEditorSelections(e.textEditor.selections),
-			visibleRanges: Editor.toSerializableRange(e.visibleRanges),
-			lineCount: e.textEditor.document.lineCount
-		});
 	}
 
 	private isSupportedEditor(textEditor: TextEditor): boolean {
@@ -1512,7 +1434,7 @@ export class SidebarController implements Disposable {
 					fileName: workspace.asRelativePath(uri),
 					languageId: e.document.languageId,
 					metrics: Editor.getMetrics(uri),
-					selections: Editor.toEditorSelections(e.selections),
+					selections: [],
 					visibleRanges: Editor.toSerializableRange(e.visibleRanges),
 					lineCount: e.document.lineCount
 				};
@@ -1561,17 +1483,6 @@ export class SidebarController implements Disposable {
 				teams,
 				teamless
 			});
-
-			if (
-				!hidden &&
-				this._context &&
-				this._context.panelStack &&
-				this._context.panelStack[0] === WebviewPanels.CodemarksForFile
-			) {
-				Container.markerDecorations.suspend();
-			} else {
-				Container.markerDecorations.resume();
-			}
 		} catch {}
 	}
 

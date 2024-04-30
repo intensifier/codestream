@@ -17,8 +17,6 @@ import { NotificationsController } from "./controllers/notificationsController";
 import { StatusBarController } from "./controllers/statusBarController";
 import { SidebarController } from "./controllers/sidebarController";
 import { Logger, TraceLevel } from "./logger";
-import { CodeStreamCodeActionProvider } from "./providers/codeActionProvider";
-import { CodemarkDecorationProvider } from "./providers/markerDecorationProvider";
 import { CodemarkPatchContentProvider } from "./providers/patchContentProvider";
 import { SetServerUrlRequestType } from "@codestream/protocols/agent";
 import { EditorController } from "./controllers/editorController";
@@ -55,10 +53,8 @@ export class Container {
 		context.subscriptions.push((this._session = new CodeStreamSession(config.serverUrl)));
 		context.subscriptions.push((this._notifications = new NotificationsController()));
 		context.subscriptions.push((this._commands = new Commands()));
-		context.subscriptions.push((this._codeActions = new CodeStreamCodeActionProvider()));
 		context.subscriptions.push((this._diffContents = new ReviewDiffContentProvider()));
 		context.subscriptions.push((this._gitContents = new GitContentProvider()));
-		context.subscriptions.push((this._markerDecorations = new CodemarkDecorationProvider()));
 		context.subscriptions.push(
 			(this._instrumentableCodeLensController = new InstrumentableCodeLensController())
 		);
@@ -178,11 +174,6 @@ export class Container {
 		return this._inlayHintsProvider;
 	}
 
-	private static _codeActions: CodeStreamCodeActionProvider;
-	static get codeActions() {
-		return this._codeActions;
-	}
-
 	private static _commands: Commands;
 	static get commands() {
 		return this._commands;
@@ -209,11 +200,6 @@ export class Container {
 	private static _context: ExtensionContext;
 	static get context() {
 		return this._context;
-	}
-
-	private static _markerDecorations: CodemarkDecorationProvider;
-	static get markerDecorations() {
-		return this._markerDecorations;
 	}
 
 	private static _instrumentableCodeLensController: InstrumentableCodeLensController;
