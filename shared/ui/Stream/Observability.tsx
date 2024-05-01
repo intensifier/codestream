@@ -1,11 +1,11 @@
 import {
+	DetectTeamAnomaliesRequestType,
 	DidChangeObservabilityDataNotificationType,
 	EntityAccount,
 	EntityGoldenMetrics,
 	ERROR_GENERIC_USE_ERROR_MESSAGE,
 	ERROR_NR_INSUFFICIENT_API_KEY,
 	GetEntityCountRequestType,
-	GetObservabilityAnomaliesRequestType,
 	GetObservabilityErrorAssignmentsRequestType,
 	GetObservabilityReposRequestType,
 	GetObservabilityReposResponse,
@@ -26,7 +26,7 @@ import {
 	ReposScm,
 } from "@codestream/protocols/agent";
 import cx from "classnames";
-import { head as _head, isEmpty as _isEmpty, isNil as _isNil } from "lodash-es";
+import { head as _head, isEmpty as _isEmpty } from "lodash-es";
 import React, { useEffect, useMemo, useState } from "react";
 import { shallowEqual } from "react-redux";
 import styled from "styled-components";
@@ -34,11 +34,7 @@ import { fetchDocumentMarkers } from "../store/documentMarkers/actions";
 import { setEditorContext } from "../store/editorContext/actions";
 import { isNotOnDisk } from "../utils";
 import { CurrentMethodLevelTelemetry } from "@codestream/webview/store/context/types";
-import {
-	setCurrentEntityGuid,
-	setEntityAccounts,
-	setRefreshAnomalies,
-} from "../store/context/actions";
+import { setCurrentEntityGuid, setEntityAccounts } from "../store/context/actions";
 import { HealthIcon } from "@codestream/webview/src/components/HealthIcon";
 import {
 	HostDidChangeWorkspaceFoldersNotificationType,
@@ -47,7 +43,7 @@ import {
 	OpenEditorViewNotificationType,
 } from "@codestream/protocols/webview";
 import { SecurityIssuesWrapper } from "@codestream/webview/Stream/SecurityIssuesWrapper";
-import { WebviewPanels, CLMSettings, DEFAULT_CLM_SETTINGS } from "@codestream/protocols/api";
+import { WebviewPanels } from "@codestream/protocols/api";
 import { Button } from "../src/components/Button";
 import { NoContent, PaneNode, PaneNodeName, PaneState } from "../src/components/Pane";
 import { CodeStreamState } from "../store";
@@ -285,7 +281,7 @@ export const Observability = React.memo((props: Props) => {
 	const dispatch = useAppDispatch();
 	let hasLoadedOnce = false;
 	const derivedState = useAppSelector((state: CodeStreamState) => {
-		const { providers = {}, preferences } = state;
+		const { providers = {}, preferences, anomalyData } = state;
 		const newRelicIsConnected =
 			providers["newrelic*com"] && isConnected(state, { id: "newrelic*com" });
 		const activeO11y = preferences.activeO11y;
@@ -323,6 +319,7 @@ export const Observability = React.memo((props: Props) => {
 			showLogSearch: state.ide.name === "VSC" || state.ide.name === "JETBRAINS",
 			demoMode: state.codeErrors.demoMode,
 			teamId: team?.id,
+			anomalyData,
 		};
 	}, shallowEqual);
 
@@ -385,6 +382,7 @@ export const Observability = React.memo((props: Props) => {
 	const [anomalyDetectionSupported, setAnomalyDetectionSupported] = useState<boolean>(true);
 	const [isVulnPresent, setIsVulnPresent] = useState(false);
 	const { activeO11y } = derivedState;
+	const [hasDetectedTeamAnomalies, setHasDetectedTeamAnomalies] = useState(false);
 
 	const buildFilters = (repoIds: string[]) => {
 		return repoIds.map(repoId => {
@@ -446,8 +444,8 @@ export const Observability = React.memo((props: Props) => {
 		}
 
 		await getObservabilityErrors();
-		if (expandedEntity && currentRepoId) {
-			fetchAnomalies(expandedEntity, currentRepoId);
+		if (expandedEntity) {
+			fetchAnomalies(expandedEntity);
 		}
 		setLoadingEntities(undefined);
 		setIsRefreshing(false);
@@ -551,7 +549,7 @@ export const Observability = React.memo((props: Props) => {
 						fetchObservabilityErrors(e.data.entityGuid, e.data.repoId);
 						fetchGoldenMetrics(e.data.entityGuid);
 						fetchServiceLevelObjectives(e.data.entityGuid);
-						fetchAnomalies(e.data.entityGuid, e.data.repoId);
+						fetchAnomalies(e.data.entityGuid);
 					}, 2500);
 				}
 			}
@@ -572,9 +570,15 @@ export const Observability = React.memo((props: Props) => {
 
 	useEffect(() => {
 		if (derivedState.anomaliesNeedRefresh) {
-			fetchAnomalies(expandedEntity!, currentRepoId);
+			fetchAnomalies(expandedEntity!);
 		}
 	}, [derivedState.anomaliesNeedRefresh]);
+
+	useEffect(() => {
+		if (expandedEntity) {
+			fetchAnomalies(expandedEntity);
+		}
+	}, [derivedState.anomalyData]);
 
 	useEffect(() => {
 		if (
@@ -703,9 +707,6 @@ export const Observability = React.memo((props: Props) => {
 			const filteredAssignments = observabilityAssignments?.filter(
 				_ => _.entityId === expandedEntity
 			);
-			const hasAnomalies =
-				observabilityAnomalies.errorRate.length > 0 ||
-				observabilityAnomalies.responseTime.length > 0;
 
 			const entity = derivedState.observabilityRepoEntities.find(_ => _.repoId === currentRepoId);
 
@@ -718,7 +719,6 @@ export const Observability = React.memo((props: Props) => {
 					!_isEmpty(filteredCurrentRepoErrors) || !_isEmpty(filteredAssignments)
 				}`,
 				meta_data_2: `slos_listed: ${hasServiceLevelObjectives}`,
-				meta_data_4: `anomalies_listed: ${hasAnomalies}`,
 				meta_data_3: `vulnerabilities_listed: ${isVulnPresent}`,
 				event_type: "modal_display",
 			};
@@ -847,11 +847,26 @@ export const Observability = React.memo((props: Props) => {
 		}
 	};
 
-	const fetchAnomalies = async (entityGuid: string, repoId) => {
-		dispatch(setRefreshAnomalies(false));
+	const fetchAnomalies = async (entityGuid: string) => {
+		//dispatch(setRefreshAnomalies(false));
 		setCalculatingAnomalies(true);
+		if (!hasDetectedTeamAnomalies) {
+			HostApi.instance.send(DetectTeamAnomaliesRequestType, {});
+			setHasDetectedTeamAnomalies(true);
+		}
 
 		try {
+			if (derivedState.anomalyData[entityGuid]) {
+				const entityAnomalies = derivedState.anomalyData[entityGuid];
+				const response = {
+					responseTime: entityAnomalies.durationAnomalies,
+					errorRate: entityAnomalies.errorRateAnomalies,
+					detectionMethod: entityAnomalies.detectionMethod,
+					didNotifyNewAnomalies: true,
+				};
+				setObservabilityAnomalies(response);
+			}
+			/* Deprecated in favor of server-side anomaly detection
 			const clmSettings = derivedState?.clmSettings as CLMSettings;
 			const response = await HostApi.instance.send(GetObservabilityAnomaliesRequestType, {
 				entityGuid,
@@ -900,9 +915,10 @@ export const Observability = React.memo((props: Props) => {
 				setObservabilityAnomalies(response);
 				dispatch(setRefreshAnomalies(false));
 			}
+			*/
 		} catch (ex) {
 			console.error("Failed to fetch anomalies", ex);
-			dispatch(setRefreshAnomalies(false));
+			//dispatch(setRefreshAnomalies(false));
 		} finally {
 			setCalculatingAnomalies(false);
 		}
@@ -1052,7 +1068,7 @@ export const Observability = React.memo((props: Props) => {
 			fetchGoldenMetrics(expandedEntity, true);
 			fetchServiceLevelObjectives(expandedEntity);
 			fetchObservabilityErrors(expandedEntity, currentRepoId);
-			fetchAnomalies(expandedEntity, currentRepoId);
+			fetchAnomalies(expandedEntity);
 			handleClickCLMBroadcast(expandedEntity);
 		}
 	}, [expandedEntity]);
@@ -1428,7 +1444,6 @@ export const Observability = React.memo((props: Props) => {
 												{repo.entityAccounts
 													.filter(_ => _)
 													.map(ea => {
-														debugger;
 														const _observabilityRepo = observabilityRepos.find(
 															_ => _.repoId === currentRepoId
 														);
