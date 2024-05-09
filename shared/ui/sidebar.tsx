@@ -47,7 +47,7 @@ import {
 import { updateConfigs } from "@codestream/webview/store/configs/slice";
 import { fetchReview } from "@codestream/webview/store/reviews/thunks";
 import { switchToTeam } from "@codestream/webview/store/session/thunks";
-import { setAnomalyData} from "@codestream/webview/store/anomalyData/actions";
+import { setAnomalyData } from "@codestream/webview/store/anomalyData/actions";
 import "@formatjs/intl-listformat/polyfill-locales";
 import { isEmpty as _isEmpty } from "lodash-es";
 
@@ -379,11 +379,11 @@ function listenForEvents(store: StoreType) {
 			setAnomalyData({
 				entityGuid: params.entityGuid,
 				durationAnomalies: params.duration,
-				errorRateAnomalies: params.errorRate
+				errorRateAnomalies: params.errorRate,
 			})
 		);
 	});
-		
+
 	const onShowStreamNotificationType = async function (streamId, threadId, codemarkId) {
 		if (codemarkId) {
 			let {
@@ -760,7 +760,26 @@ function listenForEvents(store: StoreType) {
 					case "logs": {
 						const definedQuery = route as RouteWithQuery<{
 							entityId?: string;
+							env?: string;
 						}>;
+
+						// if the user isn't logged in we'll queue this url
+						// up for post-login processing
+						if (!store.getState().session.userId) {
+							store.dispatch(
+								setPendingProtocolHandlerUrl({ url: e.url, query: definedQuery.query })
+							);
+							if (definedQuery.query.env) {
+								store.dispatch(setForceRegion({ region: definedQuery.query.env }));
+							}
+							if (route.query["anonymousId"]) {
+								await HostApi.instance.send(TelemetrySetAnonymousIdRequestType, {
+									anonymousId: route.query["anonymousId"],
+								});
+							}
+							store.dispatch(goToSignup({}));
+							break;
+						}
 
 						HostApi.instance.notify(OpenEditorViewNotificationType, {
 							panel: "logs",
