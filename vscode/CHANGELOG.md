@@ -1,5 +1,11 @@
 # Change Log
 
+## [15.8.1] - 2024-5-9
+
+### Fixed
+
+- Fixes on issue when open-in-IDE from Logs attempts to load logs prior to the user loggging in
+
 ## [15.8.0] - 2024-4-30
 
 ### Changed
