@@ -54,7 +54,14 @@ export class AnomalyDetectorDrillDown {
 			await this.notifyNewAnomalies(mockResponse.responseTime, mockResponse.errorRate, true);
 			return mockResponse;
 		}
+		return {
+			responseTime: [],
+			errorRate: [],
+			didNotifyNewAnomalies: false,
+		};
+	}
 
+	async _execute(): Promise<GetObservabilityAnomaliesResponse | undefined> {
 		const entityAccount = await this.getEntityAccount();
 		const languageSupport = entityAccount && (await getLanguageSupport(entityAccount));
 		if (!languageSupport) {

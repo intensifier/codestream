@@ -1480,6 +1480,7 @@ export interface GetObservabilityAnomaliesResponse {
 	error?: string;
 	isSupported?: boolean;
 	didNotifyNewAnomalies: boolean;
+	isMock?: boolean;
 }
 
 export const GetObservabilityAnomaliesRequestType = new RequestType<

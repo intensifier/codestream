@@ -24,6 +24,7 @@ import {
 	ObservabilityRepoError,
 	GetReposScmRequestType,
 	ReposScm,
+	GetObservabilityAnomaliesRequestType,
 } from "@codestream/protocols/agent";
 import cx from "classnames";
 import { head as _head, isEmpty as _isEmpty } from "lodash-es";
@@ -34,7 +35,11 @@ import { fetchDocumentMarkers } from "../store/documentMarkers/actions";
 import { setEditorContext } from "../store/editorContext/actions";
 import { isNotOnDisk } from "../utils";
 import { CurrentMethodLevelTelemetry } from "@codestream/webview/store/context/types";
-import { setCurrentEntityGuid, setEntityAccounts } from "../store/context/actions";
+import {
+	setCurrentEntityGuid,
+	setEntityAccounts,
+	setRefreshAnomalies,
+} from "../store/context/actions";
 import { HealthIcon } from "@codestream/webview/src/components/HealthIcon";
 import {
 	HostDidChangeWorkspaceFoldersNotificationType,
@@ -850,6 +855,26 @@ export const Observability = React.memo((props: Props) => {
 	const fetchAnomalies = async (entityGuid: string) => {
 		//dispatch(setRefreshAnomalies(false));
 		setCalculatingAnomalies(true);
+		// The code below will return only hard-coded mock anomalies used for demo purposes
+		const response = await HostApi.instance.send(GetObservabilityAnomaliesRequestType, {
+			entityGuid,
+			sinceDaysAgo: 1,
+			baselineDays: 1,
+			sinceLastRelease: true,
+			minimumErrorPercentage: 1,
+			minimumResponseTime: 1,
+			minimumSampleRate: 1,
+			minimumRatio: 1,
+		});
+		if (response && response.isMock) {
+			setAnomalyDetectionSupported(true);
+			setObservabilityAnomalies(response);
+			dispatch(setRefreshAnomalies(false));
+			setCalculatingAnomalies(false);
+			return;
+		}
+
+		// The real deal
 		if (!hasDetectedTeamAnomalies) {
 			HostApi.instance.send(DetectTeamAnomaliesRequestType, {});
 			setHasDetectedTeamAnomalies(true);
@@ -866,56 +891,6 @@ export const Observability = React.memo((props: Props) => {
 				};
 				setObservabilityAnomalies(response);
 			}
-			/* Deprecated in favor of server-side anomaly detection
-			const clmSettings = derivedState?.clmSettings as CLMSettings;
-			const response = await HostApi.instance.send(GetObservabilityAnomaliesRequestType, {
-				entityGuid,
-				sinceDaysAgo: parseInt(
-					!_isNil(clmSettings?.compareDataLastValue)
-						? clmSettings?.compareDataLastValue
-						: DEFAULT_CLM_SETTINGS.compareDataLastValue
-				),
-				baselineDays: parseInt(
-					!_isNil(clmSettings?.againstDataPrecedingValue)
-						? clmSettings?.againstDataPrecedingValue
-						: DEFAULT_CLM_SETTINGS.againstDataPrecedingValue
-				),
-				sinceLastRelease: !_isNil(clmSettings?.compareDataLastReleaseValue)
-					? clmSettings?.compareDataLastReleaseValue
-					: DEFAULT_CLM_SETTINGS.compareDataLastReleaseValue,
-				minimumErrorPercentage: parseFloat(
-					!_isNil(clmSettings?.minimumErrorPercentage)
-						? clmSettings?.minimumErrorPercentage
-						: DEFAULT_CLM_SETTINGS.minimumErrorPercentage
-				),
-				minimumResponseTime: parseFloat(
-					!_isNil(clmSettings?.minimumAverageDurationValue)
-						? clmSettings?.minimumAverageDurationValue
-						: DEFAULT_CLM_SETTINGS.minimumAverageDurationValue
-				),
-				minimumSampleRate: parseFloat(
-					!_isNil(clmSettings?.minimumBaselineValue)
-						? clmSettings?.minimumBaselineValue
-						: DEFAULT_CLM_SETTINGS.minimumBaselineValue
-				),
-				minimumRatio:
-					parseFloat(
-						!_isNil(clmSettings?.minimumChangeValue)
-							? clmSettings?.minimumChangeValue
-							: DEFAULT_CLM_SETTINGS.minimumChangeValue
-					) /
-						100 +
-					1,
-			});
-
-			if (response && response.isSupported === false) {
-				setAnomalyDetectionSupported(false);
-			} else {
-				setAnomalyDetectionSupported(true);
-				setObservabilityAnomalies(response);
-				dispatch(setRefreshAnomalies(false));
-			}
-			*/
 		} catch (ex) {
 			console.error("Failed to fetch anomalies", ex);
 			//dispatch(setRefreshAnomalies(false));
