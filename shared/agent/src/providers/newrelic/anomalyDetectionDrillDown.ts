@@ -1,8 +1,7 @@
-import { Container, SessionContainer } from "../../container";
+import { SessionContainer } from "../../container";
 import {
 	Comparison,
 	DetectionMethod,
-	DidDetectObservabilityAnomaliesNotificationType,
 	EntityAccount,
 	GetObservabilityAnomaliesRequest,
 	GetObservabilityAnomaliesResponse,
@@ -743,11 +742,11 @@ export class AnomalyDetectorDrillDown {
 		await storage.flush();
 
 		if (newDurationAnomalies.length || newErrorRateAnomalies.length) {
-			Container.instance().agent.sendNotification(DidDetectObservabilityAnomaliesNotificationType, {
-				entityGuid: entityGuid,
-				duration: newDurationAnomalies,
-				errorRate: newErrorRateAnomalies,
-			});
+			// Container.instance().agent.sendNotification(DidDetectObservabilityAnomaliesNotificationType, {
+			// 	entityGuid: entityGuid,
+			// 	duration: newDurationAnomalies,
+			// 	errorRate: newErrorRateAnomalies,
+			// });
 			return true;
 		}
 
