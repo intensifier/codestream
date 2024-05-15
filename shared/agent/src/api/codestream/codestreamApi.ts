@@ -2403,6 +2403,12 @@ export class CodeStreamApiProvider implements ApiProvider {
 				`${url}/detect/${currentTeam.id}`,
 				{
 					method: "post",
+					headers: {
+						"NewRelic-Requesting-Services": "CodeStream",
+						"X-Query-Source-Capability-Id": "CODESTREAM",
+						"X-Query-Source-Component-Id": "codestream.o11y",
+						"Content-Type": "application/json",
+					},
 				},
 				tokenHolder.accessToken
 			);
