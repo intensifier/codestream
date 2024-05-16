@@ -171,7 +171,6 @@ export class ClmManager implements Disposable {
 			const errorRate = this.mergeResults(results.map(_ => _.errorRate));
 			const sampleSize = this.mergeResults(results.map(_ => _.sampleSize));
 
-			/* Deprecated, observability anomalies now being handled server-side
 			const anomalies =
 				this.anomaliesProvider.getLastObservabilityAnomaliesResponse(newRelicEntityGuid);
 			if (anomalies) {
@@ -198,7 +197,6 @@ export class ClmManager implements Disposable {
 					);
 				}
 			}
-			*/
 
 			const deploymentCommit = await this.getDeploymentCommitIfNeeded(newRelicEntityGuid, {
 				averageDuration,
