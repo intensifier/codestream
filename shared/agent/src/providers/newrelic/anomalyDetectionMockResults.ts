@@ -369,6 +369,7 @@ const anomalyDetectionMockResponseTemplate: GetObservabilityAnomaliesResponse = 
 					},
 					notificationText: "Average duration (ms) +34.41% since release CS42 on $date",
 					entityName: "WebPortal",
+					scope: "WebTransaction/JSP/browse/phone.jsp",
 				},
 			],
 		},
