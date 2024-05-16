@@ -158,7 +158,7 @@ export const ObservabilityAnomalyPanel = (props: {
 	const [titleHovered, setTitleHovered] = useState<boolean>(false);
 
 	const [currentEntityGuid, setEntityGuid] = useState(props.entityGuid);
-	const [currentAnomaly, setAnomaly] = useState(props.anomaly);
+	const [currentAnomaly, setCurrentAnomaly] = useState(props.anomaly);
 
 	const disposables: Disposable[] = [];
 
@@ -236,14 +236,11 @@ export const ObservabilityAnomalyPanel = (props: {
 
 		disposables.push(
 			HostApi.instance.on(OpenEditorViewNotificationType, e => {
-				if (e.entityGuid && e.entityGuid !== currentEntityGuid) {
+				if (e.entityGuid) {
 					setEntityGuid(e.entityGuid);
 				}
-				if (
-					e.anomaly &&
-					(e.anomaly.name !== currentAnomaly.name || e.anomaly.scope !== currentAnomaly.scope)
-				) {
-					setAnomaly(e.anomaly);
+				if (e.anomaly) {
+					setCurrentAnomaly(e.anomaly);
 				}
 			})
 		);
