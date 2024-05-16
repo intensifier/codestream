@@ -82,6 +82,7 @@ import {
 	WhatsNewNotificationType,
 	SessionTokenStatus,
 	DidChangeSessionTokenStatusNotificationType,
+	DidDetectObservabilityAnomaliesNotificationType,
 } from "@codestream/protocols/agent";
 import {
 	CSAccessTokenType,
@@ -667,18 +668,18 @@ export class CodeStreamSession {
 				this.echoReceived();
 				break;
 			case MessageType.AnomalyData:
-				// if (!(e.data instanceof Array)) return;
-				// for (let datum of e.data) {
-				// 	if (typeof datum === "object") {
-				// 		for (let entityGuid in datum) {
-				// 			this.agent.sendNotification(DidDetectObservabilityAnomaliesNotificationType, {
-				// 				entityGuid,
-				// 				duration: datum[entityGuid].durationAnomalies,
-				// 				errorRate: datum[entityGuid].errorRateAnomalies,
-				// 			});
-				// 		}
-				// 	}
-				// }
+				if (!(e.data instanceof Array)) return;
+				for (let datum of e.data) {
+					if (typeof datum === "object") {
+						for (let entityGuid in datum) {
+							this.agent.sendNotification(DidDetectObservabilityAnomaliesNotificationType, {
+								entityGuid,
+								duration: datum[entityGuid].durationAnomalies,
+								errorRate: datum[entityGuid].errorRateAnomalies,
+							});
+						}
+					}
+				}
 				break;
 		}
 	}
