@@ -23,11 +23,13 @@ import {
 	WebviewIpcNotificationMessage,
 	WebviewIpcRequestMessage,
 	isIpcRequestMessage,
-	isIpcResponseMessage
+	isIpcResponseMessage,
+	OpenUrlRequestType
 } from "@codestream/protocols/webview";
 import { WebviewLike } from "webviews/webviewLike";
 import { NotificationType, RequestType } from "vscode-languageclient";
 import { Container } from "../container";
+import { openUrl } from "../urlHandler";
 
 export class EditorController implements Disposable {
 	private _disposable: Disposable | undefined;
@@ -72,11 +74,7 @@ export class EditorController implements Disposable {
 
 				case IpcRoutes.Host:
 					if (isIpcRequestMessage(e)) {
-						webview.onIpcRequest(
-							new RequestType<any, any, any, any>(e.method),
-							e,
-							(type: any, params: unknown) => this.onWebviewRequest(webview, e)
-						);
+						this.onWebviewRequest(webview, e);
 						return;
 					}
 					this.onWebviewNotification(webview, e);
@@ -190,7 +188,18 @@ export class EditorController implements Disposable {
 				break;
 			}
 			case OpenErrorGroupRequestType.method: {
-				await Container.sidebar.openErrorGroup(e.params);
+				webview.onIpcRequest(OpenErrorGroupRequestType, e, async (_type, _params) => {
+					await Container.sidebar.openErrorGroup(_params);
+					return {
+						success: true
+					};
+				});
+				break;
+			}
+			case OpenUrlRequestType.method: {
+				webview.onIpcRequest(OpenUrlRequestType, e, async (_type, _params) => {
+					await openUrl(_params.url);
+				});
 				break;
 			}
 			default: {
