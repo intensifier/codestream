@@ -97,7 +97,9 @@ import {
 	LogoutReason,
 	EditorUndoType,
 	EditorRevealRangeRequestType,
-	EditorHighlightRangeRequestType
+	EditorHighlightRangeRequestType,
+	OpenErrorGroupNotificationType,
+	OpenErrorGroupNotification
 } from "@codestream/protocols/webview";
 import {
 	authentication,
@@ -529,6 +531,21 @@ export class SidebarController implements Disposable {
 			return;
 		}
 		this._sidebar!.notify(ViewAnomalyNotificationType, args);
+	}
+
+	@log()
+	async openErrorGroup(args: OpenErrorGroupNotification): Promise<void> {
+		if (this.visible) {
+			await this._sidebar!.show();
+		} else {
+			await this.show();
+		}
+
+		if (!this._sidebar) {
+			// it's possible that the webview is closing...
+			return;
+		}
+		this._sidebar!.notify(OpenErrorGroupNotificationType, args);
 	}
 
 	@log()

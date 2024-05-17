@@ -14,6 +14,7 @@ import { CodeStreamSession } from "../api/session";
 
 import {
 	IpcRoutes,
+	OpenErrorGroupRequestType,
 	OpenInBufferRequestType,
 	SaveFileRequestType,
 	ShellPromptFolderRequestType,
@@ -71,7 +72,11 @@ export class EditorController implements Disposable {
 
 				case IpcRoutes.Host:
 					if (isIpcRequestMessage(e)) {
-						this.onWebviewRequest(webview, e);
+						webview.onIpcRequest(
+							new RequestType<any, any, any, any>(e.method),
+							e,
+							(type: any, params: unknown) => this.onWebviewRequest(webview, e)
+						);
 						return;
 					}
 					this.onWebviewNotification(webview, e);
@@ -182,6 +187,10 @@ export class EditorController implements Disposable {
 						};
 					}
 				});
+				break;
+			}
+			case OpenErrorGroupRequestType.method: {
+				await Container.sidebar.openErrorGroup(e.params);
 				break;
 			}
 			default: {
