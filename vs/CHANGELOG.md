@@ -2,6 +2,10 @@
 
 ## [15.9.0] - 2024-6-3
 
+### Added
+
+- Adds support for stacked bar charts for query results
+
 ### Changed
 
 - Queries can now be submitted via the Enter key, with Shift+Enter creating a newline
