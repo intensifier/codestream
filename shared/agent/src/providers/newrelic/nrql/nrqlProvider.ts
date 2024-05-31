@@ -83,7 +83,6 @@ export class NrNRQLProvider {
 			return {
 				accountId,
 				results: response.results,
-
 				metadata: {
 					eventType: response?.rawResponse?.metadata?.eventType,
 					since: response?.rawResponse?.metadata?.rawSince,
