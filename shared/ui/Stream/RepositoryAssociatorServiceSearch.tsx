@@ -69,7 +69,7 @@ export const formatRepoResponse = (response, repos) => {
 				const id = repo.id || "";
 				const remoteUrl = remote.rawUrl;
 				if (remoteUrl && id) {
-					const name = repos[id] ? repos[id].name : "repo";
+					const name = repos[id]?.name || repo.name || "repo";
 					const label = `${name} (${remoteUrl})`;
 					results.push({
 						...repo,
