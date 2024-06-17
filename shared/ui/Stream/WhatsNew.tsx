@@ -87,7 +87,7 @@ export const WhatsNewPanel = () => {
 							You can now search for any APM, browser, mobile or OTel service to see how it's performing, without needing to have the repository open in your IDE.
 						</UpdateItem>
 						<UpdateItem>
-							<img src="https://images.codestream.com/misc/WN-infra-logs.png" />
+							<img src="https://images.codestream.com/misc/WN-service-search.png" />
 						</UpdateItem>
 					</Update>
 				</div>
