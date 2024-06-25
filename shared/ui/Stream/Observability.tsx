@@ -58,7 +58,7 @@ import {
 	usePrevious,
 } from "../utilities/hooks";
 import { HostApi } from "../webview-api";
-import { openPanel, setUserPreference } from "./actions";
+import { openPanel, setUserPreference, setUserPreferences } from "./actions";
 import { ALERT_SEVERITY_COLORS } from "./CodeError/index";
 import { EntityAssociator } from "./EntityAssociator";
 import Icon from "./Icon";
@@ -225,6 +225,9 @@ export const Observability = React.memo((props: Props) => {
 			teamId: team?.id,
 			anomalyData,
 			currentServiceSearchEntity: state.context.currentServiceSearchEntity,
+			repoFollowingType: preferences?.repoFollowingType || "AUTO",
+			followedRepos: preferences?.followedRepos || [],
+			followedReposWithNames: preferences?.followedReposWithNames || [],
 		};
 	}, shallowEqual);
 
@@ -235,9 +238,6 @@ export const Observability = React.memo((props: Props) => {
 	const [loadingObservabilityErrors, setLoadingObservabilityErrors] = useState<boolean>(false);
 	const [genericError, setGenericError] = useState<string>();
 	const [errorInboxError, setErrorInboxError] = useState<string>();
-	const [loadingAssignmentErrorsClick, setLoadingAssignmentErrorsClick] = useState<{
-		[errorGroupGuid: string]: boolean;
-	}>({});
 	const [loadingAssignments, setLoadingAssignments] = useState<boolean>(false);
 	const [hasEntities, setHasEntities] = useState<boolean>(false);
 	const [repoForEntityAssociator, setRepoForEntityAssociator] = useState<
@@ -1062,11 +1062,55 @@ export const Observability = React.memo((props: Props) => {
 	}, [derivedState.scmInfo]);
 
 	useEffect(() => {
+		if (derivedState.repoFollowingType === "AUTO") {
+			const reposWithO11yData = observabilityRepos
+				.filter(repo => repo.entityAccounts && repo.entityAccounts.length > 0)
+				.map(_ => {
+					return { name: _.repoNameOnNr, guid: _.repoGuid };
+				});
+			const newRepos = reposWithO11yData.filter(
+				repoO11y =>
+					!derivedState.followedReposWithNames.some(
+						followedRepo => followedRepo.guid === repoO11y.guid
+					)
+			);
+			const combinedRepos = [...derivedState.followedReposWithNames, ...newRepos];
+			const uniqueRepos = Array.from(
+				new Map(combinedRepos.map(repo => [repo.guid, repo])).values()
+			);
+			const guidList = uniqueRepos.map(repo => repo.guid);
+			dispatch(
+				setUserPreferences([
+					{ prefPath: ["followedReposWithNames"], value: uniqueRepos },
+					{ prefPath: ["followedRepos"], value: guidList },
+				])
+			);
+		}
+
 		const entityAccounts = observabilityRepos.flatMap(or => {
 			return or.entityAccounts;
 		});
 		dispatch(setEntityAccounts(entityAccounts));
 	}, [observabilityRepos]);
+
+	const handleClickFollowRepo = (repoObject: { name: string; guid: string }) => {
+		const { followedReposWithNames } = derivedState;
+		const exists = followedReposWithNames.some(
+			(repo: { name: string; guid: string }) => repo.guid === repoObject.guid
+		);
+		if (!exists) {
+			const updatedFollowedRepos = [...followedReposWithNames, repoObject].filter(
+				(repo, index, self) => index === self.findIndex(r => r.guid === repo.guid)
+			);
+			const guidList = updatedFollowedRepos.map(repo => repo.guid);
+			dispatch(
+				setUserPreferences([
+					{ prefPath: ["followedReposWithNames"], value: updatedFollowedRepos },
+					{ prefPath: ["followedRepos"], value: guidList },
+				])
+			);
+		}
+	};
 
 	useEffect(() => {
 		if (!_isEmpty(currentRepoId) && _isEmpty(observabilityRepos) && didMount) {
@@ -1192,6 +1236,7 @@ export const Observability = React.memo((props: Props) => {
 				const repoIsCollapsed = currentRepoId !== repo.repoId;
 				const isLoadingCurrentRepo =
 					loadingEntities === repo.repoId || (isRefreshing && !repoIsCollapsed);
+				const isNotFollowing = !derivedState.followedRepos.includes(repo.repoGuid);
 				return (
 					<>
 						<PaneNode>
@@ -1252,28 +1297,47 @@ export const Observability = React.memo((props: Props) => {
 								customPadding="2px 10px 2px 4px"
 							>
 								{derivedState.newRelicIsConnected && !repoIsCollapsed ? (
-									<Icon
-										name="refresh"
-										title="Refresh"
-										placement="bottom"
-										delay={1}
-										className={cx("clickable", {
-											"icon-override-actions-visible": true,
-										})}
-										onClick={e => {
-											e.preventDefault();
-											e.stopPropagation();
-											setCurrentRepoId(repo.repoId);
-											dispatch(
-												setUserPreference({
-													prefPath: ["currentO11yRepoId"],
-													value: repo.repoId,
-												})
-											);
-											setLoadingEntities(repo.repoId);
-											doRefresh(true);
-										}}
-									/>
+									<>
+										{derivedState.repoFollowingType === "MANUAL" && isNotFollowing && (
+											<Icon
+												name="plus"
+												title="Follow this Repository"
+												placement="bottom"
+												delay={1}
+												className={cx("clickable", {
+													"icon-override-actions-visible": true,
+												})}
+												style={{ marginRight: "-2px" }}
+												onClick={e => {
+													e.preventDefault();
+													e.stopPropagation();
+													handleClickFollowRepo({ guid: repo.repoGuid, name: repo.repoNameOnNr });
+												}}
+											/>
+										)}
+										<Icon
+											name="refresh"
+											title="Refresh"
+											placement="bottom"
+											delay={1}
+											className={cx("clickable", {
+												"icon-override-actions-visible": true,
+											})}
+											onClick={e => {
+												e.preventDefault();
+												e.stopPropagation();
+												setCurrentRepoId(repo.repoId);
+												dispatch(
+													setUserPreference({
+														prefPath: ["currentO11yRepoId"],
+														value: repo.repoId,
+													})
+												);
+												setLoadingEntities(repo.repoId);
+												doRefresh(true);
+											}}
+										/>
+									</>
 								) : (
 									<>&nbsp;</>
 								)}
