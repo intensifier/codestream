@@ -2,7 +2,7 @@ import { useAppDispatch, useAppSelector } from "@codestream/webview/utilities/ho
 import React, { useState } from "react";
 import { CodeStreamState } from "../store";
 import { Checkbox } from "../src/components/Checkbox";
-import { setUserPreference, setUserPreferences, closeModal } from "./actions";
+import { setUserPreference, closeModal } from "./actions";
 import { Dialog } from "../src/components/Dialog";
 import { RadioGroup, Radio } from "../src/components/RadioGroup";
 import Icon from "./Icon";
@@ -11,6 +11,16 @@ import cx from "classnames";
 import { isEmpty as _isEmpty } from "lodash";
 import { HostApi } from "../webview-api";
 import { useDidMount } from "../utilities/hooks";
+import styled from "styled-components";
+
+const NotficationSubHeaders = styled.div`
+	text-transform: uppercase;
+	font-weight: 800;
+	opacity: 0.7;
+	color: var(--text-color-subtle);
+	font-size: 11px;
+	margin-bottom: 8px;
+`;
 
 export const Notifications = props => {
 	const dispatch = useAppDispatch();
@@ -34,7 +44,7 @@ export const Notifications = props => {
 				? state.preferences.serviceNotifyAccountId
 				: "",
 			hasDesktopNotifications,
-			followedReposWithNames: state.preferences?.followedReposWithNames || [],
+			followedRepos: state.preferences?.followedRepos || [],
 		};
 	});
 	const [serviceNotifyTagValue, setServiceNotifyTagValue] = useState(
@@ -111,18 +121,10 @@ export const Notifications = props => {
 
 	const handleUnfollowRepoClick = (repoObject: { guid: string; name: string }) => {
 		const { guid } = repoObject;
-		const isFollowed = derivedState.followedReposWithNames.some(repo => repo.guid === guid);
+		const isFollowed = derivedState.followedRepos.some(repo => repo.guid === guid);
 		if (isFollowed) {
-			const newFollowedReposWithNames = derivedState.followedReposWithNames.filter(
-				repo => repo.guid !== guid
-			);
-			const guidList = newFollowedReposWithNames.map(repo => repo.guid);
-			dispatch(
-				setUserPreferences([
-					{ prefPath: ["followedReposWithNames"], value: newFollowedReposWithNames },
-					{ prefPath: ["followedRepos"], value: guidList },
-				])
-			);
+			const newFollowedRepos = derivedState.followedRepos.filter(repo => repo.guid !== guid);
+			dispatch(setUserPreference({ prefPath: ["followedRepos"], value: newFollowedRepos }));
 		}
 	};
 
@@ -166,16 +168,14 @@ export const Notifications = props => {
 											Notify me about services with performance problems
 										</div>
 									</Checkbox>
-									<div style={{ marginLeft: "30px" }} className="subtle">
+									<div style={{ marginLeft: "30px", fontSize: "smaller" }} className="subtle">
 										CodeStream will email you about services associated with the selected
 										repositories that are exhibiting performance problems.
 									</div>
 								</div>
 								{derivedState.notifyPerformanceIssues && (
 									<>
-										<div style={{ fontSize: "larger", marginBottom: "10px" }} className="subtle">
-											REPOSITORIES YOU ARE FOLLOWING
-										</div>
+										<NotficationSubHeaders>REPOSITORIES YOU ARE FOLLOWING</NotficationSubHeaders>
 										<RadioGroup
 											name="repo-following-type"
 											selectedValue={derivedState.repoFollowingType}
@@ -184,7 +184,7 @@ export const Notifications = props => {
 											<Radio value={"AUTO"}>Automatically follow any repository that I open</Radio>
 											<Radio value={"MANUAL"}>
 												Manually follow repositories
-												<div className="subtle">
+												<div style={{ fontSize: "smaller" }} className="subtle">
 													Hover over a repository's name in the CodeStream tree view and click on
 													the Follow icon.
 												</div>
@@ -192,7 +192,7 @@ export const Notifications = props => {
 										</RadioGroup>
 										{derivedState.repoFollowingType === "MANUAL" && (
 											<div style={{ marginTop: "6px" }}>
-												{derivedState.followedReposWithNames.map((_, index, array) => {
+												{derivedState.followedRepos.map((_, index, array) => {
 													return (
 														<div
 															style={{
@@ -218,12 +218,9 @@ export const Notifications = props => {
 												})}
 											</div>
 										)}
-										<div
-											style={{ fontSize: "larger", margin: "15px 0px 10px 0px" }}
-											className="subtle"
-										>
+										<NotficationSubHeaders style={{ margin: "15px 0px 8px 0px" }}>
 											SERVICES YOU WILL BE NOTIFIED ABOUT
-										</div>
+										</NotficationSubHeaders>
 										<RadioGroup
 											name="service-notify-type"
 											selectedValue={derivedState.serviceNotifyType}
