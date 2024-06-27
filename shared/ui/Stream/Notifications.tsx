@@ -1,5 +1,5 @@
 import { useAppDispatch, useAppSelector } from "@codestream/webview/utilities/hooks";
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { CodeStreamState } from "../store";
 import { Checkbox } from "../src/components/Checkbox";
 import { setUserPreference, closeModal } from "./actions";
@@ -24,6 +24,7 @@ const NotficationSubHeaders = styled.div`
 
 export const Notifications = props => {
 	const dispatch = useAppDispatch();
+	const elementRef = useRef<HTMLFormElement>(null);
 	const derivedState = useAppSelector((state: CodeStreamState) => {
 		const hasDesktopNotifications = state.ide.name === "VSC" || state.ide.name === "JETBRAINS";
 		return {
@@ -65,11 +66,29 @@ export const Notifications = props => {
 	const [originalServiceNotificationType, setOriginalServiceNotificationType] = useState(
 		derivedState.serviceNotifyType
 	);
+	const [formWidth, setFormWidth] = useState(0);
 
 	useDidMount(() => {
 		setOriginalRepoFollowingType(derivedState.repoFollowingType);
 		setOriginalServiceNotificationType(derivedState.serviceNotifyType);
+		setTagValueValidity(isTagValueValid(derivedState.serviceNotifyTagValue));
+		setStringValidity(!_isEmpty(derivedState.serviceNotifyStringName));
+		setAccountIdValidity(isAccountIdValid(derivedState.serviceNotifyAccountId));
 	});
+
+	useEffect(() => {
+		const handleResize = () => {
+			if (elementRef.current) {
+				const elementWidth = elementRef.current?.offsetWidth;
+				setFormWidth(elementWidth);
+			}
+		};
+		handleResize();
+		window.addEventListener("resize", handleResize);
+		return () => {
+			window.removeEventListener("resize", handleResize);
+		};
+	}, [elementRef]);
 
 	const isTagValueValid = (tagValue: string) =>
 		new RegExp("^\\s*\\w+\\s*:\\s*\\w+\\s*(,\\s*\\w+\\s*:\\s*\\w+\\s*)*$").test(tagValue);
@@ -136,13 +155,13 @@ export const Notifications = props => {
 		e.preventDefault();
 
 		if (originalRepoFollowingType !== derivedState.repoFollowingType) {
-			HostApi.instance.track("codestream/notifications/repo_following_option", {
+			HostApi.instance.track("codestream/notifications/repo_following_option changed", {
 				meta_data: `old_value: ${originalRepoFollowingType.toLowerCase()}; new_value: ${derivedState.repoFollowingType.toLowerCase()}`,
 				event_type: "change",
 			});
 		}
 		if (originalServiceNotificationType !== derivedState.serviceNotifyType) {
-			HostApi.instance.track("codestream/notifications/service_notification_option", {
+			HostApi.instance.track("codestream/notifications/service_notification_option changed", {
 				meta_data: `old_value: ${originalServiceNotificationType}; new_value: ${derivedState.serviceNotifyType}`,
 				event_type: "change",
 			});
@@ -153,7 +172,7 @@ export const Notifications = props => {
 
 	return (
 		<Dialog wide={true} title="Notification Settings" onClose={e => handleClose(e)}>
-			<form onSubmit={handleSubmit} className="standard-form vscroll">
+			<form ref={elementRef} onSubmit={handleSubmit} className="standard-form vscroll">
 				<fieldset className="form-body">
 					<div id="controls">
 						{derivedState.hasDesktopNotifications && (
@@ -190,34 +209,42 @@ export const Notifications = props => {
 												</div>
 											</Radio>
 										</RadioGroup>
-										{derivedState.repoFollowingType === "MANUAL" && (
-											<div style={{ marginTop: "6px" }}>
-												{derivedState.followedRepos.map((_, index, array) => {
-													return (
+										<div style={{ marginTop: "6px" }}>
+											{derivedState.followedRepos.map((_, index, array) => {
+												return (
+													<div
+														style={{
+															display: "flex",
+															marginBottom: index !== array.length - 1 ? "4px" : "0px",
+														}}
+													>
+														<div>
+															<Icon style={{ marginRight: "2px" }} name="repo" />
+														</div>
+
 														<div
 															style={{
-																display: "flex",
-																justifyContent: "space-between",
-																marginBottom: index !== array.length - 1 ? "4px" : "0px",
+																padding: "0px 25px 0px 10px",
+																wordWrap: "break-word",
+																width: `${formWidth - 45}px`,
 															}}
 														>
-															<div>
-																<Icon style={{ marginRight: "2px" }} name="repo" />
-																{_.name}
-															</div>
-															<div>
+															{_.name}
+														</div>
+														<div style={{ marginRight: "auto" }}>
+															{derivedState.repoFollowingType === "MANUAL" && (
 																<Icon
 																	style={{ marginRight: "4px" }}
 																	className="clickable"
 																	name="x"
 																	onClick={e => handleUnfollowRepoClick(_)}
 																/>
-															</div>
+															)}
 														</div>
-													);
-												})}
-											</div>
-										)}
+													</div>
+												);
+											})}
+										</div>
 										<NotficationSubHeaders style={{ margin: "15px 0px 8px 0px" }}>
 											SERVICES YOU WILL BE NOTIFIED ABOUT
 										</NotficationSubHeaders>
