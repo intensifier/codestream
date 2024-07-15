@@ -132,7 +132,21 @@ export class NrNRQLProvider {
 	}
 
 	replaceDoubleQuotesWithSingle(query: string): string {
-		return query.replace(/"/g, "'");
+		let result = "";
+		let insideSingleQuotes = false;
+
+		for (let i = 0; i < query.length; i++) {
+			if (query[i] === "'") {
+				insideSingleQuotes = !insideSingleQuotes;
+			}
+			if (query[i] === '"' && !insideSingleQuotes) {
+				result += "'";
+			} else {
+				result += query[i];
+			}
+		}
+
+		return result;
 	}
 
 	/**
