@@ -20,7 +20,10 @@ import { EllipsisMenu } from "./EllipsisMenu";
 import Icon from "./Icon";
 import Tooltip from "./Tooltip";
 import { parseId } from "../utilities/newRelic";
-
+import { TourTip } from "../src/components/TourTip";
+import { getSidebarLocation } from "../store/editorContext/reducer";
+import { isEmpty as _isEmpty } from "lodash-es";
+import { StepOneContinue, StepOneEnd } from "./O11yTourTips";
 const sum = (total, num) => total + Math.round(num);
 
 export function GlobalNav() {
@@ -37,6 +40,8 @@ export function GlobalNav() {
 				}
 			});
 		}
+
+		const hasEntityAccounts = !_isEmpty(state.context.entityAccounts);
 
 		return {
 			currentUserId: state.session.userId,
@@ -55,6 +60,9 @@ export function GlobalNav() {
 			ideName: state.ide.name,
 			showNrqlBuilder: state.ide.name === "VSC" || state.ide.name === "JETBRAINS",
 			showLogSearch: state.ide.name === "VSC" || state.ide.name === "JETBRAINS",
+			o11yTour: state.preferences.o11yTour ? state.preferences.o11yTour : "globalNav",
+			sidebarLocation: getSidebarLocation(state),
+			hasEntityAccounts,
 		};
 	});
 
@@ -127,8 +135,19 @@ export function GlobalNav() {
 	// Plural handling
 	const tooltipText = inviteCount < 2 ? "Invitation" : "Invitations";
 
-	// const selected = panel => activePanel === panel && !currentPullRequestId && !currentReviewId; // && !plusMenuOpen && !menuOpen;
-	const selected = panel => false;
+	const globalNavTourTipTitle =
+		derivedState.o11yTour === "globalNav" &&
+		derivedState.showNrqlBuilder &&
+		derivedState.showLogSearch &&
+		derivedState.hasEntityAccounts ? (
+			<StepOneContinue />
+		) : derivedState.o11yTour === "globalNav" &&
+		  derivedState.showNrqlBuilder &&
+		  derivedState.showLogSearch &&
+		  !derivedState.hasEntityAccounts ? (
+			<StepOneEnd />
+		) : undefined;
+
 	return React.useMemo(() => {
 		if (activePanel === WebviewPanels.Onboard) return null;
 		else if (activePanel === WebviewPanels.OnboardNewRelic) return null;
@@ -195,47 +214,58 @@ export function GlobalNav() {
 						)}
 					</label>
 
-					{derivedState.showNrqlBuilder && (
-						<label onClick={launchNrqlEditor} id="global-nav-query-label">
-							<span>
-								<Icon
-									name="terminal"
-									title="Query your data"
-									placement="bottom"
-									delay={1}
-									trigger={["hover"]}
-								/>
-							</span>
-						</label>
-					)}
+					<TourTip title={globalNavTourTipTitle} placement={"bottomLeft"}>
+						<div
+							style={{
+								backgroundColor: globalNavTourTipTitle
+									? "var(--panel-tool-background-color)"
+									: "inherit",
+								borderRadius: globalNavTourTipTitle ? "2px" : "none",
+								padding: globalNavTourTipTitle ? "1px 0px 0px 2px" : 0,
+							}}
+						>
+							{derivedState.showNrqlBuilder && (
+								<label onClick={launchNrqlEditor} id="global-nav-query-label">
+									<span>
+										<Icon
+											name="terminal"
+											title="Query your data"
+											placement="bottom"
+											delay={1}
+											trigger={["hover"]}
+										/>
+									</span>
+								</label>
+							)}
 
-					{derivedState.showLogSearch && (
-						<label onClick={launchLogSearch} id="global-nav-logs-label">
-							<span>
-								<Icon
-									name="logs"
-									title="View Logs"
-									placement="bottom"
-									delay={1}
-									trigger={["hover"]}
-								/>
-							</span>
-						</label>
-					)}
+							{derivedState.showLogSearch && (
+								<label onClick={launchLogSearch} id="global-nav-logs-label">
+									<span>
+										<Icon
+											name="logs"
+											title="View Logs"
+											placement="bottom"
+											delay={1}
+											trigger={["hover"]}
+										/>
+									</span>
+								</label>
+							)}
+						</div>
+					</TourTip>
 				</nav>
 			);
 		}
 	}, [
 		activePanel,
-
 		derivedState.currentEntityGuid,
 		currentReviewId,
 		currentCodeErrorGuid,
 		currentPullRequestId,
-
 		plusMenuOpen,
 		teamMenuOpen,
 		ellipsisMenuOpen,
 		inviteCount,
+		derivedState.o11yTour,
 	]);
 }

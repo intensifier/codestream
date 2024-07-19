@@ -28,7 +28,7 @@ import {
 } from "@codestream/protocols/agent";
 import cx from "classnames";
 import { head as _head, isEmpty as _isEmpty } from "lodash-es";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { shallowEqual } from "react-redux";
 import styled from "styled-components";
 import { setEditorContext } from "../store/editorContext/actions";
@@ -80,6 +80,8 @@ import { ObservabilityPreview } from "@codestream/webview/Stream/ObservabilityPr
 import { ObservabilityLoadingServiceEntities } from "@codestream/webview/Stream/ObservabilityLoading";
 import { ObservabilityServiceSearch } from "./ObservabilityServiceSearch";
 import { ObservabilityServiceEntity } from "./ObservabilityServiceEntity";
+import { StepTwoPerformanceData, StepTwoEntityAssociator, StepThree } from "./O11yTourTips";
+import { TourTip } from "../src/components/TourTip";
 
 interface Props {
 	paneState: PaneState;
@@ -198,6 +200,7 @@ export const Observability = React.memo((props: Props) => {
 		const team = state.teams[state.context.currentTeamId] || {};
 		const company =
 			!_isEmpty(state.companies) && !_isEmpty(team) ? state.companies[team.companyId] : undefined;
+		const hasEntityAccounts = !_isEmpty(state.context.entityAccounts);
 
 		return {
 			sessionStart: state.context.sessionStart,
@@ -226,6 +229,8 @@ export const Observability = React.memo((props: Props) => {
 			currentServiceSearchEntity: state.context.currentServiceSearchEntity,
 			repoFollowingType: preferences?.repoFollowingType || "AUTO",
 			followedRepos: preferences?.followedRepos || [],
+			o11yTour: preferences?.o11yTour || "",
+			hasEntityAccounts,
 		};
 	}, shallowEqual);
 
@@ -281,6 +286,7 @@ export const Observability = React.memo((props: Props) => {
 	const [isVulnPresent, setIsVulnPresent] = useState(false);
 	const { activeO11y } = derivedState;
 	const [hasDetectedTeamAnomalies, setHasDetectedTeamAnomalies] = useState(false);
+	const [tourTipRepo, setTourTipRepo] = useMemoizedState<string | undefined>(undefined);
 
 	const buildFilters = (repoIds: string[]) => {
 		return repoIds.map(repoId => {
@@ -1083,6 +1089,33 @@ export const Observability = React.memo((props: Props) => {
 		dispatch(setEntityAccounts(entityAccounts));
 	}, [observabilityRepos]);
 
+	useEffect(() => {
+		let repoWithEntityAccounts;
+
+		for (const repo of observabilityRepos) {
+			if (repo.repoId === currentRepoId && repo.entityAccounts.length > 0) {
+				setTourTipRepo(currentRepoId);
+				return; // Exit hook early if the currentRepoId has entityAccounts
+			}
+
+			if (!repoWithEntityAccounts && repo.entityAccounts.length > 0) {
+				repoWithEntityAccounts = repo.repoId;
+			}
+		}
+
+		// If currentRepoId does not have entityAccounts, set to first repo with entityAccounts
+		if (repoWithEntityAccounts) {
+			setTourTipRepo(repoWithEntityAccounts);
+		} else {
+			// If no repo has entityAccounts, set to currentRepoId
+			if (currentRepoId) {
+				setTourTipRepo(currentRepoId);
+			} else {
+				setTourTipRepo(undefined);
+			}
+		}
+	}, [observabilityRepos, currentRepoId]);
+
 	const handleClickFollowRepo = (repoObject: { name: string; guid: string }) => {
 		const { followedRepos } = derivedState;
 		const exists = followedRepos.some(
@@ -1164,9 +1197,11 @@ export const Observability = React.memo((props: Props) => {
 				setCurrentRepo(currentRepo, scmInfo);
 			}
 		}
-
-		//await fetchDocumentMarkers(textEditorUri);
 	};
+
+	const serviceSearchTourTipTitle = useMemo(() => {
+		return derivedState.o11yTour === "service-search" ? <StepThree /> : undefined;
+	}, [derivedState.o11yTour]);
 
 	return (
 		<Root>
@@ -1187,40 +1222,62 @@ export const Observability = React.memo((props: Props) => {
 					)}
 			</div>
 
-			<ObservabilityServiceSearch
-				anomalyDetectionSupported={anomalyDetectionSupported}
-				calculatingAnomalies={calculatingAnomalies}
-				currentRepoId={currentRepoId || ""}
-				entityGoldenMetrics={entityGoldenMetrics}
-				entityGoldenMetricsErrors={entityGoldenMetricsErrors}
-				errorInboxError={errorInboxError}
-				handleClickTopLevelService={handleClickTopLevelService}
-				hasServiceLevelObjectives={hasServiceLevelObjectives}
-				loadingGoldenMetrics={loadingGoldenMetrics}
-				loadingPane={loadingPane}
-				noErrorsAccess={noErrorsAccess}
-				observabilityAnomalies={observabilityAnomalies}
-				observabilityAssignments={observabilityAssignments}
-				observabilityErrors={observabilityErrors}
-				observabilityErrorsError={observabilityErrorsError}
-				recentIssues={recentIssues}
-				serviceLevelObjectiveError={serviceLevelObjectiveError}
-				serviceLevelObjectives={serviceLevelObjectives}
-				setIsVulnPresent={setIsVulnPresent}
-				isVulnPresent={isVulnPresent}
-				showErrors={false}
-				expandedEntity={expandedEntity}
-				setExpandedEntityCallback={setExpandedEntity}
-				setExpandedEntityUserPrefCallback={setExpandedEntityUserPref}
-				setCurrentRepoIdCallback={setCurrentRepoId}
-				doRefreshCallback={doRefresh}
-			/>
+			<TourTip title={serviceSearchTourTipTitle} placement={"bottom"}>
+				<div
+					style={{
+						backgroundColor: serviceSearchTourTipTitle
+							? "var(--panel-tool-background-color)"
+							: "inherit",
+						borderRadius: serviceSearchTourTipTitle ? "2px" : "none",
+						padding: serviceSearchTourTipTitle ? "1px 0px 4px 2px" : 0,
+					}}
+				>
+					<ObservabilityServiceSearch
+						anomalyDetectionSupported={anomalyDetectionSupported}
+						calculatingAnomalies={calculatingAnomalies}
+						currentRepoId={currentRepoId || ""}
+						entityGoldenMetrics={entityGoldenMetrics}
+						entityGoldenMetricsErrors={entityGoldenMetricsErrors}
+						errorInboxError={errorInboxError}
+						handleClickTopLevelService={handleClickTopLevelService}
+						hasServiceLevelObjectives={hasServiceLevelObjectives}
+						loadingGoldenMetrics={loadingGoldenMetrics}
+						loadingPane={loadingPane}
+						noErrorsAccess={noErrorsAccess}
+						observabilityAnomalies={observabilityAnomalies}
+						observabilityAssignments={observabilityAssignments}
+						observabilityErrors={observabilityErrors}
+						observabilityErrorsError={observabilityErrorsError}
+						recentIssues={recentIssues}
+						serviceLevelObjectiveError={serviceLevelObjectiveError}
+						serviceLevelObjectives={serviceLevelObjectives}
+						setIsVulnPresent={setIsVulnPresent}
+						isVulnPresent={isVulnPresent}
+						showErrors={false}
+						expandedEntity={expandedEntity}
+						setExpandedEntityCallback={setExpandedEntity}
+						setExpandedEntityUserPrefCallback={setExpandedEntityUserPref}
+						setCurrentRepoIdCallback={setCurrentRepoId}
+						doRefreshCallback={doRefresh}
+					/>
+				</div>
+			</TourTip>
 
 			{observabilityRepos.map(repo => {
 				const repoIsCollapsed = currentRepoId !== repo.repoId;
 				const isLoadingCurrentRepo =
 					loadingEntities === repo.repoId || (isRefreshing && !repoIsCollapsed);
 				const isNotFollowing = !derivedState.followedRepos.some(_ => _.guid === repo.repoGuid);
+				const repoHasEntityAccounts = repo.entityAccounts.length > 0;
+
+				const getServiceTourTipTitle = () => {
+					if (tourTipRepo === repo.repoId && derivedState.o11yTour === "services") {
+						return repoHasEntityAccounts ? <StepTwoPerformanceData /> : <StepTwoEntityAssociator />;
+					}
+					return undefined;
+				};
+
+				const serviceTourTipTitle = getServiceTourTipTitle();
 
 				return (
 					<>
@@ -1233,15 +1290,17 @@ export const Observability = React.memo((props: Props) => {
 											style={{ transform: "scale(0.7)", display: "inline-block" }}
 											name="repo"
 										/>{" "}
-										<span
-											style={{
-												fontSize: "11px",
-												fontWeight: "bold",
-												margin: "1px 2px 0px 0px",
-											}}
-										>
-											{repo.repoName?.toUpperCase()}
-										</span>
+										<TourTip title={serviceTourTipTitle} placement={"bottomLeft"}>
+											<span
+												style={{
+													fontSize: "11px",
+													fontWeight: "bold",
+													margin: "1px 2px 0px 0px",
+												}}
+											>
+												{repo.repoName?.toUpperCase()}
+											</span>
+										</TourTip>
 										<span
 											style={{
 												fontSize: "11px",
