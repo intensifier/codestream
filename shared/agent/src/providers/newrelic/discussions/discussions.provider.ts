@@ -3,6 +3,7 @@ import {
 	CloseCollaborationThreadRequest,
 	CloseCollaborationThreadRequestType,
 	CloseCollaborationThreadResponse,
+	CollaborationAttachment,
 	CollaborationComment,
 	CreateCollaborationCommentRequest,
 	CreateCollaborationCommentRequestType,
@@ -30,6 +31,7 @@ import { NewRelicGraphqlClient } from "../newRelicGraphqlClient";
 import { generateHash } from "./discussions.utils";
 import { mapNRErrorResponse, parseId } from "../utils";
 import {
+	AttachmentById,
 	BaseCollaborationResponse,
 	BootStrapResponse,
 	CollaborationContext,
@@ -572,7 +574,7 @@ export class DiscussionsProvider {
 	 */
 	private async parseComment(comment: CollaborationComment): Promise<CollaborationComment> {
 		comment = this.stripComment(comment);
-		comment = this.parseCommentForMentions(comment);
+		comment = await this.parseCommentForMentions(comment);
 		comment = await this.parseCommentForGrok(comment);
 
 		return comment;
@@ -603,12 +605,14 @@ export class DiscussionsProvider {
 	 * @param comment `CollaborationComment`
 	 * @returns `CollaborationComment`
 	 */
-	public parseCommentForMentions(comment: CollaborationComment): CollaborationComment {
+	public async parseCommentForMentions(
+		comment: CollaborationComment
+	): Promise<CollaborationComment> {
 		let match: RegExpExecArray | null;
 		let i = 0;
 
 		while ((match = this.collabTagRegex.exec(comment.body)) !== null) {
-			match?.forEach(e => {
+			match?.forEach(async e => {
 				const dom = htmlparser2.parseDocument(e);
 				const element = htmlparser2.DomUtils.findOne(
 					elem => elem.type === htmlparser2.ElementType.Tag && elem.name === "collab-mention",
@@ -634,10 +638,17 @@ export class DiscussionsProvider {
 						}
 						break;
 					case "FILE":
-						comment.body = comment.body.replace(
-							e,
-							`(screenshot attached; viewable through New Relic One)\n`
+						const fileId = htmlparser2.DomUtils.getAttributeValue(
+							element,
+							"data-mentionable-item-id"
 						);
+						if (fileId) {
+							const attachment = await this.getFileData(fileId);
+							comment.attachments?.push(attachment);
+							comment.body = comment.body.replace(e, ``);
+						} else {
+							comment.body = comment.body.replace(e, "(unknown attachment)");
+						}
 						break;
 					default:
 						Logger.log(`Unknown mention type ${dataType}`);
@@ -653,6 +664,36 @@ export class DiscussionsProvider {
 		}
 
 		return comment;
+	}
+
+	private async getFileData(fileId: string): Promise<CollaborationAttachment> {
+		try {
+			const getFileQuery = `
+				query($fileId: ID!) {
+					actor {
+						collaboration {
+							fileById(id: $fileId) {
+								id
+								fileName
+								filePath
+							}
+						}
+					}
+				}`;
+
+			const getFileQueryResponse = await this.graphqlClient.query<AttachmentById>(getFileQuery, {
+				fileId: fileId,
+			});
+
+			return getFileQueryResponse.actor.collaboration.fileById;
+		} catch (ex) {
+			ContextLogger.warn("getFileData failure", {
+				fileId,
+				error: ex,
+			});
+
+			throw ex;
+		}
 	}
 
 	/**
