@@ -19,7 +19,7 @@ export default function (vsRootPath: string) {
 				[
 					`CodeStream.VisualStudio.sln`,
 					"/t:restore,rebuild",
-					"/p:Configuration=Debug",
+					"/p:Configuration=Release",
 					"/verbosity:quiet",
 					"/p:Platform=x64",
 					"/p:DeployExtension=False"
