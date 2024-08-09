@@ -418,11 +418,18 @@ export class ObservabilityErrorsProvider {
 				// TODO fix me. remove this once we have a userId on a connection
 				userId = await this.graphqlClient.getUserId();
 			}
+
+			const endTime = new Date().getTime();
+			const startTime = endTime - 30 * 24 * 60 * 60 * 1000; // 30 days ago
+
 			return this.graphqlClient.query(
-				`query getAssignments($userId: Int, $emailAddress: String!) {
+				`query getAssignments($userId: Int, $emailAddress: String!, $startTime: EpochMilliseconds!, $endTime: EpochMilliseconds!) {
 				actor {
 				  errorsInbox {
-					errorGroups(filter: {isAssigned: true, assignment: {userId: $userId, userEmail: $emailAddress}}) {
+					errorGroups(
+					filter: {isAssigned: true, assignment: {userId: $userId, userEmail: $emailAddress}, states: UNRESOLVED}
+					timeWindow: {endTime: $endTime, startTime: $startTime}
+					sortBy: {field: LAST_OCCURRENCE_IN_WINDOW, direction: DESC}) {
 					  results {
 						url
 						state
@@ -438,6 +445,8 @@ export class ObservabilityErrorsProvider {
 				{
 					userId: userId,
 					emailAddress: emailAddress,
+					startTime: startTime,
+					endTime: endTime,
 				}
 			);
 		} catch (ex) {
@@ -1057,20 +1066,15 @@ export class ObservabilityErrorsProvider {
 
 			const result = await this.getErrorsInboxAssignments(me.email);
 			if (result) {
-				response.items = result.actor.errorsInbox.errorGroups.results
-					.filter(_ => {
-						// dont show IGNORED or RESOLVED errors
-						return !_.state || _.state === "UNRESOLVED";
-					})
-					.map((_: any) => {
-						return {
-							entityId: _.entityGuid,
-							errorGroupGuid: _.id,
-							errorClass: _.name,
-							message: _.message,
-							errorGroupUrl: _.url,
-						} as ObservabilityErrorCore;
-					});
+				response.items = result.actor.errorsInbox.errorGroups.results.map((_: any) => {
+					return {
+						entityId: _.entityGuid,
+						errorGroupGuid: _.id,
+						errorClass: _.name,
+						message: _.message,
+						errorGroupUrl: _.url,
+					} as ObservabilityErrorCore;
+				});
 
 				if (response.items && response.items.find(_ => !_.errorClass)) {
 					ContextLogger.warn("getObservabilityErrorAssignments has empties", {
