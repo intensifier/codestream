@@ -2,7 +2,7 @@
  * @jest-environment jsdom
  */
 import { describe, expect } from "@jest/globals";
-import { arrayDiff, asPastedText, escapeHtml, replaceHtml } from "../../utils";
+import { arrayDiff, asPastedText, escapeHtml, replaceHtml, transformMentions } from "../../utils";
 import { parseId } from "@codestream/webview/utilities/newRelic";
 
 describe("utils", () => {
@@ -163,5 +163,12 @@ describe("utils", () => {
 	test(".parseId(%s) (strict=false) (bad input)", () => {
 		// missing the last char, but still works for accountId
 		expect(parseId("MXxBUE18QVBQTElDQVRJT058Mj", false)?.accountId).toEqual(1);
+	});
+	test("remove non id information from mention", () => {
+		const text = `hello @[Eric Jones](<collab-mention data-value="@Eric Jones" data-type="NR_USER" data-mentionable-item-id="1000024919">Eric Jones</collab-mention>)`;
+		const transformed = transformMentions(text);
+		expect(transformed).toBe(
+			`hello <collab-mention data-value="@Eric Jones" data-type="NR_USER" data-mentionable-item-id="1000024919">Eric Jones</collab-mention>`
+		);
 	});
 });

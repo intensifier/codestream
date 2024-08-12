@@ -5,10 +5,7 @@ import { CodeStreamState } from "../store";
 import { ErrorRow } from "./ErrorRow";
 import { Row } from "./CrossPostIssueControls/IssuesPane";
 import { HostApi } from "@codestream/webview/webview-api";
-import {
-	IdeNames,
-	OpenEditorViewNotificationType,
-} from "@codestream/protocols/webview";
+import { IdeNames, OpenEditorViewNotificationType } from "@codestream/protocols/webview";
 import { CLMSettings } from "@codestream/protocols/api";
 import { setCurrentObservabilityAnomaly } from "@codestream/webview/store/context/actions";
 import { closeAllPanels } from "@codestream/webview/store/context/thunks";
@@ -88,14 +85,8 @@ export const ObservabilityAnomaliesGroup = React.memo((props: Props) => {
 					? "error_rate"
 					: ""
 			}`,
-			meta_data_4: `detection_method: ${
-				props.detectionMethod === "Release Based"
-					? "release_based"
-					: props.detectionMethod === "Time Based"
-					? "time_based"
-					: "<unknown>"
-			}`,
 			meta_data_3: `language: ${props.observabilityAnomalies[0]?.language ?? "<unknown>"}`,
+			meta_data_5: `anomaly_prefix: ${anomaly.name.split("/")[0]}`,
 			event_type: "click",
 		};
 

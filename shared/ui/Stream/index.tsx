@@ -18,7 +18,6 @@ import { PostsState } from "@codestream/webview/store/posts/types";
 import {
 	closeModal,
 	closePanel,
-	createPostAndCodemark,
 	markPostUnread,
 	openPanel,
 	setUserPreference,
@@ -40,6 +39,7 @@ import {
 	setCurrentCodeErrorData,
 	setCurrentCodemark,
 	setCurrentInstrumentationOptions,
+	setCurrentServiceSearchEntity,
 	setCurrentOrganizationInvite,
 	setCurrentPixieDynamicLoggingOptions,
 	setCurrentPullRequest,
@@ -57,7 +57,6 @@ import { ComponentUpdateEmitter, Disposable } from "../utils";
 import { HostApi } from "../webview-api";
 import { AcceptCompanyInvite } from "./AcceptCompanyInvite";
 import { SetUserPreferenceRequest } from "./actions.types";
-import { ActivityPanel } from "./ActivityPanel";
 import CancelButton from "./CancelButton";
 import { ChangeAvatar } from "./ChangeAvatar";
 import { ChangeCompanyName } from "./ChangeCompanyName";
@@ -68,8 +67,7 @@ import { ChangePhoneNumber } from "./ChangePhoneNumber";
 import { ChangeTeamName } from "./ChangeTeamName";
 import { ChangeUsername } from "./ChangeUsername";
 import { ChangeWorksOn } from "./ChangeWorksOn";
-import { CodemarkForm } from "./CodemarkForm";
-import { CodemarkView } from "./CodemarkView";
+import { ErrorRoadblock } from "./ErrorRoadblock";
 import ConfigureAzureDevOpsPanel from "./ConfigureAzureDevOpsPanel";
 import ConfigureEnterprisePanel from "./ConfigureEnterprisePanel";
 import ConfigureNewRelicPanel from "./ConfigureNewRelicPanel";
@@ -98,7 +96,7 @@ import { OnboardNewRelic } from "./OnboardNewRelic";
 import { PixieDynamicLoggingPanel } from "./PixieDynamicLogging/PixieDynamicLoggingPanel";
 import { ProfilePanel } from "./ProfilePanel";
 import { PRProviderErrorBanner } from "./PRProviderErrorBanner";
-import { ReviewForm } from "./ReviewForm";
+//import { ReviewForm } from "./ReviewForm";
 import { CLMSettings } from "./CLMSettings";
 import { Sidebar } from "./Sidebar";
 import { PRInfoModal } from "./SpatialView/PRInfoModal";
@@ -112,7 +110,6 @@ interface DispatchProps {
 	clearDynamicLogging: Function;
 	closeModal: Function;
 	closePanel: Function;
-	createPostAndCodemark: Function;
 	markPostUnread: Function;
 	openPanel: typeof openPanel;
 	setCurrentCodemark: typeof setCurrentCodemark;
@@ -481,6 +478,7 @@ export class SimpleStream extends PureComponent<Props> {
 						{activeModal === WebviewModals.ChangePassword && <ChangePassword />}
 						{activeModal === WebviewModals.ChangeTeamName && <ChangeTeamName />}
 						{activeModal === WebviewModals.ChangeCompanyName && <ChangeCompanyName />}
+						{activeModal === WebviewModals.ErrorRoadblock && <ErrorRoadblock />}
 						{activeModal === WebviewModals.FinishReview && <FinishReview />}
 						{activeModal === WebviewModals.Profile && <ProfilePanel />}
 						{activeModal === WebviewModals.Invite && <Invite />}
@@ -516,12 +514,11 @@ export class SimpleStream extends PureComponent<Props> {
 						<Modal translucent>
 							{activePanel === WebviewPanels.Tester && <Tester />}
 							{activePanel === WebviewPanels.FilterSearch && <FilterSearchPanel />}
-							{activePanel === WebviewPanels.Activity && <ActivityPanel />}
 							{activePanel === WebviewPanels.Export && <ExportPanel />}
 							{activePanel === WebviewPanels.PRInfo && (
 								<PRInfoModal onClose={() => this.props.closePanel()} />
 							)}
-							{activePanel === WebviewPanels.NewComment && (
+							{/* {activePanel === WebviewPanels.NewComment && (
 								<CodemarkForm
 									commentType="comment"
 									streamId={this.props.postStreamId}
@@ -532,8 +529,8 @@ export class SimpleStream extends PureComponent<Props> {
 									multiLocation={true}
 									dontAutoSelectLine={true}
 								/>
-							)}
-							{activePanel === WebviewPanels.NewIssue && (
+							)} */}
+							{/* {activePanel === WebviewPanels.NewIssue && (
 								<CodemarkForm
 									commentType="issue"
 									streamId={this.props.postStreamId}
@@ -544,7 +541,7 @@ export class SimpleStream extends PureComponent<Props> {
 									multiLocation={true}
 									dontAutoSelectLine={true}
 								/>
-							)}
+							)} */}
 							{activePanel === WebviewPanels.CodeError && (
 								<>
 									<DelayedRender>
@@ -553,7 +550,7 @@ export class SimpleStream extends PureComponent<Props> {
 								</>
 							)}
 							{activePanel === WebviewPanels.Flow && <FlowPanel />}
-							{activePanel === WebviewPanels.NewReview && <ReviewForm />}
+							{/* {activePanel === WebviewPanels.NewReview && <ReviewForm />} */}
 							{activePanel === WebviewPanels.PixieDynamicLogging && <PixieDynamicLoggingPanel />}
 							{activePanel === WebviewPanels.MethodLevelTelemetry && <MethodLevelTelemetryPanel />}
 							{activePanel === WebviewPanels.TransactionSpan && <TransactionSpanPanel />}
@@ -595,11 +592,6 @@ export class SimpleStream extends PureComponent<Props> {
 							)}
 						</Modal>
 					)}
-				{this.props.currentCodemarkId && (
-					<Modal translucent onClose={() => this.props.setCurrentCodemark()}>
-						<CodemarkView />
-					</Modal>
-				)}
 				{/* {false && this.props.currentCodeErrorId && (
 					<Modal onClose={() => this.props.setCurrentCodeError()}>
 						<CodeErrorView />
@@ -758,10 +750,10 @@ export class SimpleStream extends PureComponent<Props> {
 			const state = this.context.store.getState();
 			const newPostEntryPoint =
 				state && state.context ? state.context.newPostEntryPoint : undefined;
-			retVal = await this.props.createPostAndCodemark(
-				attributes,
-				newPostEntryPoint || "Global Nav"
-			);
+			// retVal = await this.props.createPostAndCodemark(
+			// 	attributes,
+			// 	newPostEntryPoint || "Global Nav"
+			// );
 			this.props.closePanel();
 		} finally {
 			this.props.setNewPostEntry(undefined);
@@ -833,13 +825,13 @@ export default connect(mapStateToProps, {
 	clearDynamicLogging,
 	closeModal,
 	closePanel,
-	createPostAndCodemark,
 	markPostUnread,
 	openPanel,
 	setCurrentCodemark,
 	editCodemark,
 	setCurrentCodeErrorData,
 	setCurrentInstrumentationOptions,
+	setCurrentServiceSearchEntity,
 	setCurrentPixieDynamicLoggingOptions,
 	setCurrentPullRequest,
 	setCurrentOrganizationInvite,

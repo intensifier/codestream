@@ -95,7 +95,6 @@ import {
 	GetReviewResponse,
 	GetStreamRequest,
 	GetTeamRequest,
-	GetUnreadsRequest,
 	GetUserRequest,
 	InviteUserRequest,
 	JoinCompanyRequest,
@@ -132,7 +131,6 @@ import {
 	SharePostViaServerRequest,
 	ThirdPartyProviderSetInfoRequest,
 	UnarchiveStreamRequest,
-	Unreads,
 	UpdateCodeErrorRequest,
 	UpdateCompanyRequest,
 	UpdateCompanyRequestType,
@@ -196,7 +194,6 @@ import {
 	CSGetStreamsResponse,
 	CSGetTeamResponse,
 	CSGetTeamsResponse,
-	CSGetTelemetryKeyResponse,
 	CSGetUserResponse,
 	CSGetUsersResponse,
 	CSInviteUserRequest,
@@ -274,7 +271,6 @@ import {
 } from "../apiProvider";
 import { CodeStreamPreferences } from "../preferences";
 import { BroadcasterEvents } from "./events";
-import { CodeStreamUnreads } from "./unreads";
 import { clearResolvedFlag } from "@codestream/utils/api/codeErrorCleanup";
 import { ResponseError } from "vscode-jsonrpc/lib/messages";
 import { parseId } from "../../providers/newrelic/utils";
@@ -298,12 +294,12 @@ export class CodeStreamApiProvider implements ApiProvider {
 	private _events: BroadcasterEvents | undefined;
 	private readonly _middleware: CodeStreamApiMiddleware[] = [];
 	private _pubnubSubscribeKey: string | undefined;
+	private _pubnubCipherKey: string | undefined;
 	private _broadcasterToken: string | undefined;
-	private _socketCluster: { host: string; port: string; ignoreHttps?: boolean } | undefined;
+	private _isV3BroadcasterToken: boolean = false;
 	private _subscribedMessageTypes: Set<MessageType> | undefined;
 	private _teamId: string | undefined;
 	private _team: CSTeam | undefined;
-	private _unreads: CodeStreamUnreads | undefined;
 	private _userId: string | undefined;
 	private _preferences: CodeStreamPreferences | undefined;
 	private _features: CSApiFeatures | undefined;
@@ -595,8 +591,13 @@ export class CodeStreamApiProvider implements ApiProvider {
 			response.accessTokenInfo
 		);
 		this._pubnubSubscribeKey = response.pubnubKey;
-		this._broadcasterToken = response.broadcasterToken || response.pubnubToken;
-		this._socketCluster = response.socketCluster;
+		this._pubnubCipherKey = response.pubnubCipherKey;
+		if (response.broadcasterV3Token) {
+			this._broadcasterToken = response.broadcasterV3Token;
+			this._isV3BroadcasterToken = true;
+		} else {
+			this._broadcasterToken = response.broadcasterToken;
+		}
 
 		this._teamId = team.id;
 		this._team = team;
@@ -676,11 +677,6 @@ export class CodeStreamApiProvider implements ApiProvider {
 
 		const { session, users } = SessionContainer.instance();
 		const me = await users.getMe();
-		if (types === undefined || types.includes(MessageType.Unreads)) {
-			this._unreads = new CodeStreamUnreads(this);
-			this._unreads.onDidChange(this.onUnreadsChanged, this);
-			this._unreads.compute(me.lastReads, me.lastReadItems);
-		}
 		if (types === undefined || types.includes(MessageType.Preferences)) {
 			this._preferences = new CodeStreamPreferences(me.preferences);
 			this._preferences.onDidChange(preferences => {
@@ -693,14 +689,16 @@ export class CodeStreamApiProvider implements ApiProvider {
 			this._httpsAgent instanceof HttpsAgent || this._httpsAgent instanceof HttpsProxyAgent
 				? this._httpsAgent
 				: undefined;
+		Logger.log(`Invoking broadcaster with ${this._isV3BroadcasterToken ? "V3" : "V2"} token`);
 		this._events = new BroadcasterEvents({
 			accessToken: tokenHolder.accessToken!,
 			pubnubSubscribeKey: this._pubnubSubscribeKey,
+			pubnubCipherKey: this._pubnubCipherKey,
 			broadcasterToken: this._broadcasterToken!,
+			isV3Token: this._isV3BroadcasterToken,
 			api: this,
 			httpsAgent,
 			strictSSL: this._strictSSL,
-			socketCluster: this._socketCluster,
 			supportsEcho: session.isOnPrem && (!!session.apiCapabilities.echoes || false),
 		});
 		this._events.onDidReceiveMessage(this.onPubnubMessageReceivedWithBlocking, this);
@@ -767,10 +765,6 @@ export class CodeStreamApiProvider implements ApiProvider {
 				e.data = await SessionContainer.instance().posts.resolve(e, { onlyIfNeeded: false });
 				if (e.data == null || e.data.length === 0) return;
 
-				if (this._unreads !== undefined) {
-					this._unreads.update(e.data as CSPost[], oldPosts);
-				}
-
 				await this.fetchAndStoreUnknownAuthors(e.data as CSPost[]);
 
 				break;
@@ -831,12 +825,6 @@ export class CodeStreamApiProvider implements ApiProvider {
 				}
 
 				let me = await usersManager.getMe();
-				const lastReads = {
-					...(this._unreads ? (await this._unreads.get()).lastReads : me.lastReads),
-				};
-				const lastReadItems = {
-					...(this._unreads ? (await this._unreads.get()).lastReadItems : me.lastReadItems),
-				};
 
 				const userPreferencesBefore = JSON.stringify(me.preferences);
 
@@ -849,18 +837,14 @@ export class CodeStreamApiProvider implements ApiProvider {
 				e.data = [me];
 
 				try {
-					if (
-						this._unreads !== undefined &&
-						(!Objects.shallowEquals(lastReads, me.lastReads || {}) ||
-							!Objects.shallowEquals(lastReadItems, me.lastReadItems || {}))
-					) {
-						this._unreads.compute(me.lastReads, me.lastReadItems);
-					}
 					if (!this._preferences) {
 						this._preferences = new CodeStreamPreferences(me.preferences);
 					}
 					if (me.preferences && JSON.stringify(me.preferences) !== userPreferencesBefore) {
 						this._preferences.update(me.preferences);
+					}
+					if (me.broadcasterV3Token && this._events) {
+						this._events.setV3BroadcasterToken(me.broadcasterV3Token);
 					}
 				} catch {
 					debugger;
@@ -872,10 +856,6 @@ export class CodeStreamApiProvider implements ApiProvider {
 		this._onDidReceiveMessage.fire(e as RTMessage);
 	}
 
-	private onUnreadsChanged(e: Unreads) {
-		this._onDidReceiveMessage.fire({ type: MessageType.Unreads, data: e });
-	}
-
 	grantBroadcasterChannelAccess(token: string, channel: string): Promise<{}> {
 		return this.put(`/grant/${channel}`, {}, token);
 	}
@@ -883,24 +863,6 @@ export class CodeStreamApiProvider implements ApiProvider {
 	@log()
 	private getMe() {
 		return this.get<CSGetMeResponse>("/users/me", tokenHolder.accessToken);
-	}
-
-	@log()
-	async getUnreads(request: GetUnreadsRequest) {
-		if (this._unreads === undefined) {
-			return {
-				unreads: {
-					lastReads: {},
-					lastReadItems: {},
-					mentions: {},
-					unreads: {},
-					totalMentions: 0,
-					totalUnreads: 0,
-				},
-			};
-		}
-
-		return { unreads: await this._unreads!.get() };
 	}
 
 	@log()
@@ -2006,15 +1968,6 @@ export class CodeStreamApiProvider implements ApiProvider {
 	}
 
 	@log()
-	async getTelemetryKey(): Promise<string> {
-		const telemetrySecret = "84$gTe^._qHm,#D";
-		const response = await this.get<CSGetTelemetryKeyResponse>(
-			`/no-auth/telemetry-key?secret=${encodeURIComponent(telemetrySecret)}`
-		);
-		return response.key;
-	}
-
-	@log()
 	async getApiCapabilities(): Promise<CSApiCapabilities> {
 		const response = await this.get<CSGetApiCapabilitiesResponse>(`/no-auth/capabilities`);
 		return response.capabilities;
@@ -2566,19 +2519,22 @@ export class CodeStreamApiProvider implements ApiProvider {
 			let resp: Response | undefined;
 			let retryCount = 0;
 			let triedRefresh = false;
+			let responseBody = "";
 			if (json === undefined) {
 				while (!resp) {
 					[resp, retryCount] = await this.fetchClient.fetchCore(0, absoluteUrl, init);
+					if (!resp.ok) {
+						const resp2 = resp.clone();
+						responseBody = (await resp2.text()) ?? "";
+					}
 					if (
 						!triedRefresh &&
 						!resp.ok &&
-						resp.status === 403 &&
+						(resp.status === 403 || resp.status === 401) &&
 						refreshToken &&
 						init?.headers instanceof Headers
 					) {
-						const resp2 = resp.clone();
-						const jsonData = (await resp2.json()) as { error: string };
-						if (jsonData?.error && jsonData.error.match(/token expired/)) {
+						if (responseBody.match(/token expired/) || resp.status === 401) {
 							Logger.log(
 								"On CodeStream API request, token was found to be expired, attempting to refresh..."
 							);
@@ -2588,9 +2544,9 @@ export class CodeStreamApiProvider implements ApiProvider {
 								Logger.log("NR access token successfully refreshed, trying request again...");
 								token = tokenInfo.accessToken;
 								if (tokenInfo.tokenType === CSAccessTokenType.ACCESS_TOKEN) {
-									init.headers.set("x-access-token", token);
+									init?.headers.set("x-access-token", token);
 								} else {
-									init.headers.set("x-id-token", token);
+									init?.headers.set("x-id-token", token);
 								}
 								//init.headers.set("Authorization", `Bearer ${token}`);
 								triedRefresh = true;
@@ -2599,6 +2555,8 @@ export class CodeStreamApiProvider implements ApiProvider {
 								Logger.warn("Exception thrown refreshing NR access token:", ex);
 								// allow the original (failed) flow to continue, more meaningful than throwing an exception on refresh
 							}
+						} else {
+							Logger.warn(`Non-expired token found with ${resp.status} error, not refreshing`);
 						}
 					}
 				}
@@ -2624,14 +2582,14 @@ export class CodeStreamApiProvider implements ApiProvider {
 					} catch (ex) {
 						Logger.error(
 							ex,
-							`API(${id}): ${method} ${sanitizedUrl}: Middleware(${mw.name}).onResponse FAILED`
+							`API(${id}): ${method} ${this.baseUrl} ${sanitizedUrl}: Middleware(${mw.name}).onResponse FAILED`
 						);
 					}
 				}
 			}
 
 			if (resp !== undefined && !resp.ok) {
-				traceResult = `API(${id}): FAILED(${retryCount}x) ${method} ${sanitizedUrl}`;
+				traceResult = `API(${id}): FAILED(${retryCount}x) ${method} ${this.baseUrl} ${sanitizedUrl} ${resp.status}`;
 				Container.instance().errorReporter.reportBreadcrumb({
 					message: traceResult,
 					category: "apiErrorResponse",

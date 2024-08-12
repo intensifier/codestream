@@ -11,12 +11,15 @@ describe("newRelicProvider", () => {
 			{} as any,
 			{} as any,
 			{} as any,
+			{} as any,
 			{} as any
 		);
 		const asdf = goldenSignalsProvider.getGoldenSignalsEntity({} as any, {
 			repoId: "123",
 			repoName: "repo1",
 			repoRemote: "remote",
+			repoGuid: "guid123",
+			repoNameOnNr: "repo1",
 			hasCodeLevelMetricSpanData: true,
 			entityAccounts: [
 				{
@@ -37,12 +40,15 @@ describe("newRelicProvider", () => {
 			{} as any,
 			{} as any,
 			{} as any,
+			{} as any,
 			{} as any
 		);
 		const asdf = goldenSignalsProvider.getGoldenSignalsEntity({} as any, {
 			repoId: "123",
 			repoName: "repo1",
 			repoRemote: "remote",
+			repoGuid: "guid123",
+			repoNameOnNr: "repo1",
 			hasCodeLevelMetricSpanData: true,
 			entityAccounts: [
 				{
@@ -72,12 +78,15 @@ describe("newRelicProvider", () => {
 			{} as any,
 			{} as any,
 			{} as any,
+			{} as any,
 			{} as any
 		);
 		const asdf = goldenSignalsProvider.getGoldenSignalsEntity({} as any, {
 			repoId: "123",
 			repoName: "repo1",
 			repoRemote: "remote",
+			repoGuid: "guid123",
+			repoNameOnNr: "repo1",
 			hasCodeLevelMetricSpanData: true,
 			entityAccounts: [
 				{
@@ -110,6 +119,7 @@ describe("newRelicProvider", () => {
 	});
 	it("getBestEntity-basedOnpreferences", () => {
 		const goldenSignalsProvider = new GoldenSignalsProvider(
+			{} as any,
 			{} as any,
 			{} as any,
 			{} as any,
@@ -155,6 +165,8 @@ describe("newRelicProvider", () => {
 				repoId: "555",
 				repoName: "repo1",
 				repoRemote: "remote",
+				repoGuid: "guid123",
+				repoNameOnNr: "repo1",
 				hasCodeLevelMetricSpanData: true,
 				entityAccounts: [
 					{
@@ -219,7 +231,8 @@ describe("newRelicProvider", () => {
 			graphqlClient as any,
 			{} as any,
 			{} as any,
-			deploymentProviderStub as any
+			deploymentProviderStub as any,
+			{} as any
 		);
 
 		const response = (await goldenSignalsProvider.getEntityLevelGoldenMetrics(

@@ -21,8 +21,6 @@ import {
 	CreateExternalPostRequest,
 	CreatePostRequest,
 	CreatePostResponse,
-	CSAsyncError,
-	CSGrokStream,
 	DeclineInviteRequest,
 	DeclineInviteResponse,
 	DeleteCodeErrorRequest,
@@ -75,8 +73,6 @@ import {
 	GetStreamResponse,
 	GetTeamRequest,
 	GetTeamResponse,
-	GetUnreadsRequest,
-	GetUnreadsResponse,
 	GetUserRequest,
 	GetUserResponse,
 	InviteUserRequest,
@@ -116,7 +112,6 @@ import {
 	ThirdPartyProviderSetInfoRequest,
 	UnarchiveStreamRequest,
 	UnarchiveStreamResponse,
-	Unreads,
 	UpdateCodeErrorRequest,
 	UpdateCodeErrorResponse,
 	UpdateInvisibleRequest,
@@ -238,16 +233,6 @@ export interface CodeErrorsRTMessage {
 	data: CSCodeError[];
 }
 
-export interface AsyncErrorRTMessage {
-	type: MessageType.AsyncError;
-	data: CSAsyncError[];
-}
-
-export interface GrokStreamRTMessage {
-	type: MessageType.GrokStream;
-	data: CSGrokStream[];
-}
-
 export interface AnomalyDataRTMessage {
 	type: MessageType.AnomalyData;
 	data: any;
@@ -261,11 +246,6 @@ export interface StreamsRTMessage {
 export interface TeamsRTMessage {
 	type: MessageType.Teams;
 	data: CSTeam[];
-}
-
-export interface UnreadsRTMessage {
-	type: MessageType.Unreads;
-	data: Unreads;
 }
 
 export interface UsersRTMessage {
@@ -303,10 +283,7 @@ export type RTMessage =
 	| CodeErrorsRTMessage
 	| StreamsRTMessage
 	| TeamsRTMessage
-	| UnreadsRTMessage
 	| UsersRTMessage
-	| AsyncErrorRTMessage
-	| GrokStreamRTMessage
 	| AnomalyDataRTMessage
 	| EchoMessage;
 
@@ -334,13 +311,12 @@ export interface ApiProvider {
 
 	grantBroadcasterChannelAccess(token: string, channel: string): Promise<{}>;
 
-	getUnreads(request: GetUnreadsRequest): Promise<GetUnreadsResponse>;
 	updatePreferences(request: UpdatePreferencesRequest): Promise<UpdatePreferencesResponse>;
 	updateInvisible(request: UpdateInvisibleRequest): Promise<UpdateInvisibleResponse>;
 	updateStatus(request: UpdateStatusRequest): Promise<UpdateStatusResponse>;
 	getPreferences(): Promise<GetPreferencesResponse>;
 	updatePresence(request: UpdatePresenceRequest): Promise<UpdatePresenceResponse>;
-	getTelemetryKey(): Promise<string>;
+
 	getApiCapabilities(): Promise<CSApiCapabilities>;
 
 	// createFileStream(request: CreateFileStreamRequest): Promise<CreateFileStreamResponse>;

@@ -12,21 +12,32 @@ import { useAppDispatch, useAppSelector } from "@codestream/webview/utilities/ho
 import { WebviewPanels, SidebarPanes, CSPossibleAuthDomain } from "@codestream/protocols/api";
 import { CodeStreamState } from "../store";
 import { isFeatureEnabled } from "../store/apiVersioning/reducer";
-import { openModal, setProfileUser } from "../store/context/actions";
+import { openModal } from "../store/context/actions";
+import { setUserPreference } from "./actions";
 import { HostApi } from "../webview-api";
 import { openPanel } from "./actions";
 import Icon from "./Icon";
 import Menu from "./Menu";
 import { AVAILABLE_PANES } from "./Sidebar";
 import { EMPTY_STATUS } from "./StartWork";
-import { setApiDemoMode } from "@codestream/webview/store/codeErrors/api/apiResolver";
-import { setDemoMode } from "@codestream/webview/store/codeErrors/actions";
 import { shallowEqual } from "react-redux";
+import { isCurrentUserInternal } from "../store/users/reducer";
 
 const RegionSubtext = styled.div`
 	font-size: smaller;
 	margin: 0 0 0 21px;
 	color: var(--text-color-subtle);
+`;
+
+const TopLabelStyle = styled.div`
+	small {
+		font-size: smaller;
+		color: var(--text-color-subtle);
+	}
+	big {
+		font-size: larger;
+		color: var(--text-color-highlight);
+	}
 `;
 
 export const MailHighlightedIconWrapper = styled.div`
@@ -62,6 +73,7 @@ export function EllipsisMenu(props: EllipsisMenuProps) {
 		const { environmentHosts, environment, isProductionCloud } = state.configs;
 		const currentHost = environmentHosts?.find(host => host.shortName === environment);
 		const supportsMultiRegion = isFeatureEnabled(state, "multiRegion");
+		const showNotificationsMenu = isFeatureEnabled(state, "showNotificationsMenu");
 
 		let currentCompanyId;
 		for (const key in companies) {
@@ -120,6 +132,8 @@ export function EllipsisMenu(props: EllipsisMenuProps) {
 			nrUserId: user?.nrUserId,
 			ide: state.ide,
 			demoMode: state.codeErrors.demoMode,
+			showNotificationsMenu,
+			isInternalUser: isCurrentUserInternal(state),
 		};
 	}, shallowEqual);
 
@@ -261,60 +275,20 @@ export function EllipsisMenu(props: EllipsisMenuProps) {
 
 	const menuItems = [] as any;
 
-	interface SubmenuOption {
-		label: string;
-		action?: () => void;
-	}
-	let accountSubmenu: SubmenuOption[] = [];
-
-	accountSubmenu = [
-		{
-			label: "View Profile",
-			action: () => {
-				dispatch(setProfileUser(derivedState.currentUserId));
-				popup(WebviewModals.Profile);
-			},
-		},
-		{ label: "Change Profile Photo", action: () => popup(WebviewModals.ChangeAvatar) },
-		{ label: "Change Username", action: () => popup(WebviewModals.ChangeUsername) },
-		{ label: "-" },
-		{ label: "Sign Out", action: () => handleLogout() },
-	];
-
-	menuItems.push(
-		{
-			label: "Account",
-			action: "account",
-			submenu: [
-				{
-					label: "View Profile",
-					action: () => {
-						dispatch(setProfileUser(derivedState.currentUserId));
-						popup(WebviewModals.Profile);
-					},
-				},
-				{ label: "Change Username", action: () => popup(WebviewModals.ChangeUsername) },
-				{ label: "-" },
-				{ label: "Sign Out", action: () => dispatch(logout()) },
-			],
-		}
-		// {
-		// 	label: "Notifications",
-		// 	action: () => dispatch(openModal(WebviewModals.Notifications)),
-		// }
-	);
-
 	menuItems.push(
 		...[
-			{ label: "-" },
 			{
 				label: (
-					<>
-						<h3>{derivedState.currentOrg?.organization_name}</h3>
-						{derivedState.currentHost && derivedState.hasMultipleEnvironments && (
-							<small>{derivedState.currentHost.name}</small>
-						)}
-					</>
+					<TopLabelStyle>
+						<div>
+							<big>{derivedState.currentOrg?.organization_name}</big>
+							{derivedState.currentHost && derivedState.hasMultipleEnvironments && (
+								<small> ({derivedState.currentHost.name})</small>
+							)}
+						</div>
+
+						<small>{derivedState.currentUserEmail}</small>
+					</TopLabelStyle>
 				),
 				key: "companyHeader",
 				noHover: true,
@@ -326,59 +300,71 @@ export function EllipsisMenu(props: EllipsisMenuProps) {
 		].filter(Boolean)
 	);
 
-	menuItems.push(
-		{
-			label: "Help",
-			key: "help",
-			submenu: [
-				{
-					label: "What's New",
-					key: "whatsnew",
-					action: () => {
-						HostApi.instance.notify(OpenEditorViewNotificationType, {
-							panel: "whatsnew",
-							title: "What's New",
-							entryPoint: "profile",
-							ide: {
-								name: derivedState.ide.name,
-							},
-						});
-					},
-				},
-				{
-					label: "Documentation",
-					key: "documentation",
-					action: () => openUrl("https://docs.newrelic.com/docs/codestream"),
-				},
-				//{
-				//	label: "Keybindings",
-				//	key: "keybindings",
-				//	action: () => dispatch(openModal(WebviewModals.Keybindings)),
-				//},
-				// {
-				// 	label: "Getting Started Guide",
-				// 	key: "getting-started",
-				// 	action: () => dispatch(openPanel(WebviewPanels.GettingStarted))
-				// },
-				{
-					label: "Support",
-					key: "issue",
-					action: () => openUrl("https://one.newrelic.com/help-xp"),
-				},
-			],
-		},
-		{ label: "-" }
-	);
+	if (derivedState.showNotificationsMenu) {
+		menuItems.push({
+			label: "Notifications",
+			action: () => dispatch(openModal(WebviewModals.Notifications)),
+		});
+	}
 
-	let versionStatement = `This is CodeStream version ${derivedState.pluginVersion}`;
+	menuItems.push({
+		label: "Help",
+		key: "help",
+		submenu: [
+			{
+				label: "What's New",
+				key: "whatsnew",
+				action: () => {
+					HostApi.instance.notify(OpenEditorViewNotificationType, {
+						panel: "whatsnew",
+						title: "What's New",
+						entryPoint: "profile",
+						ide: {
+							name: derivedState.ide.name,
+						},
+					});
+				},
+			},
+			{
+				label: "Documentation",
+				key: "documentation",
+				action: () => openUrl("https://docs.newrelic.com/docs/codestream"),
+			},
+			//{
+			//	label: "Keybindings",
+			//	key: "keybindings",
+			//	action: () => dispatch(openModal(WebviewModals.Keybindings)),
+			//},
+			// {
+			// 	label: "Getting Started Guide",
+			// 	key: "getting-started",
+			// 	action: () => dispatch(openPanel(WebviewPanels.GettingStarted))
+			// },
+			{
+				label: "Support",
+				key: "issue",
+				action: () => openUrl("https://one.newrelic.com/help-xp"),
+			},
+		],
+	});
+
+	menuItems.push({ label: "Sign Out", action: () => handleLogout() });
+
+	let versionStatement = `CodeStream version ${derivedState.pluginVersion}`;
 	if (!derivedState.isProductionCloud || derivedState.hasMultipleEnvironments) {
 		versionStatement += ` (${derivedState.environment.toLocaleUpperCase()})`;
 	}
+
 	const demoClick = e => {
 		e.preventDefault();
-		const nextDemoMode = !derivedState.demoMode.enabled;
-		setApiDemoMode(nextDemoMode);
-		dispatch(setDemoMode(nextDemoMode));
+		// const nextDemoMode = !derivedState.demoMode.enabled;
+		// setApiDemoMode(nextDemoMode);
+		// dispatch(setDemoMode(nextDemoMode));
+		// dispatch(setUserPreference({ prefPath: ["demoMode"], value: !derivedState.demoMode }));
+		if (derivedState.isInternalUser) {
+			dispatch(setUserPreference({ prefPath: ["hideCodeErrorInstructions"], value: false }));
+			dispatch(setUserPreference({ prefPath: ["o11yTour"], value: "globalNav" }));
+		}
 	};
 
 	const text = (

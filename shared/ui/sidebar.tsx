@@ -25,7 +25,6 @@ import {
 	VerifyConnectivityResponse,
 	GetObservabilityErrorGroupMetadataRequestType,
 	GetObservabilityErrorGroupMetadataResponse,
-	CSAsyncGrokError,
 	DidChangeSessionTokenStatusNotificationType,
 	GetReposScmResponse,
 } from "@codestream/protocols/agent";
@@ -37,12 +36,7 @@ import { Range } from "vscode-languageserver-types";
 
 import { logError, logWarning } from "@codestream/webview/logger";
 import { setBootstrapped } from "@codestream/webview/store/bootstrapped/actions";
-import {
-	handleGrokChonk,
-	handleGrokError,
-	openErrorGroup,
-	resolveStackTraceLine,
-} from "@codestream/webview/store/codeErrors/thunks";
+import { openErrorGroup, resolveStackTraceLine } from "@codestream/webview/store/codeErrors/thunks";
 import { updateConfigs } from "@codestream/webview/store/configs/slice";
 import { fetchReview } from "@codestream/webview/store/reviews/thunks";
 import { switchToTeam } from "@codestream/webview/store/session/thunks";
@@ -122,7 +116,6 @@ import { openPullRequestByUrl } from "./store/providerPullRequests/thunks";
 import { configureProvider, updateProviders } from "./store/providers/actions";
 import { getReview } from "./store/reviews/reducer";
 import { setMaintenanceMode, setSessionTokenStatus } from "./store/session/actions";
-import { updateUnreads } from "./store/unreads/actions";
 import { upgradeRecommended, upgradeRequired } from "./store/versioning/actions";
 import { fetchCodemarks, openPanel } from "./Stream/actions";
 import { moveCursorToLine } from "./Stream/api-functions";
@@ -264,23 +257,20 @@ function listenForEvents(store: StoreType) {
 			case ChangeDataType.Preferences:
 				store.dispatch(updatePreferences(data));
 				break;
-			case ChangeDataType.Unreads:
-				store.dispatch(updateUnreads(data));
-				break;
 			case ChangeDataType.Providers:
 				store.dispatch(updateProviders(data));
 				break;
 			case ChangeDataType.ApiCapabilities:
 				store.dispatch(apiCapabilitiesUpdated(data));
 				break;
-			case ChangeDataType.AsyncError:
-				// Only 1 error type right now
-				store.dispatch(handleGrokError(data[0] as CSAsyncGrokError));
-				break;
-			case ChangeDataType.GrokStream:
-				// console.log("GrokStream", data);
-				store.dispatch(handleGrokChonk(data));
-				break;
+			// case ChangeDataType.AsyncError:
+			// 	// Only 1 error type right now
+			// 	store.dispatch(handleGrokError(data[0] as CSAsyncGrokError));
+			// 	break;
+			// case ChangeDataType.GrokStream:
+			// 	// console.log("GrokStream", data);
+			// 	store.dispatch(handleGrokChonk(data));
+			// 	break;
 			default:
 				store.dispatch({ type: `ADD_${type.toUpperCase()}`, payload: data });
 		}
@@ -1068,11 +1058,7 @@ const confirmSwitchToTeam = function (
 	const { teamId, companyName } = options;
 
 	if (type === "code error") {
-		if (
-			!options.codeError ||
-			!currentUser ||
-			!(options.codeError.followerIds || []).includes(currentUser.id)
-		) {
+		if (!options.codeError || !currentUser) {
 			const title = "No access";
 			const message = `You don't have access to this ${type}`;
 			confirmPopup({

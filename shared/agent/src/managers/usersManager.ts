@@ -8,9 +8,6 @@ import {
 	FetchUsersResponse,
 	GetPreferencesRequestType,
 	GetPreferencesResponse,
-	GetUnreadsRequest,
-	GetUnreadsRequestType,
-	GetUnreadsResponse,
 	GetUserRequest,
 	GetUserRequestType,
 	GetUserResponse,
@@ -59,12 +56,7 @@ export class UsersManager extends CachedEntityManagerBase<CSUser> {
 		return { users: users };
 	}
 
-	protected async loadCache() {
-		const response = await this.session.api.fetchUsers({});
-		const { users, ...rest } = response;
-		this.cache.reset(users);
-		this.cacheResponse(rest);
-	}
+	protected async loadCache() {}
 
 	async getByEmails(
 		emails: string[],
@@ -184,11 +176,6 @@ export class UsersManager extends CachedEntityManagerBase<CSUser> {
 			throw new Error(`User's own object (${this.session.userId}) not found in cache`);
 		}
 		return cachedMe as CSMe;
-	}
-
-	@lspHandler(GetUnreadsRequestType)
-	getUnreads(request: GetUnreadsRequest): Promise<GetUnreadsResponse> {
-		return this.session.api.getUnreads(request);
 	}
 
 	@lspHandler(GetUserRequestType)

@@ -52,7 +52,16 @@ let nrColumnsByAccountByCollectionName: NrColumnsByAccountByCollectionName = {};
 
 @lsp
 export class NrNRQLProvider {
-	static ALL_RESULT_TYPES = ["table", "json", "billboard", "line", "bar", "area", "pie"];
+	static ALL_RESULT_TYPES = [
+		"table",
+		"json",
+		"billboard",
+		"line",
+		"bar",
+		"stacked bar",
+		"area",
+		"pie",
+	];
 
 	constructor(private graphqlClient: NewRelicGraphqlClient) {}
 
@@ -80,15 +89,16 @@ export class NrNRQLProvider {
 			void this.saveRecentQuery(request);
 
 			const facet = response?.rawResponse?.metadata?.facet;
+			const hasAlias = this.hasAlias(query);
 			return {
 				accountId,
 				results: response.results,
-
 				metadata: {
 					eventType: response?.rawResponse?.metadata?.eventType,
 					since: response?.rawResponse?.metadata?.rawSince,
 					// facet is an array or string, normalize to array
 					facet: facet ? (Array.isArray(facet) ? facet : [facet]) : undefined,
+					hasAlias,
 				},
 				resultsTypeGuess: this.getResultsType(
 					response.results,
@@ -107,32 +117,68 @@ export class NrNRQLProvider {
 			};
 		}
 	}
+	/**
+	 *
+	 * Check to see if a query has an alias through use of a regex
+	 * Generally used for the billboard nrql query result display
+	 *
+	 * @param query
+	 * @returns
+	 */
+	hasAlias(query: string): boolean {
+		const aliasRegex = /([\w\(\),\s\*]+)\s+as\s+('?.+?'?)/gi;
+
+		return aliasRegex.test(query);
+	}
+
+	replaceDoubleQuotesWithSingle(query: string): string {
+		let result = "";
+		let insideSingleQuotes = false;
+
+		for (let i = 0; i < query.length; i++) {
+			if (query[i] === "'") {
+				insideSingleQuotes = !insideSingleQuotes;
+			}
+			if (query[i] === '"' && !insideSingleQuotes) {
+				result += "'";
+			} else {
+				result += query[i];
+			}
+		}
+
+		return result;
+	}
 
 	/**
- * Removes comments from the end of a string
- * 
- * FROM Collection
- * SELECT foo -- that's the foo
-  WHERE queryTypes = 'bar' /* that's the bar
-  on two lines *\/
-  AND status = 'baz' // baz is here
+	 * Removes comments from the end of a string, unless it has been single-quoted
+	 * 
+	 * FROM Collection
+	 * SELECT foo -- that's the foo
+		WHERE queryTypes = 'bar' /* that's the bar
+		on two lines *\/
+		AND status = 'baz' // baz is here
 
-  becomes:
+		becomes:
 
-  FROM Collection
-  SELECT foo
-  WHERE queryTypes = 'bar
-  AND status = 'baz'
- * 
- * @param nrql 
- * @returns 
- */
-	private removeNrqlComments(nrql: string) {
-		return nrql.replace(/(\-\-|\/\/|\/*\*[\s\S]*?\*\/).*$/gm, "");
+		FROM Collection
+		SELECT foo
+		WHERE queryTypes = 'bar
+		AND status = 'baz'
+	* 
+	* @param nrql 
+	* @returns 
+	*/
+	private removeNrqlComments(nrql: string): string {
+		return nrql.replace(/'[^']*'|(\-\-|\/\/|\/*\*[\s\S]*?\*\/).*$/gm, (match, group1) => {
+			// If group1 is undefined, it means we matched a single-quoted string, so we return the match as is.
+			// Otherwise, we return an empty string to remove the comment.
+			return typeof group1 === "undefined" ? match : "";
+		});
 	}
 
 	transformQuery(nrql: string) {
-		let query = this.removeNrqlComments(nrql);
+		let query = this.replaceDoubleQuotesWithSingle(nrql);
+		query = this.removeNrqlComments(query);
 		query = escapeNrql(query);
 		query = query.replace(/[\n\r]/g, " ").trim();
 		return query;
@@ -344,20 +390,20 @@ export class NrNRQLProvider {
 					};
 				};
 			}>(`{
-  actor {
-    accounts {
-      id
-      name
-    }
-    queryHistory {
-      nrql(options: {limit: 50}) {
-        query
-        accountIds
-        createdAt
-      }
-    }
-  }
-}`);
+				actor {
+					accounts {
+						id
+						name
+					}
+					queryHistory {
+						nrql(options: {limit: 50}) {
+							query
+							accountIds
+							createdAt
+						}
+					}
+				}
+			}`);
 
 			if (response) {
 				const accounts = response?.actor?.accounts || [];
@@ -470,8 +516,8 @@ export class NrNRQLProvider {
 		const isTimeseries = metadata?.timeSeries || metadata?.contents?.timeSeries;
 		const isFacet = metadata?.facet;
 		if (isTimeseries && isFacet) {
-			// TODO stacked bar and line and area
-			return { selected: "line", enabled: ["table", "json", "line"] };
+			// TODO add area
+			return { selected: "line", enabled: ["table", "json", "line", "stackedBar"] };
 		}
 
 		if (isTimeseries) {
@@ -480,7 +526,7 @@ export class NrNRQLProvider {
 			);
 
 			if (dataKeys.length > 1) {
-				return { selected: "json", enabled: ["json"] };
+				return { selected: "line", enabled: ["json", "line", "area"] };
 			}
 			// complex timeseries data
 			if (Array.isArray(results[0][dataKeys[0]])) {
@@ -490,7 +536,16 @@ export class NrNRQLProvider {
 			return { selected: "line", enabled: ["table", "json", "line", "area"] };
 		}
 		if (isFacet) {
-			return { selected: "bar", enabled: ["bar", "json", "pie", "table"] };
+			const dataKeys = Object.keys(results[0] || {}).filter(
+				_ => _ !== "facet" && _ !== metadata.facet
+			);
+
+			// Doesn't make sense to have multiple dataKeys for pie or bar charts
+			if (dataKeys.length > 1) {
+				return { selected: "table", enabled: ["table", "json"] };
+			} else {
+				return { selected: "bar", enabled: ["bar", "json", "pie", "table"] };
+			}
 		}
 		return { selected: "table", enabled: ["table", "json"] };
 	}

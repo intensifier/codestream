@@ -11,29 +11,22 @@ import {
 } from "recharts";
 import { NRQLResult } from "@codestream/protocols/agent";
 import { isEmpty as _isEmpty } from "lodash-es";
-import { ColorsHash, Colors } from "./utils";
+import {
+	ColorsHash,
+	Colors,
+	truncate,
+	fillNullValues,
+	getUniqueDataKeyAndFacetValues,
+	formatXAxisTime,
+	isMultiSelect,
+	flattenResultsWithObjects,
+} from "./utils";
 import { EventTypeTooltip } from "./EventTypeTooltip";
 import { EventTypeLegend } from "./EventTypeLegend";
 import { FacetLineTooltip } from "./FacetLineTooltip";
 import Tooltip from "../Tooltip";
 
 export const LEFT_MARGIN_ADJUST_VALUE = 25;
-
-const formatXAxisTime = time => {
-	const date = new Date(time * 1000);
-	return `${date.toLocaleTimeString()}`;
-};
-
-const getUniqueDataKeyAndFacetValues = (results, facet) => {
-	const result = results ? results[0] : undefined;
-
-	const defaultFilterKeys = ["beginTimeSeconds", "endTimeSeconds", "facet"];
-	const filterKeys = defaultFilterKeys.concat(facet);
-
-	const dataKeys = Object.keys(result || {}).filter(key => !filterKeys.includes(key));
-	const uniqueFacetValues = [...new Set(results.map(obj => obj.facet))];
-	return { dataKeys, uniqueFacetValues };
-};
 
 const formatResultsForLineChart = (originalArray, uniqueFacets, dataKeys) => {
 	const groupedByEndTime = {};
@@ -59,27 +52,6 @@ const formatResultsForLineChart = (originalArray, uniqueFacets, dataKeys) => {
 	}));
 
 	return fillNullValues(newArray);
-};
-
-const fillNullValues = array => {
-	array.forEach((obj, i) => {
-		Object.keys(obj).forEach(key => {
-			if (key !== "endTimeSeconds" && obj[key] === null) {
-				let j = i - 1;
-				while (j >= 0 && array[j][key] === null) j--;
-				obj[key] = j >= 0 ? array[j][key] : 0;
-			}
-		});
-	});
-	return array.filter(obj =>
-		Object.keys(obj).some(key => key !== "endTimeSeconds" && obj[key] !== undefined)
-	);
-};
-
-const truncate = (str: string, max: number) => {
-	if (!str) return str;
-	if (str.length >= max) return `${str.substring(0, max - 1)}${"\u2026"}`;
-	return str;
 };
 
 interface NRQLResultsLineProps {
@@ -119,6 +91,8 @@ export const NRQLResultsLine: React.FC<NRQLResultsLineProps> = ({
 	const handleMouseLeave = () => {
 		setActiveIndex(undefined);
 	};
+
+	const queryIsMultiSelect = isMultiSelect(results);
 
 	const FacetLineLegend = ({ payload }: { payload?: { dataKey: string; color: string }[] }) => {
 		return (
@@ -175,13 +149,13 @@ export const NRQLResultsLine: React.FC<NRQLResultsLineProps> = ({
 	return (
 		<div style={{ marginLeft: `-${LEFT_MARGIN_ADJUST_VALUE}px` }} className="histogram-chart">
 			<div style={{ height: height, overflowY: "auto", overflowX: "hidden" }}>
-				{_isEmpty(facet) ? (
+				{_isEmpty(facet) && !queryIsMultiSelect && (
 					<ResponsiveContainer width="100%" height={500} debounce={1}>
 						{/* Non-facet, single line chart */}
 						<LineChart
 							width={500}
 							height={300}
-							data={results}
+							data={flattenResultsWithObjects(results, dataKeys)}
 							margin={{ top: 5, right: 0, left: 0, bottom: 5 }}
 						>
 							<CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
@@ -202,7 +176,46 @@ export const NRQLResultsLine: React.FC<NRQLResultsLineProps> = ({
 							/>
 						</LineChart>
 					</ResponsiveContainer>
-				) : (
+				)}
+				{_isEmpty(facet) && queryIsMultiSelect && (
+					<ResponsiveContainer width="100%" height={500} debounce={1}>
+						{/* Non-facet, single line chart */}
+						<LineChart
+							width={500}
+							height={300}
+							data={results}
+							margin={{ top: 5, right: 0, left: 0, bottom: 5 }}
+						>
+							<CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
+							<XAxis
+								tick={{ fontSize: 11 }}
+								dataKey="endTimeSeconds"
+								tickFormatter={formatXAxisTime}
+							/>
+							<YAxis tick={{ fontSize: 11 }} />
+							<ReTooltip content={<FacetLineTooltip activeDotKey={activeDotKey} />} />
+							{dataKeys.map((_, index) => {
+								const color = ColorsHash[index % Colors.length];
+								return (
+									<Line
+										key={_}
+										dataKey={_}
+										stroke={color}
+										fill={color}
+										dot={false}
+										strokeOpacity={activeIndex === undefined ? 1 : activeIndex === index ? 1 : 0.5}
+										activeDot={{
+											onMouseOver: e => customMouseOver(_, index),
+											onMouseLeave: e => customMouseLeave(),
+										}}
+									/>
+								);
+							})}
+							<Legend content={<FacetLineLegend />} />
+						</LineChart>
+					</ResponsiveContainer>
+				)}
+				{!_isEmpty(facet) && (
 					<ResponsiveContainer width="100%" height={500} debounce={1}>
 						{/* facet, multiple line chart */}
 						<LineChart width={500} height={300} data={resultsForLineChart}>

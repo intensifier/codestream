@@ -134,7 +134,7 @@ export class NRManager {
 		errorGroupGuid,
 		stackTrace,
 		occurrenceId,
-	}: ParseStackTraceRequest): Promise<ParseStackTraceResponse> {
+	}: ParseStackTraceRequest): Promise<ParseStackTraceResponse | undefined> {
 		const lines: string[] = typeof stackTrace === "string" ? stackTrace.split("\n") : stackTrace;
 		const whole = lines.join("\n");
 
@@ -143,7 +143,7 @@ export class NRManager {
 		// avoid having to determine the language
 
 		// take an educated guess on the language, based on a simple search for file extension,
-		// before attempting to parse accoding to the generating language
+		// before attempting to parse according to the generating language
 		let lang = this.guessStackTraceLanguage(lines);
 		if (lang) {
 			return StackTraceParsers[lang](whole);
@@ -188,10 +188,14 @@ export class NRManager {
 			}
 
 			// take the last one
-			const response = info || ({} as ParseStackTraceResponse);
-			response.warning = {
-				message: "Unable to parse language from stack trace",
-			};
+			const response = info;
+			if (response && !response?.language) {
+				// Only show this warning if language wasn't inferred from trying all
+				// the StackTraceParsers
+				response.warning = {
+					message: "Unable to parse language from stack trace",
+				};
+			}
 			return response;
 		}
 	}
@@ -216,11 +220,17 @@ export class NRManager {
 		const matchingRepoPath = matchingRepo?.path;
 		let firstWarning: WarningOrError | undefined = undefined;
 		let resolvedRef: string | undefined = ref;
+		let firstNotification: WarningOrError | undefined = undefined;
 
 		// NOTE: the warnings should not prevent a stack trace from being displayed
 		const setWarning = (warning: WarningOrError) => {
 			// only set the warning if we haven't already set it.
 			if (!firstWarning) firstWarning = warning;
+		};
+
+		const setNotification = (notification: WarningOrError) => {
+			// only set the warning if we haven't already set it.
+			if (!firstNotification) firstNotification = notification;
 		};
 
 		if (domain === "BROWSER" && isEmpty(stackSourceMap)) {
@@ -240,7 +250,7 @@ export class NRManager {
 		}
 
 		if (!ref) {
-			setWarning({
+			setNotification({
 				message: `[Associate a build sha or release tag with your errors] so that CodeStream can help make sure you’re looking at the right version of the code.`,
 				helpUrl: CONFIGURE_ERROR_REF_HELP_URL,
 			});
@@ -283,6 +293,9 @@ export class NRManager {
 			stackTrace,
 			occurrenceId,
 		});
+		if (!parsedStackInfo) {
+			return { error: "Unable to parse stack trace" };
+		}
 		if (parsedStackInfo.parseError) {
 			return { error: parsedStackInfo.parseError };
 		} else if (ref && !parsedStackInfo.lines.find(line => !line.error)) {
@@ -338,6 +351,7 @@ export class NRManager {
 
 		return {
 			warning: firstWarning,
+			notification: firstNotification,
 			resolvedStackInfo,
 			parsedStackInfo,
 		};
@@ -391,44 +405,36 @@ export class NRManager {
 
 				if (!line.error && matchingRepoPath && parsedStackInfo.language) {
 					let resolvedLine: CSStackTraceLine;
-					if (resolveStackTracePathsResponse.notImplemented) {
-						// TODO remove if block once ResolveStackTracePathsRequestType is implemented in VS
-						resolvedLine = await this.resolveStackTraceLine(
-							line,
-							ref,
-							matchingRepoPath,
-							parsedStackInfo.language
-						);
-					} else {
-						const resolvedPath = resolveStackTracePathsResponse.resolvedPaths[i];
-						if (resolvedPath) {
-							const pathExists = await this.resolvePathAtRef(resolvedPath, ref);
-							if (pathExists) {
-								resolvedLine = {
-									fileFullPath: resolvedPath,
-									fileRelativePath: path.relative(matchingRepoPath, resolvedPath),
-									line: line.line,
-									column: line.column,
-									resolved: true,
-									warning: commitSha ? undefined : "Missing sha",
-								};
-							} else {
-								resolvedLine = {
-									error: `Unable to find matching file in revision ${ref} for path ${line.fileFullPath}`,
-								};
-							}
+					const resolvedPath = resolveStackTracePathsResponse.resolvedPaths[i];
+					if (resolvedPath) {
+						const pathExists = await this.resolvePathAtRef(resolvedPath, ref);
+						if (pathExists) {
+							resolvedLine = {
+								fileFullPath: resolvedPath,
+								fileRelativePath: path.relative(matchingRepoPath, resolvedPath),
+								line: line.line,
+								column: line.column,
+								resolved: true,
+								warning: commitSha ? undefined : "Missing sha",
+							};
 						} else {
 							resolvedLine = {
-								error: `Unable to find matching file for path ${line.fileFullPath}`,
+								error: `Unable to find matching file in revision ${ref} for path ${line.fileFullPath}`,
+								resolved: false,
 							};
 						}
+					} else {
+						resolvedLine = {
+							error: `Unable to find matching file for path ${line.fileFullPath}`,
+							resolved: false,
+						};
+					}
 
-						if (resolvedLine.error) {
-							Logger.log(`Stack trace line failed to resolve: ${resolvedLine.error}`);
-						} else {
-							const loggableLine = `${resolvedLine.fileRelativePath}:${resolvedLine.line}:${resolvedLine.column}`;
-							Logger.log(`Stack trace line resolved: ${loggableLine}`);
-						}
+					if (resolvedLine.error) {
+						Logger.log(`Stack trace line failed to resolve: ${resolvedLine.error}`);
+					} else {
+						const loggableLine = `${resolvedLine.fileRelativePath}:${resolvedLine.line}:${resolvedLine.column}`;
+						Logger.log(`Stack trace line resolved: ${loggableLine}`);
 					}
 
 					session.agent.sendNotification(DidResolveStackTraceLineNotificationType, {

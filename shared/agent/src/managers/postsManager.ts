@@ -525,7 +525,6 @@ export class PostsManager extends EntityManagerBase<CSPost> {
 			...request,
 		});
 
-		const unreads = await SessionContainer.instance().users.getUnreads({});
 		const { posts: postsManager } = SessionContainer.instance();
 
 		const posts: PostPlus[] = [];
@@ -546,19 +545,6 @@ export class PostsManager extends EntityManagerBase<CSPost> {
 					// no-op
 				} else {
 					if (object.reviewId != null || object.codeErrorId != null) return;
-				}
-
-				if (unreads.unreads.lastReads[object.streamId]) {
-					try {
-						const threadResponse = await this.session.api.fetchPostReplies({
-							postId: object.postId,
-							streamId: object.streamId,
-						});
-						await this.cacheResponse(threadResponse);
-						posts.push(...threadResponse.posts);
-					} catch (error) {
-						debugger;
-					}
 				}
 
 				return object;
@@ -640,6 +626,7 @@ export class PostsManager extends EntityManagerBase<CSPost> {
 		return { posts, codemarks: [] };
 	}
 
+	// TODO COLLAB-ERRORS: NO LONGER USED?
 	// this is what the webview will call to create codeErrors in the sharing model
 	@lspHandler(CreateShareableCodeErrorRequestType)
 	@log()

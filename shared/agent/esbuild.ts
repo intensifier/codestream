@@ -48,7 +48,18 @@ function getPostBuildCopy(args: Args): CopyStuff[] {
 		result.push({
 			from: path.join(getDepsRoot(args.watchMode), "node_modules/**"),
 			to: nodeModulesDest,
-			options: { ignore: ["**/@newrelic/security-agent/**"] }, // Path too long for windows
+			options: {
+				ignore: [
+					"**/@newrelic/security-agent/**",
+					"**/react-native/**",
+					"**/jsc-android/**",
+					"**/@babel/**",
+					"**/@react-native/**",
+					"**/react-devtools-core/**",
+					"**/@react-native-community/**",
+					"/**/@types/**",
+				],
+			}, // Path too long for windows
 		});
 	} else {
 		symlinkSync(path.join(getDepsRoot(args.watchMode), "node_modules"), nodeModulesDest);
@@ -110,7 +121,6 @@ async function installProdDeps(tmpDir: string) {
 			...commonEsbuildOptions(false, args),
 			entryPoints: {
 				agent: "./src/main.ts",
-				"agent-vs-2019": "./src/main-vs-2019.ts",
 			},
 			// The newrelic agent doesn't support bundling.
 			packages: "external",

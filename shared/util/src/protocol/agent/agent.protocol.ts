@@ -4,7 +4,6 @@ import { InitializeResult, RequestType, WorkspaceFolder } from "vscode-languages
 
 import { LoginResponse } from "./agent.protocol.auth";
 import { CreateCompanyRequest, CreateCompanyResponse } from "./agent.protocol.companies";
-import { Unreads } from "./agent.protocol.notifications";
 import { ThirdPartyProviders } from "./agent.protocol.providers";
 import {
 	CSAccessTokenType,
@@ -238,7 +237,6 @@ export interface BootstrapResponse {
 	teams: CSTeam[];
 	companies: CSCompany[];
 	users: CSUser[];
-	unreads: Unreads;
 	providers: ThirdPartyProviders;
 }
 
@@ -290,10 +288,8 @@ export type TelemetryEventName =
 	| "codestream/anomaly_link clicked"
 	| "codestream/codelens_link clicked"
 	| "codestream/codelenses displayed"
-	| "codestream/codemarks/codemark created"
 	| "codestream/codemarks/share succeeded"
 	| "codestream/codemarks/codemark displayed"
-	| "codestream/codemarks/reply created"
 	| "codestream/codemarks/slack_sharing failed"
 	| "codestream/email_unsubscribe succeeded"
 	| "codestream/entity_association succeeded"
@@ -317,10 +313,13 @@ export type TelemetryEventName =
 	| "codestream/logs/expand_button clicked"
 	| "codestream/logs/show_surrounding_button clicked"
 	| "codestream/logs/webview displayed"
+	| "codestream/nrai/error_analysis succeeded"
 	| "codestream/nrql/export succeeded"
 	| "codestream/nrql/query submitted"
 	| "codestream/nrql/visualization changed"
 	| "codestream/nrql/webview displayed"
+	| "codestream/notifications/repo_following_option changed"
+	| "codestream/notifications/service_notification_option changed"
 	| "codestream/o11y displayed"
 	| "codestream/o11y_fetch failed"
 	| "codestream/related_service_link clicked"

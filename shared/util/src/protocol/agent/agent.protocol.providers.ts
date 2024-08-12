@@ -1359,12 +1359,25 @@ export interface GetObservabilityErrorsRequest {
 	timeWindow?: string;
 }
 
+export interface GetObservabilityErrorsWithoutReposRequest {
+	entityGuid: string;
+	accountId: number;
+	entityType: string;
+	timeWindow: string;
+}
+
+export interface GetObservabilityErrorsWithoutReposResponse {
+	repos?: ObservabilityRepoError[];
+	error?: NRErrorResponse;
+}
+
 export interface ObservabilityErrorCore {
 	entityId: string;
 	errorClass: string;
 	message: string;
 	errorGroupGuid: string;
 	errorGroupUrl?: string;
+	lastSeenAt?: number;
 }
 
 export interface ObservabilityError extends ObservabilityErrorCore {
@@ -1388,6 +1401,8 @@ export interface ObservabilityRepo {
 	repoId: string;
 	repoName: string;
 	repoRemote: string;
+	repoGuid: string;
+	repoNameOnNr: string;
 	hasRepoAssociation?: boolean;
 	hasCodeLevelMetricSpanData: boolean | NRErrorResponse;
 	entityAccounts: EntityAccount[];
@@ -1404,6 +1419,174 @@ export const GetObservabilityErrorsRequestType = new RequestType<
 	void,
 	void
 >("codestream/newrelic/errors");
+
+export const GetObservabilityErrorsWithoutReposRequestType = new RequestType<
+	GetObservabilityErrorsWithoutReposRequest,
+	GetObservabilityErrorsWithoutReposResponse,
+	void,
+	void
+>("codestream/newrelic/errorsWithoutRepos");
+
+export interface CollaborationAttachment {
+	id: string;
+	fileName: string;
+	filePath: string;
+}
+
+export interface CollaborationComment {
+	id: string;
+	body: string;
+	createdAt: string;
+	deactivated: boolean;
+	systemMessageType?: string;
+	creator: {
+		email?: string;
+		name: string;
+		userId: string;
+	};
+	externalApplicationType?: string;
+	attachments?: CollaborationAttachment[];
+}
+
+export interface InitiateNrAiRequest {
+	entityGuid: string;
+	errorGroupGuid: string;
+
+	codeBlock?: string;
+	stackTrace: string;
+	errorText: string;
+	language?: string;
+
+	threadId: string;
+}
+
+export interface InitiateNrAiResponse {
+	commentId?: string;
+	nrError?: NRErrorResponse;
+}
+
+export const InitiateNrAiRequestType = new RequestType<
+	InitiateNrAiRequest,
+	InitiateNrAiResponse,
+	void,
+	void
+>("codestream/newrelic/collaboration/initiateNrAi");
+
+export interface GetErrorInboxCommentsRequest {
+	errorGroupGuid: string;
+	entityGuid: string;
+}
+
+export interface GetErrorInboxCommentsResponse {
+	threadId?: string;
+	comments?: CollaborationComment[];
+	nrError?: NRErrorResponse;
+}
+
+export const GetErrorInboxCommentsRequestType = new RequestType<
+	GetErrorInboxCommentsRequest,
+	GetErrorInboxCommentsResponse,
+	void,
+	void
+>("codestream/newrelic/collaboration/getErrorComments");
+
+export interface CreateCollaborationCommentRequest {
+	errorGroupGuid: string;
+	entityGuid: string;
+	threadId: string;
+	body: string;
+}
+
+export interface CreateCollaborationCommentResponse {
+	comment?: CollaborationComment;
+	nrError?: NRErrorResponse;
+}
+
+export const CreateCollaborationCommentRequestType = new RequestType<
+	CreateCollaborationCommentRequest,
+	CreateCollaborationCommentResponse,
+	void,
+	void
+>("codestream/newrelic/collaboration/createComment");
+
+export interface CloseCollaborationThreadRequest {
+	threadId: string;
+}
+
+export interface CloseCollaborationThreadResponse {
+	success?: boolean;
+	nrError?: NRErrorResponse;
+}
+
+export const CloseCollaborationThreadRequestType = new RequestType<
+	CloseCollaborationThreadRequest,
+	CloseCollaborationThreadResponse,
+	void,
+	void
+>("codestream/newrelic/collaboration/closeThread");
+
+export interface DeleteCollaborationCommentRequest {
+	commentId: string;
+}
+
+export interface DeleteCollaborationCommentResponse {
+	commentId?: string;
+	nrError?: NRErrorResponse;
+}
+
+export const DeleteCollaborationCommentRequestType = new RequestType<
+	DeleteCollaborationCommentRequest,
+	DeleteCollaborationCommentResponse,
+	void,
+	void
+>("codestream/newrelic/collaboration/deleteComment");
+
+export interface GetCollaborationCommentRequest {
+	commentId: string;
+}
+
+export interface GetCollaborationCommentResponse {
+	comment?: CollaborationComment;
+	nrError?: NRErrorResponse;
+}
+
+export const GetCollaborationCommentRequestType = new RequestType<
+	GetCollaborationCommentRequest,
+	GetCollaborationCommentResponse,
+	void,
+	void
+>("codestream/newrelic/collaboration/getComment");
+
+export interface GetCollaborationWebsocketInfoRequest {}
+
+export interface GetCollaborationWebsocketInfoResponse {
+	url: string;
+	NRConnectionId: string;
+}
+
+export const GetCollaborationWebsocketInfoRequestType = new RequestType<
+	GetCollaborationWebsocketInfoRequest,
+	GetCollaborationWebsocketInfoResponse,
+	void,
+	void
+>("codestream/newrelic/collaboration/websocketInfo");
+
+export interface UpdateCollaborationCommentRequest {
+	commentId: string;
+	body: string;
+}
+
+export interface UpdateCollaborationCommentResponse {
+	commentId?: string;
+	nrError?: NRErrorResponse;
+}
+
+export const UpdateCollaborationCommentRequestType = new RequestType<
+	UpdateCollaborationCommentRequest,
+	UpdateCollaborationCommentResponse,
+	void,
+	void
+>("codestream/newrelic/collaboration/updateComment");
 
 export interface GetObservabilityAnomaliesRequest {
 	entityGuid: string;
@@ -1546,12 +1729,15 @@ export interface EntityAccount {
 	type?: string;
 	entityTypeDescription?: string;
 	domain?: string;
+	name?: string;
+	guid?: string;
 	url?: string;
 	displayName?: string;
 	tags: {
 		key: string;
 		values: string[];
 	}[];
+	repoEntities?: RelatedRepoWithRemotes[];
 }
 
 export interface LanguageAndVersionValidation {
@@ -1571,6 +1757,10 @@ export const GetObservabilityReposRequestType = new RequestType<
 	void,
 	void
 >("codestream/newrelic/repos");
+
+export interface GetEntityAccountFromGuidRequest {
+	id: string;
+}
 
 export interface GetObservabilityEntityByGuidRequest {
 	id: string;
@@ -1692,6 +1882,7 @@ export interface GetObservabilityErrorGroupMetadataRequest {
 	errorGroupGuid?: string;
 	entityGuid?: string;
 	traceId?: string;
+	lastSeenAt?: number;
 }
 
 export interface GetObservabilityErrorGroupMetadataResponse {
@@ -1810,6 +2001,7 @@ export interface GetServiceLevelTelemetryRequest {
 	skipRepoFetch?: boolean;
 	fetchRecentIssues?: boolean;
 	force?: boolean;
+	isServiceSearch?: boolean;
 }
 
 export interface UpdateAzureFullNameRequest {
@@ -2198,7 +2390,7 @@ export interface Entity {
 	goldenMetrics?: { metrics?: MethodGoldenMetrics[] };
 	guid: string;
 	name: string;
-	type?: Type;
+	type?: string;
 	entityType?: EntityType;
 	tags?: {
 		key: string;
@@ -2217,6 +2409,7 @@ export interface ErrorGroupsResponse {
 					message: string;
 					id: string;
 					entityGuid: string;
+					lastSeenAt: number;
 				}[];
 			};
 		};
@@ -2374,6 +2567,12 @@ export interface GetAlertViolationsQueryResult {
 			recentAlertViolations: RecentAlertViolation[];
 		};
 	};
+}
+
+export interface GetEntityFromGuid {
+	alertSeverity: string;
+	entityName: string;
+	entityGuid: string;
 }
 
 export interface GetIssuesQueryResult {
@@ -2814,6 +3013,7 @@ export interface GetNRQLResponse {
 		facet?: string[];
 		eventType?: string;
 		since?: string;
+		hasAlias: boolean;
 	};
 	error?: NRErrorResponse;
 	resultsTypeGuess?: ResultsTypeGuess;
@@ -2926,3 +3126,20 @@ export type ApplyPatchResponse = {
 export const ApplyPatchType = new RequestType<ApplyPatchRequest, ApplyPatchResponse, void, void>(
 	"codestream/newrelic/applyPatch"
 );
+
+export type UserSearchRequest = {
+	query?: string;
+	nextCursor?: string;
+};
+
+export type UserSearchResponse = {
+	users: NewRelicUser[];
+	nextCursor?: string;
+};
+
+export const UserSearchRequestType = new RequestType<
+	UserSearchRequest,
+	UserSearchResponse,
+	void,
+	void
+>("codestream/newrelic/userSearch");

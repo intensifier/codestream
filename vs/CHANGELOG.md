@@ -1,5 +1,64 @@
 # Change Log
 
+## [15.13.1] - 2024-8-7
+
+### Fixed
+
+- Fix migrated AI posts not showing up
+- Fix issue with getting logged out after closing IDE
+
+## [15.13.0] - 2024-8-1
+
+### Changed
+
+- Update extensions for new API server
+
+## [15.12.0] - 2024-7-29
+
+### Changed
+
+- Error discussions are now tied to New Relic's collaboration tools, with discussions accessible from both CodeStream and New Relic on the web
+
+### Fixed
+
+- Fixes an issue with FACET value duplicated in query results in table visualization
+- Fixes an issue with the submission of queries via the Enter key changing the account selection
+- Fixes an issue with the display of charts in code-level metrics details view in JetBrains IDEs
+
+## [15.11.0] - 2024-7-8
+
+### Added
+
+- Adds support for double quotes in NRQL queries
+
+### Fixed
+
+- Fixes an issue with the Enter key not submitting queries when no repositories are open
+
+## [15.10.0] - 2024-6-20
+
+### Added
+
+- Adds service search, allowing you to see observability data for any service, even when you don't have the repository open in your IDE
+
+## [15.9.0] - 2024-6-6
+
+### Added
+
+- Adds support for stacked bar charts for query results
+
+### Changed
+
+- Queries can now be submitted via the Enter key, with Shift+Enter creating a newline
+- Details for transaction anomalies are now displayed in a new webview in the editor group, with relevant errors, critical path analysis or database queries included as appropriate
+
+### Fixed
+
+- Fixes an issue rendering query results as pie charts 
+- Fixes an issue with labels missing from bar charts
+- Fixes an issue with slashes in queries not being properly escaped
+- Fixes an issue where adding TIMESERIES to a query generated a table by default instead of a line chart
+
 ## [15.8.1] - 2024-5-9
 
 ### Fixed

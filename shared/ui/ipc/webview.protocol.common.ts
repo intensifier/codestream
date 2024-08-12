@@ -82,6 +82,7 @@ export enum WebviewModals {
 	ChangeCompanyName = "change-company-name",
 	CreateTeam = "create-team",
 	CreateCompany = "create-company",
+	ErrorRoadblock = "error-roadblock",
 	FinishReview = "finish-review",
 	TeamSetup = "team-setup",
 	Keybindings = "keybindings",
@@ -111,6 +112,10 @@ export interface CodeErrorData {
 	stackSourceMap?: string;
 	domain?: string;
 	traceId?: string;
+
+	entityGuid?: string;
+	accountId?: number;
+	errorGroupGuid?: string;
 }
 
 export interface TeamlessContext {
