@@ -437,6 +437,7 @@ export class ObservabilityErrorsProvider {
 						message
 						id
 						entityGuid
+						lastSeenAt
 					  }
 					}
 				  }
@@ -473,7 +474,10 @@ export class ObservabilityErrorsProvider {
 	 * 	>)}
 	 * @memberof ObservabilityErrorsProvider
 	 */
-	private async getMetricData(errorGroupGuid: string): Promise<
+	private async getMetricData(
+		errorGroupGuid: string,
+		lastSeenAt?: number
+	): Promise<
 		| {
 				entityGuid: string;
 				traceId?: string;
@@ -489,7 +493,7 @@ export class ObservabilityErrorsProvider {
 
 			const accountId = parseId(errorGroupGuid)?.accountId!;
 
-			const errorGroupResponse = await this.fetchErrorGroupById(errorGroupGuid);
+			const errorGroupResponse = await this.fetchErrorGroupById(errorGroupGuid, lastSeenAt);
 
 			if (!errorGroupResponse) {
 				ContextLogger.warn("fetchErrorGroupDataById missing errorGroupGuid");
@@ -1012,7 +1016,7 @@ export class ObservabilityErrorsProvider {
 
 		try {
 			if (request.errorGroupGuid) {
-				const metricResponse = await this.getMetricData(request.errorGroupGuid);
+				const metricResponse = await this.getMetricData(request.errorGroupGuid, request.lastSeenAt);
 				if (!metricResponse) return undefined;
 
 				const mappedRepoEntities = await this.reposProvider.findMappedRemoteByEntity(
@@ -1073,6 +1077,7 @@ export class ObservabilityErrorsProvider {
 						errorClass: _.name,
 						message: _.message,
 						errorGroupUrl: _.url,
+						lastSeenAt: _.lastSeenAt,
 					} as ObservabilityErrorCore;
 				});
 

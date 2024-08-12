@@ -1377,6 +1377,7 @@ export interface ObservabilityErrorCore {
 	message: string;
 	errorGroupGuid: string;
 	errorGroupUrl?: string;
+	lastSeenAt?: number;
 }
 
 export interface ObservabilityError extends ObservabilityErrorCore {
@@ -1881,6 +1882,7 @@ export interface GetObservabilityErrorGroupMetadataRequest {
 	errorGroupGuid?: string;
 	entityGuid?: string;
 	traceId?: string;
+	lastSeenAt?: number;
 }
 
 export interface GetObservabilityErrorGroupMetadataResponse {
@@ -2407,6 +2409,7 @@ export interface ErrorGroupsResponse {
 					message: string;
 					id: string;
 					entityGuid: string;
+					lastSeenAt: number;
 				}[];
 			};
 		};
