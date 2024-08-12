@@ -1070,7 +1070,7 @@ export class ObservabilityErrorsProvider {
 
 			const result = await this.getErrorsInboxAssignments(me.email);
 			if (result) {
-				response.items = result.actor.errorsInbox.errorGroups.results.map((_: any) => {
+				response.items = result.actor.errorsInbox.errorGroups.results.map(_ => {
 					return {
 						entityId: _.entityGuid,
 						errorGroupGuid: _.id,
