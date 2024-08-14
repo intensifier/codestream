@@ -7,15 +7,12 @@ import {
 	GetNRQLResponse,
 } from "@codestream/protocols/agent";
 import { createTheme } from "@codestream/webview/src/themes";
-import { CodeStreamState } from "@codestream/webview/store";
 import { isFeatureEnabled } from "@codestream/webview/store/apiVersioning/reducer";
 import { NRQLPanel } from "@codestream/webview/Stream/NRQL/NRQLPanel";
 import { HostApi } from "@codestream/webview/webview-api";
-import configureStore from "redux-mock-store";
 import "@testing-library/jest-dom";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import React from "react";
-import { Provider } from "react-redux";
 import { ThemeProvider } from "styled-components";
 
 global.ResizeObserver = jest.fn().mockImplementation(() => ({
@@ -75,16 +72,10 @@ MockedHostApi.mockImplementation(() => {
 // YUCK yuck yuck, static singletons are bad bad bad for testing
 MockedHostApi.instance = mockHostApi;
 
-function createState(): Partial<CodeStreamState> {
-	return {};
-}
-
 describe("NRQL Panel UI", () => {
 	let container: HTMLDivElement | undefined = undefined;
 
 	it("should render", async () => {
-		const mockStore = configureStore([]);
-
 		const props = {
 			accountId: 1,
 			entryPoint: "test",
@@ -93,11 +84,9 @@ describe("NRQL Panel UI", () => {
 
 		await act(async () => {
 			render(
-				<Provider store={mockStore(createState())}>
-					<ThemeProvider theme={createTheme()}>
-						<NRQLPanel {...props}></NRQLPanel>
-					</ThemeProvider>
-				</Provider>,
+				<ThemeProvider theme={createTheme()}>
+					<NRQLPanel {...props}></NRQLPanel>
+				</ThemeProvider>,
 				{ container }
 			);
 		});
