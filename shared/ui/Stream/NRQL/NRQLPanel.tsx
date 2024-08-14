@@ -36,9 +36,7 @@ import { NRQLVisualizationDropdown } from "./NRQLVisualizationDropdown";
 import { RecentQueries } from "./RecentQueries";
 import { PanelHeaderTitleWithLink } from "../PanelHeaderTitleWithLink";
 import { DropdownWithSearch } from "../DropdownWithSearch";
-import { useAppDispatch, useAppSelector, useDidMount } from "../../utilities/hooks";
-import { CodeStreamState } from "@codestream/webview/store";
-import { setUserPreference } from "../../Stream/actions";
+import { useDidMount } from "../../utilities/hooks";
 
 const QueryWrapper = styled.div`
 	width: 100%;
@@ -115,9 +113,10 @@ const CodeText = styled.span`
 	font-family: Menlo, Consolas, "DejaVu Sans Mono", monospace;
 	color: var(--text-color);
 `;
+
 interface SelectOptionType {
 	label: string;
-	value: string;
+	value: number;
 }
 
 const Option = (props: OptionProps) => {
@@ -144,15 +143,17 @@ export const NRQLPanel = (props: {
 	hash?: string;
 	ide?: { name?: IdeNames; browserEngine?: BrowserEngines };
 }) => {
-	const dispatch = useAppDispatch();
-
 	const supports = {
 		export: props.ide?.name === "VSC" || props.ide?.name === "JETBRAINS",
 		// default to true! currently JsBrowser works!
 		enhancedEditor: true, // !props.ide || props?.ide?.browserEngine !== "JxBrowser",
 	};
 
-	const initialAccountId = props.accountId
+	const mruAccountId = localStorage.getItem(`nrql.accountMruByFile.${props.hash}`);
+
+	const initialAccountId = mruAccountId
+		? parseInt(mruAccountId)
+		: props.accountId
 		? props.accountId
 		: props.entityGuid
 		? parseId(props.entityGuid)?.accountId
@@ -186,16 +187,6 @@ export const NRQLPanel = (props: {
 
 	let accountsPromise;
 
-	const derivedState = useAppSelector((state: CodeStreamState) => {
-		const mruAccountId = props.hash
-			? state.preferences.nrql?.accountMruByFile?.[props.hash]
-			: undefined;
-
-		return {
-			mruAccountId,
-		};
-	});
-
 	useDidMount(() => {
 		HostApi.instance.track("codestream/nrql/webview displayed", {
 			event_type: "modal_display",
@@ -208,15 +199,14 @@ export const NRQLPanel = (props: {
 				setAccounts(result.accounts);
 				let foundAccount: Account | undefined = undefined;
 				if (result?.accounts?.length) {
-					if (derivedState.mruAccountId) {
-						foundAccount = result.accounts.find(_ => _.id === derivedState.mruAccountId);
-					} else if (initialAccountId) {
+					if (initialAccountId) {
 						foundAccount = result.accounts.find(_ => _.id === initialAccountId);
 					}
 
 					if (!foundAccount) {
 						foundAccount = result.accounts[0];
 					}
+
 					if (foundAccount) {
 						setSelectedAccount(formatSelectedAccount(foundAccount));
 					}
@@ -236,7 +226,7 @@ export const NRQLPanel = (props: {
 	});
 
 	const accountId = useMemo(() => {
-		return (selectedAccount?.value || derivedState.mruAccountId || initialAccountId)!;
+		return (selectedAccount?.value || initialAccountId)!;
 	}, [selectedAccount]);
 
 	const disposables: Disposable[] = [];
@@ -373,19 +363,18 @@ export const NRQLPanel = (props: {
 		}));
 	};
 
-	const handleAccountSelectionChangeCallback = (label: string, value: number) => {
+	const handleAccountSelectionChangeCallback = (selection: SelectOptionType) => {
 		setSelectedAccount({
-			label,
-			value,
+			label: selection.label,
+			value: selection.value,
 		});
 
 		if (props.hash) {
-			dispatch(
-				setUserPreference({
-					prefPath: ["nrql", "accountMruByFile", props.hash],
-					value: value,
-				})
-			);
+			try {
+				localStorage.setItem(`nrql.accountMruByFile.${props.hash}`, selection.value.toString());
+			} catch (ex) {
+				console.error(`Local storage not available`, ex);
+			}
 		}
 	};
 
