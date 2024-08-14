@@ -114,6 +114,7 @@ export const CodeErrorHeader = (props: CodeErrorHeaderProps) => {
 		setTimeout(_ => {
 			setIsAssigneeChanging(false);
 		}, 1);
+		buildAssignees();
 	};
 
 	const buildStates = () => {

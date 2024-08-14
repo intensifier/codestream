@@ -14,7 +14,11 @@ export const useUserSearch = () => {
 	const [userSearchResults, setUserSearchResults] = useState<UserSearchResults[]>([]);
 
 	const fetchUsers = useCallback(
-		async (query: string, mappingStyle: string = "default", callback?: Function) => {
+		async (
+			query: string,
+			mappingStyle: string = "default",
+			callback?: Function
+		): Promise<void | { display: string; id: string }> => {
 			let _query = query.toLowerCase();
 
 			if (_query.length > 2) {
@@ -53,16 +57,28 @@ export const useUserSearch = () => {
 					}
 					setUserSearchResults([]);
 				}
+			} else if (_query === "ai" && mappingStyle === "mentions") {
+				const aiUserObject = {
+					display: "AI",
+					id: `<collab-mention data-value="@AI" data-type="NR_BOT" data-mentionable-item-id="NR_BOT">AI</collab-mention>`,
+					email: "",
+					headshot: { email: "", name: "AI" },
+				};
+				if (callback) {
+					callback([aiUserObject]);
+				}
+				setUserSearchResults([aiUserObject]);
 			} else {
 				if (callback) {
 					callback([]);
 				}
 				setUserSearchResults([]);
 			}
+
+			return;
 		},
 		[]
 	);
-
 	return {
 		userSearchResults,
 		fetchUsers,
