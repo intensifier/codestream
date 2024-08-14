@@ -174,12 +174,12 @@ export const isMultiSelect = array => {
  * We can lose the 75 as its not relevant to the results/UX
  *
  */
-export const flattenResultsWithObjects = (dataResults, dataKeys) => {
+export const flattenResultsWithObjects = (dataResults: NRQLResult[], dataKeys: string[]) => {
 	let _dataResults = dataResults;
 	let _dataKeys = dataKeys;
 	_dataResults.forEach(item => {
 		_dataKeys.forEach(key => {
-			if (item.hasOwnProperty(key) && typeof item[key] === "object") {
+			if (item.hasOwnProperty(key) && typeof item[key] === "object" && item[key]) {
 				const keyValue = Object.keys(item[key])[0];
 				item[key] = item[key][keyValue];
 			}
