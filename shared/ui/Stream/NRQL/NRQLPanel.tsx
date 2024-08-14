@@ -36,7 +36,9 @@ import { NRQLVisualizationDropdown } from "./NRQLVisualizationDropdown";
 import { RecentQueries } from "./RecentQueries";
 import { PanelHeaderTitleWithLink } from "../PanelHeaderTitleWithLink";
 import { DropdownWithSearch } from "../DropdownWithSearch";
-import { useDidMount } from "../../utilities/hooks";
+import { useAppDispatch, useAppSelector, useDidMount } from "../../utilities/hooks";
+import { CodeStreamState } from "@codestream/webview/store";
+import { setUserPreference } from "../../Stream/actions";
 
 const QueryWrapper = styled.div`
 	width: 100%;
@@ -139,8 +141,11 @@ export const NRQLPanel = (props: {
 	entryPoint: string;
 	entityGuid?: string;
 	query?: string;
+	hash?: string;
 	ide?: { name?: IdeNames; browserEngine?: BrowserEngines };
 }) => {
+	const dispatch = useAppDispatch();
+
 	const supports = {
 		export: props.ide?.name === "VSC" || props.ide?.name === "JETBRAINS",
 		// default to true! currently JsBrowser works!
@@ -181,6 +186,16 @@ export const NRQLPanel = (props: {
 
 	let accountsPromise;
 
+	const derivedState = useAppSelector((state: CodeStreamState) => {
+		const mruAccountId = props.hash
+			? state.preferences.nrql?.accountMruByFile?.[props.hash]
+			: undefined;
+
+		return {
+			mruAccountId,
+		};
+	});
+
 	useDidMount(() => {
 		HostApi.instance.track("codestream/nrql/webview displayed", {
 			event_type: "modal_display",
@@ -193,9 +208,12 @@ export const NRQLPanel = (props: {
 				setAccounts(result.accounts);
 				let foundAccount: Account | undefined = undefined;
 				if (result?.accounts?.length) {
-					if (initialAccountId) {
+					if (derivedState.mruAccountId) {
+						foundAccount = result.accounts.find(_ => _.id === derivedState.mruAccountId);
+					} else if (initialAccountId) {
 						foundAccount = result.accounts.find(_ => _.id === initialAccountId);
 					}
+
 					if (!foundAccount) {
 						foundAccount = result.accounts[0];
 					}
@@ -218,7 +236,7 @@ export const NRQLPanel = (props: {
 	});
 
 	const accountId = useMemo(() => {
-		return (selectedAccount?.value || initialAccountId)!;
+		return (selectedAccount?.value || derivedState.mruAccountId || initialAccountId)!;
 	}, [selectedAccount]);
 
 	const disposables: Disposable[] = [];
@@ -355,6 +373,22 @@ export const NRQLPanel = (props: {
 		}));
 	};
 
+	const handleAccountSelectionChangeCallback = (label: string, value: number) => {
+		setSelectedAccount({
+			label,
+			value,
+		});
+
+		if (props.hash) {
+			dispatch(
+				setUserPreference({
+					prefPath: ["nrql", "accountMruByFile", props.hash],
+					value: value,
+				})
+			);
+		}
+	};
+
 	return (
 		<>
 			<div id="modal-root"></div>
@@ -400,7 +434,7 @@ export const NRQLPanel = (props: {
 													hasMore: false,
 												};
 											}}
-											handleChangeCallback={setSelectedAccount}
+											handleChangeCallback={handleAccountSelectionChangeCallback}
 											customOption={Option}
 											tabIndex={1}
 											customWidth={entitySearchWidth?.toString()}
