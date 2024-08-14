@@ -51,6 +51,7 @@ import {
 } from "@codestream/webview/store/discussions/discussionsSlice";
 import useNraiStreaming from "@codestream/webview/Stream/CodeError/socks/useNraiStreaming";
 import { setFunctionToEditFailed } from "@codestream/webview/store/codeErrors/actions";
+import { isEmpty as _isEmpty } from "lodash-es";
 
 export const CodeError = (props: CodeErrorProps) => {
 	const dispatch = useAppDispatch();
@@ -266,12 +267,12 @@ export const CodeError = (props: CodeErrorProps) => {
 	};
 
 	useEffect(() => {
-		if (!accountId || !entityGuid || !errorGroupGuid) {
+		if (!accountId || !entityGuid || !errorGroupGuid || !_isEmpty(props.tourStep)) {
 			return;
 		}
 
 		loadDiscussion();
-	}, [accountId, entityGuid, errorGroupGuid]);
+	}, [accountId, entityGuid, errorGroupGuid, props.tourStep]);
 
 	useEffect(() => {
 		if (footerRef.current) {
@@ -308,7 +309,13 @@ export const CodeError = (props: CodeErrorProps) => {
 		if (derivedState.functionToEditFailed || derivedState.functionToEdit) {
 			initializeNrAiAnalysis();
 		}
-	}, [discussion, useNrAi, derivedState.functionToEditFailed, derivedState.functionToEdit]);
+	}, [
+		discussion,
+		discussion?.comments,
+		useNrAi,
+		derivedState.functionToEditFailed,
+		derivedState.functionToEdit,
+	]);
 
 	const initializeNrAiAnalysis = async () => {
 		try {

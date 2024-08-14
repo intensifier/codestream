@@ -878,6 +878,7 @@ export function CodeErrorNavigator(props: Props) {
 										errorGroup={derivedState.errorGroup!}
 										stackFrameClickDisabled={!!repoError}
 										parsedStackTrace={parsedStack}
+										tourStep={hoverButton}
 									/>
 								</StyledCodeError>
 							</TourTip>
