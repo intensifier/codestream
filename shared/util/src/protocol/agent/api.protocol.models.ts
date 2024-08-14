@@ -857,8 +857,6 @@ export interface CSMePreferences {
 		[repoId: string]: string;
 	};
 
-	nrql?: NrqlPreferences;
-
 	//current repo in o11y pane
 	currentO11yRepoId?: string;
 
@@ -890,12 +888,6 @@ export interface CSMePreferences {
 	whatsNewNotificationsSent?: string[];
 
 	[key: string]: any;
-}
-
-export interface NrqlPreferences {
-	accountMruByFile: {
-		[fileHash: string]: number;
-	};
 }
 
 export interface CLMSettings {

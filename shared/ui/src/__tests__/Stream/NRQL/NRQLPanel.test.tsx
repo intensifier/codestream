@@ -36,7 +36,6 @@ const mockHostApi = {
 		return {
 			dispose: () => {},
 		};
-		0;
 	},
 	send: async (a: { method: string }, b, c) => {
 		if (a.method === "codestream/newrelic/nrql/queries/recent") {
