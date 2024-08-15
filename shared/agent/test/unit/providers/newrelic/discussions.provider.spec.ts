@@ -14,8 +14,8 @@ describe("DiscussionsProvider", () => {
 		const comment: CollaborationComment = {
 			id: "id",
 			body:
-				'<collab-mention data-value="@wmiraglia+pd4" data-type="NR_USER" data-mentionable-item-id="1001036877">\n            wmiraglia+pd4\n        </collab-mention>test 2 ' +
-				'<collab-mention data-type="NR_USER" data-value="@wmiraglia+pd3" data-mentionable-item-id="55555">\n            wmiraglia+pd3\n        </collab-mention>test 3',
+				'<collab-mention data-value="@William Miraglia" data-type="NR_USER" data-mentionable-item-id="1001036877">\n            William Miraglia\n        </collab-mention>test 2 ' +
+				'<collab-mention data-type="NR_USER" data-value="@David Hersh" data-mentionable-item-id="55555">\n           David Hersh\n        </collab-mention>test 3',
 			createdAt: "12345",
 			deactivated: false,
 			creator: {
@@ -24,6 +24,6 @@ describe("DiscussionsProvider", () => {
 			},
 		};
 		const result = await discussionsProvider.parseCommentForMentions(comment);
-		expect(result.body).toEqual("@wmiraglia+pd4 test 2 @wmiraglia+pd3 test 3");
+		expect(result.body).toEqual("[@William Miraglia] test 2 [@David Hersh] test 3");
 	});
 });
