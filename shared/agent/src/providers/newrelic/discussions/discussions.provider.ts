@@ -635,7 +635,7 @@ export class DiscussionsProvider {
 					case "NR_BOT":
 						const dataValue = htmlparser2.DomUtils.getAttributeValue(element, "data-value");
 						if (dataValue) {
-							comment.body = comment.body.replace(e, dataValue + " ");
+							comment.body = comment.body.replace(e, `[${dataValue}] `);
 						} else {
 							// if we failed to find the data-value, we still have to strip the mention
 							// so we don't end up in an infinite loop.
